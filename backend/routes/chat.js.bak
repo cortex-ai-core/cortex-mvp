@@ -1,0 +1,211 @@
+// ============================================================
+//  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP)
+// ============================================================
+
+import fp from "fastify-plugin";
+import OpenAI from "openai";
+import { requireAuth } from "../lib/authMiddleware.js";
+
+// 🔒 DLP
+import { runDLPScan } from "../lib/dlp.js";
+
+// 🔥 Step 46 Reasoning Modules
+import { decodeIntent } from "../reasoning/intent.js";
+import { assembleContext } from "../reasoning/context.js";
+import { inferPaths } from "../reasoning/inference.js";
+import { synthesizeFinalAnswer } from "../reasoning/synthesis.js";
+
+// 🔥 Step 47 Identity Layer
+import { applyIdentityLayer } from "../identity/applyIdentity.js";
+import { resolveToneForNamespace } from "../identity/toneRouter.js";
+
+// 🔥 PRE-ROUTER
+function handleSimpleCases(input = "") {
+  const text = input.toLowerCase().trim();
+
+  if (text === "who are you" || text === "who are you?") {
+    return { finalAnswer: "Cortéx. KING’s Intelligence Engine." };
+  }
+
+  if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(input)) {
+    return { finalAnswer: "Email detected. No context." };
+  }
+
+  if (text.length <= 10) {
+    return { finalAnswer: "No subject." };
+  }
+
+  return null;
+}
+
+// 🔥 OUTPUT DLP
+function stripSensitiveFields(text = "") {
+  if (!text || typeof text !== "string") return text;
+
+  let output = text;
+
+  output = output.replace(
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
+    "[REDACTED_EMAIL]"
+  );
+
+  const phonePatterns = [
+    /\+?1?\s*\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
+    /\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b/g
+  ];
+
+  phonePatterns.forEach((pattern) => {
+    output = output.replace(pattern, "[REDACTED_PHONE]");
+  });
+
+  const addressPatterns = [
+    /\b\d{1,5}\s+[A-Za-z0-9.\s]+\s(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct)\b/gi,
+    /\b\d{1,5}\s+[A-Za-z0-9.\s]+,\s*[A-Za-z\s]+,\s*[A-Z]{2}\b/gi
+  ];
+
+  addressPatterns.forEach((pattern) => {
+    output = output.replace(pattern, "[REDACTED_ADDRESS]");
+  });
+
+  return output;
+}
+
+export default fp(async function chatRoute(fastify) {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  fastify.post(
+    "/api/chat",
+    { preHandler: requireAuth() },
+    async (req, reply) => {
+      try {
+        const { message = "", namespace: requestedNamespace, ephemeralContext } = req.body || {};
+        const identity = req.user;
+
+        if (!identity) return reply.code(401).send({ error: "Unauthorized" });
+
+        const { userId, role, namespace } = identity;
+
+        if (!userId || !role || !namespace) {
+          return reply.code(401).send({ error: "Invalid identity" });
+        }
+
+        if (requestedNamespace && requestedNamespace !== namespace) {
+          return reply.code(403).send({ error: "Forbidden" });
+        }
+
+        if (!message.trim()) {
+          return reply.code(400).send({ error: "Message required" });
+        }
+
+        const initialDLP = runDLPScan(message);
+
+        if (initialDLP.block) {
+          return reply.send({ error: "Sensitive data blocked" });
+        }
+
+        let sanitizedMessage = initialDLP.sanitized;
+
+        const contactIntent = /\b(contact info|contact information|phone number|email address|address)\b/i;
+        const summaryIntent = /(summarize|summary|overview|analyze|explain|who is|background|experience)/i;
+
+        const wantsContact = contactIntent.test(sanitizedMessage);
+        const wantsSummary = summaryIntent.test(sanitizedMessage);
+
+        if (wantsContact && !wantsSummary) {
+          return reply.send({ finalAnswer: "Contact information is not available." });
+        }
+
+        const simpleResponse = handleSimpleCases(sanitizedMessage);
+        if (simpleResponse) {
+          let identityMerged = applyIdentityLayer(
+            { finalAnswer: simpleResponse.finalAnswer },
+            { toneMode: resolveToneForNamespace(namespace) },
+            { namespace }
+          );
+
+          identityMerged.finalAnswer = stripSensitiveFields(identityMerged.finalAnswer);
+
+          return reply.send(identityMerged);
+        }
+
+        let ragResults = [];
+        let ragContext = "";
+
+        if (ephemeralContext?.trim()) {
+          ragResults = [{ content: ephemeralContext }];
+          ragContext = ephemeralContext;
+        } else {
+          const retrieveRes = await fastify.inject({
+            method: "POST",
+            url: "/api/retrieve",
+            payload: {
+              query: sanitizedMessage,
+              namespace,
+              topK: 5
+            },
+            headers: {
+              authorization: req.headers.authorization
+            }
+          });
+
+          let parsed = {};
+          try {
+            parsed = JSON.parse(retrieveRes.body);
+          } catch (e) {
+            console.error("RETRIEVE PARSE ERROR:", retrieveRes.body);
+          }
+
+          ragResults = (parsed.results || []).map(r => ({
+            content: r.content,
+            confidence: r.similarity
+          }));
+
+          ragContext = ragResults.map(r => r.content).join("\n\n---\n\n");
+        }
+
+        let finalAnswer = await synthesizeFinalAnswer({
+          userMessage: sanitizedMessage,
+          contextWindow: ragContext,
+          model: openai
+        });
+
+        if (wantsContact && wantsSummary) {
+          finalAnswer += "\n\nContact information is not available.";
+        }
+
+        // ----------------------------------------------------
+        // 🔒 OUTPUT CONTROL — FINAL (GLOBAL ADDRESS SUPPRESSION)
+        // ----------------------------------------------------
+
+        if (typeof finalAnswer === "string") {
+
+          // Remove labeled address lines
+          finalAnswer = finalAnswer.replace(
+            /(Address:|Location:)[^\n]*/gi,
+            ""
+          );
+
+          // Remove city/state/zip patterns
+          finalAnswer = finalAnswer.replace(
+            /\b[A-Z][a-zA-Z]+,\s?[A-Z]{2}\s\d{5}(-\d{4})?\b/g,
+            ""
+          );
+        }
+
+        let identityMerged = applyIdentityLayer(
+          { finalAnswer },
+          { toneMode: resolveToneForNamespace(namespace) },
+          { namespace }
+        );
+
+        identityMerged.finalAnswer = stripSensitiveFields(identityMerged.finalAnswer);
+
+        return reply.send(identityMerged);
+
+      } catch (err) {
+        console.error(err);
+        return reply.code(500).send({ error: "Failure" });
+      }
+    }
+  );
+});

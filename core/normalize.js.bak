@@ -1,0 +1,26 @@
+// core/normalize.js
+// CORTÉX NORMALIZATION ENGINE v1.0
+// Ensures clean punctuation, spacing, and prevents malformed output.
+
+export function normalizeCortexOutput(text) {
+  if (!text || typeof text !== "string") return "";
+
+  let out = text;
+
+  // Collapse weird double spaces
+  out = out.replace(/\s{2,}/g, " ");
+
+  // Fix line breaks
+  out = out.replace(/\n{3,}/g, "\n\n");
+
+  // Cleanup stray Markdown tokens
+  out = out.replace(/\* \* \*/g, "***");
+  out = out.replace(/` ` ` /g, "```");
+
+  // Prevent "undefined" leaks
+  out = out.replace(/undefined/g, "");
+
+  // Trim safe edges
+  return out.trimStart();
+}
+

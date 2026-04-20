@@ -1,0 +1,64 @@
+// ============================================================
+//  CORTÉX — RAG RETRIEVE ROUTE (STAGE 46 CLEAN VERSION)
+//  This file must NOT duplicate /api/chat
+// ============================================================
+
+import fp from "fastify-plugin";
+import { createClient } from "@supabase/supabase-js";
+
+// ============================================================
+//  Retrieve top-K chunks from vector store (Supabase PGVector)
+// ============================================================
+
+export default fp(async function retrieveRoute(fastify, opts) {
+
+  fastify.post("/api/retrieve", async (req, reply) => {
+    try {
+      const { query, namespace = "default", topK = 5 } = req.body || {};
+
+      if (!query || !query.trim()) {
+        return reply.code(400).send({ error: "Query text is required." });
+      }
+
+      // Supabase client
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_KEY
+      );
+
+      // 1️⃣ Embed the query
+      const embedRes = await fastify.openai.embeddings.create({
+        model: "text-embedding-3-small",
+        input: query,
+      });
+
+      const embedding = embedRes.data?.[0]?.embedding;
+
+      if (!embedding) {
+        return reply.code(500).send({ error: "Failed to generate embedding." });
+      }
+
+      // 2️⃣ Perform vector similarity search
+      const { data, error } = await supabase.rpc("match_documents", {
+        query_embedding: embedding,
+        match_threshold: 0.1,
+        match_count: topK,
+        query_namespace: namespace,
+      });
+
+      if (error) {
+        console.error("❌ retrieve error:", error);
+        return reply.code(500).send({ error: error.message });
+      }
+
+      return reply.send({ results: data || [] });
+
+    } catch (err) {
+      console.error("❌ /api/retrieve FAILURE:", err);
+      return reply.code(500).send({
+        error: "RAG retrieve failure",
+        detail: err.message,
+      });
+    }
+  });
+});

@@ -1,0 +1,29 @@
+// lib/memory/queryMemory.js
+
+import { embedText } from "../embedding.js";
+import { vectorStore } from "../vectorStore.js";
+import { applyWeights } from "./memoryWeights.js";
+import { normalizeResults } from "../rag/normalizeResults.js";
+
+export async function queryMemory({ query, topK = 5 }) {
+  // 1. Convert query → embedding vector
+  const queryEmbedding = await embedText(query);
+
+  // 2. Fetch raw matches (oversample for weighting)
+  const rawMatches = await vectorStore.search(queryEmbedding, topK * 3);
+
+  // 3. Apply weighting engine
+  const weighted = applyWeights(rawMatches);
+
+  // 4. Take top K after weighting
+  const topResults = weighted.slice(0, topK);
+
+  // 5. Create normalized results for UI/chat
+  const normalized = normalizeResults(topResults);
+
+  return {
+    raw: topResults,
+    normalized
+  };
+}
+

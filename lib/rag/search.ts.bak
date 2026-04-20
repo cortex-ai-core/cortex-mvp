@@ -1,0 +1,35 @@
+// api/rag/search.ts
+// Step 32F — RAG Search Endpoint (Mock Version)
+// This endpoint is wired to mockRagSearch() until Step 34 implements real pgvector search.
+
+import { NextResponse } from "next/server";
+import { mockRagSearch } from "@/lib/rag/mockSearch.js";
+
+export async function POST(req: Request) {
+  try {
+    const { query } = await req.json();
+
+    if (!query || typeof query !== "string") {
+      return NextResponse.json(
+        { error: "Missing or invalid 'query' value." },
+        { status: 400 }
+      );
+    }
+
+    // Temporary mock results — replaced in Step 34 (real embeddings + pgvector)
+    const results = await mockRagSearch(query);
+
+    return NextResponse.json({
+      query,
+      results,
+      message: "Mock RAG search successful — real vector search arrives in Step 34."
+    });
+  } catch (err) {
+    console.error("RAG Search Error:", err);
+    return NextResponse.json(
+      { error: "RAG search failed." },
+      { status: 500 }
+    );
+  }
+}
+

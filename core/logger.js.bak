@@ -1,0 +1,27 @@
+// core/logger.js
+// STEP 34H — Dual-Channel Logging Engine (DLE)
+
+const DEV_PREFIX = "[CORTEX_DEV]";
+const UI_PREFIX  = "[CORTEX_UI]";
+
+// -------------------------------------------------------
+// 1️⃣ Developer Log (Internal Only)
+// -------------------------------------------------------
+export function devLog(...args) {
+  try {
+    console.log(DEV_PREFIX, ...args);
+  } catch (_) {}
+}
+
+// -------------------------------------------------------
+// 2️⃣ UI Log (Safe, Non-Technical)
+//    Sent back to frontend only when explicitly used.
+// -------------------------------------------------------
+export function uiLog(message) {
+  try {
+    return `${UI_PREFIX} ${message}`;
+  } catch (_) {
+    return `${UI_PREFIX} log failed`;
+  }
+}
+

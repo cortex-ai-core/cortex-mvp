@@ -1,0 +1,44 @@
+// utils/memory.js
+// STEP 26A — Local Memory Vault (RESTORED)
+
+import fs from "fs";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
+
+const memoryPath = path.resolve("memory/documents.json");
+
+// Ensure memory folder + file exist
+export function ensureMemoryInitialized() {
+  if (!fs.existsSync("memory")) {
+    fs.mkdirSync("memory");
+  }
+  if (!fs.existsSync(memoryPath)) {
+    fs.writeFileSync(memoryPath, JSON.stringify([], null, 2));
+  }
+}
+
+export function loadDocuments() {
+  ensureMemoryInitialized();
+  const data = fs.readFileSync(memoryPath, "utf8");
+  return JSON.parse(data);
+}
+
+export function saveDocuments(docs) {
+  fs.writeFileSync(memoryPath, JSON.stringify(docs, null, 2));
+}
+
+export function addDocument({ filename, mimetype, text }) {
+  const docs = loadDocuments();
+  const doc = {
+    id: uuidv4(),
+    filename,
+    mimetype,
+    text,
+    embedding: [],
+    timestamp: Date.now()
+  };
+  docs.push(doc);
+  saveDocuments(docs);
+  return doc;
+}
+
