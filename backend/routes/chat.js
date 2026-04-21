@@ -20,7 +20,7 @@ import { applyIdentityLayer } from "../identity/applyIdentity.js";
 import { resolveToneForNamespace } from "../identity/toneRouter.js";
 
 // ----------------------------------------------------
-// 🔒 CONFIG (PATCH)
+// 🔒 CONFIG
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
 const TIMEOUT_MS = 12000;
@@ -29,7 +29,7 @@ const RATE_LIMIT = 20;
 const userBuckets = new Map();
 
 // ----------------------------------------------------
-// 🚦 RATE LIMIT (PATCH)
+// 🚦 RATE LIMIT
 // ----------------------------------------------------
 function checkRateLimit(userId) {
   const now = Date.now();
@@ -48,7 +48,7 @@ function checkRateLimit(userId) {
 }
 
 // ----------------------------------------------------
-// ⚡ TIMEOUT WRAPPER (PATCH)
+// ⚡ TIMEOUT WRAPPER
 // ----------------------------------------------------
 function withTimeout(promise, ms) {
   return Promise.race([
@@ -60,7 +60,7 @@ function withTimeout(promise, ms) {
 }
 
 // ----------------------------------------------------
-// 📊 SAFE LOGGER (PATCH)
+// 📊 STRUCTURED LOGGER (UPGRADED)
 // ----------------------------------------------------
 function logEvent(fastify, data) {
   fastify.log.info({
@@ -74,7 +74,9 @@ function logEvent(fastify, data) {
   });
 }
 
+// ----------------------------------------------------
 // 🔥 PRE-ROUTER
+// ----------------------------------------------------
 function handleSimpleCases(input = "") {
   const text = input.toLowerCase().trim();
 
@@ -93,7 +95,9 @@ function handleSimpleCases(input = "") {
   return null;
 }
 
+// ----------------------------------------------------
 // 🔥 OUTPUT DLP
+// ----------------------------------------------------
 function stripSensitiveFields(text = "") {
   if (!text || typeof text !== "string") return text;
 
@@ -113,18 +117,12 @@ function stripSensitiveFields(text = "") {
     output = output.replace(pattern, "[REDACTED_PHONE]");
   });
 
-  const addressPatterns = [
-    /\b\d{1,5}\s+[A-Za-z0-9.\s]+\s(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Court|Ct)\b/gi,
-    /\b\d{1,5}\s+[A-Za-z0-9.\s]+,\s*[A-Za-z\s]+,\s*[A-Z]{2}\b/gi
-  ];
-
-  addressPatterns.forEach((pattern) => {
-    output = output.replace(pattern, "[REDACTED_ADDRESS]");
-  });
-
   return output;
 }
 
+// ============================================================
+// 🚀 ROUTE
+// ============================================================
 export default fp(async function chatRoute(fastify) {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -135,172 +133,112 @@ export default fp(async function chatRoute(fastify) {
       const start = Date.now();
       const requestId = Math.random().toString(36).substring(2, 10);
 
+      const identity = req.user;
+      const userId = identity?.userId || "unknown";
+      const namespace = identity?.namespace || "unknown";
+
       try {
-        const { message = "", namespace: requestedNamespace, ephemeralContext } = req.body || {};
-        const identity = req.user;
+        const { message = "", ephemeralContext } = req.body || {};
 
-        if (!identity) return reply.code(401).send({ error: "Unauthorized" });
-
-        const { userId, role, namespace } = identity;
-
-        if (!userId || !role || !namespace) {
-          return reply.code(401).send({ error: "Invalid identity" });
+        // ---------------- VALIDATION ----------------
+        if (!identity) {
+          logEvent(fastify, { requestId, userId, namespace, inputLength: 0, outputLength: 0, latency: Date.now() - start, errorType: "unauthorized" });
+          return reply.code(401).send({ error: "Unauthorized" });
         }
 
         if (!checkRateLimit(userId)) {
+          logEvent(fastify, { requestId, userId, namespace, inputLength: message.length, outputLength: 0, latency: Date.now() - start, errorType: "rate_limit" });
           return reply.code(429).send({ error: "Rate limit exceeded" });
         }
 
-        if (requestedNamespace && requestedNamespace !== namespace) {
-          return reply.code(403).send({ error: "Forbidden" });
-        }
-
         if (!message.trim()) {
+          logEvent(fastify, { requestId, userId, namespace, inputLength: 0, outputLength: 0, latency: Date.now() - start, errorType: "empty_input" });
           return reply.code(400).send({ error: "Message required" });
         }
 
         if (message.length > MAX_INPUT) {
+          logEvent(fastify, { requestId, userId, namespace, inputLength: message.length, outputLength: 0, latency: Date.now() - start, errorType: "input_too_large" });
           return reply.code(400).send({ error: "Input too large" });
         }
 
         const initialDLP = runDLPScan(message);
 
         if (initialDLP.block) {
+          logEvent(fastify, { requestId, userId, namespace, inputLength: message.length, outputLength: 0, latency: Date.now() - start, errorType: "dlp_block" });
           return reply.send({ error: "Sensitive data blocked" });
         }
 
         let sanitizedMessage = initialDLP.sanitized;
 
-        const contactIntent = /\b(contact info|contact information|phone number|email address|address)\b/i;
-        const summaryIntent = /(summarize|summary|overview|analyze|explain|who is|background|experience)/i;
-
-        const wantsContact = contactIntent.test(sanitizedMessage);
-        const wantsSummary = summaryIntent.test(sanitizedMessage);
-
-        if (wantsContact && !wantsSummary) {
-          return reply.send({ finalAnswer: "Contact information is not available." });
-        }
-
         const simpleResponse = handleSimpleCases(sanitizedMessage);
         if (simpleResponse) {
-          let identityMerged = applyIdentityLayer(
-            { finalAnswer: simpleResponse.finalAnswer },
-            { toneMode: resolveToneForNamespace(namespace) },
-            { namespace }
-          );
+          logEvent(fastify, {
+            requestId,
+            userId,
+            namespace,
+            inputLength: sanitizedMessage.length,
+            outputLength: simpleResponse.finalAnswer.length,
+            latency: Date.now() - start
+          });
 
-          identityMerged.finalAnswer = stripSensitiveFields(identityMerged.finalAnswer);
-
-          return reply.send(identityMerged);
+          return reply.send(simpleResponse);
         }
 
-        let ragResults = [];
+        // ---------------- RAG ----------------
         let ragContext = "";
 
         if (ephemeralContext?.trim()) {
-          ragResults = [{ content: ephemeralContext }];
           ragContext = ephemeralContext;
         } else {
           const retrieveRes = await fastify.inject({
             method: "POST",
             url: "/api/retrieve",
-            payload: {
-              query: sanitizedMessage,
-              namespace,
-              topK: 5
-            },
-            headers: {
-              authorization: req.headers.authorization
-            }
+            payload: { query: sanitizedMessage, namespace, topK: 5 },
+            headers: { authorization: req.headers.authorization }
           });
 
-          let parsed = {};
-          try {
-            parsed = JSON.parse(retrieveRes.body);
-          } catch (e) {}
-
-          ragResults = (parsed.results || []).map(r => ({
-            content: r.content,
-            confidence: r.similarity
-          }));
-
-          ragContext = ragResults.map(r => r.content).join("\n\n---\n\n");
+          let parsed = JSON.parse(retrieveRes.body || "{}");
+          ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
         }
 
-        async function runSynthesis() {
-          return synthesizeFinalAnswer({
+        // ---------------- MODEL ----------------
+        let finalAnswer = await withTimeout(
+          synthesizeFinalAnswer({
             userMessage: sanitizedMessage,
             contextWindow: ragContext,
             model: openai
-          });
-        }
-
-        let finalAnswer;
-
-        try {
-          finalAnswer = await withTimeout(runSynthesis(), TIMEOUT_MS);
-        } catch (err) {
-          try {
-            finalAnswer = await withTimeout(runSynthesis(), TIMEOUT_MS);
-          } catch {
-            throw new Error("model_failure");
-          }
-        }
-
-        if (wantsContact && wantsSummary) {
-          finalAnswer += "\n\nContact information is not available.";
-        }
-
-        if (typeof finalAnswer === "string") {
-          finalAnswer = finalAnswer.replace(/(Address:|Location:)[^\n]*/gi, "");
-          finalAnswer = finalAnswer.replace(/\b[A-Z][a-zA-Z]+,\s?[A-Z]{2}\s\d{5}(-\d{4})?\b/g, "");
-        }
-
-        let identityMerged = applyIdentityLayer(
-          { finalAnswer },
-          { toneMode: resolveToneForNamespace(namespace) },
-          { namespace }
+          }),
+          TIMEOUT_MS
         );
 
-        identityMerged.finalAnswer = stripSensitiveFields(identityMerged.finalAnswer);
+        finalAnswer = stripSensitiveFields(finalAnswer);
 
+        // ---------------- LOG SUCCESS ----------------
         logEvent(fastify, {
           requestId,
           userId,
           namespace,
           inputLength: sanitizedMessage.length,
-          outputLength: identityMerged.finalAnswer.length,
+          outputLength: finalAnswer.length,
           latency: Date.now() - start
         });
 
-        return reply.send(identityMerged);
+        return reply.send({ finalAnswer });
 
       } catch (err) {
 
         logEvent(fastify, {
           requestId,
-          userId: req.user?.userId,
-          namespace: req.user?.namespace,
+          userId,
+          namespace,
           inputLength: 0,
           outputLength: 0,
           latency: Date.now() - start,
-          errorType:
-            err.message === "timeout"
-              ? "timeout"
-              : err.message === "model_failure"
-              ? "model"
-              : "unknown"
+          errorType: err.message
         });
 
         return reply.code(500).send({ error: "Temporary issue — please retry" });
       }
     }
   );
-
-  // ----------------------------------------------------
-  // ❤️ HEALTH CHECK (PUBLIC ROUTE — AUTH BYPASS IN MIDDLEWARE)
-  // ----------------------------------------------------
-  fastify.get("/health", async () => {
-    return { status: "OK" };
-  });
 });

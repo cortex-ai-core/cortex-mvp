@@ -1,0 +1,38 @@
+{
+  "type": "module",
+  "name": "cortex-server",
+  "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --require dotenv/config server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@fastify/cors": "^11.2.0",
+    "@fastify/express": "^4.0.4",
+    "@fastify/multipart": "^9.4.0",
+    "@supabase/auth-helpers-nextjs": "^0.15.0",
+    "@supabase/supabase-js": "^2.95.3",
+    "dotenv": "^17.2.4",
+    "fastify": "^5.7.4",
+    "fastify-plugin": "^5.1.0",
+    "file-type": "^21.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "mammoth": "^1.11.0",
+    "next": "^16.1.6",
+    "openai": "^6.17.0",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse-fixed": "^1.1.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "uuid": "^13.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.14",
+    "typescript": "^5.9.3"
+  }
+}

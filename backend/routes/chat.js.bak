@@ -19,6 +19,61 @@ import { synthesizeFinalAnswer } from "../reasoning/synthesis.js";
 import { applyIdentityLayer } from "../identity/applyIdentity.js";
 import { resolveToneForNamespace } from "../identity/toneRouter.js";
 
+// ----------------------------------------------------
+// 🔒 CONFIG (PATCH)
+// ----------------------------------------------------
+const MAX_INPUT = 10000;
+const TIMEOUT_MS = 12000;
+const RATE_LIMIT = 20;
+
+const userBuckets = new Map();
+
+// ----------------------------------------------------
+// 🚦 RATE LIMIT (PATCH)
+// ----------------------------------------------------
+function checkRateLimit(userId) {
+  const now = Date.now();
+  const windowMs = 60000;
+
+  if (!userBuckets.has(userId)) {
+    userBuckets.set(userId, []);
+  }
+
+  const timestamps = userBuckets.get(userId).filter(ts => now - ts < windowMs);
+  timestamps.push(now);
+
+  userBuckets.set(userId, timestamps);
+
+  return timestamps.length <= RATE_LIMIT;
+}
+
+// ----------------------------------------------------
+// ⚡ TIMEOUT WRAPPER (PATCH)
+// ----------------------------------------------------
+function withTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), ms)
+    )
+  ]);
+}
+
+// ----------------------------------------------------
+// 📊 SAFE LOGGER (PATCH)
+// ----------------------------------------------------
+function logEvent(fastify, data) {
+  fastify.log.info({
+    requestId: data.requestId,
+    userId: data.userId,
+    namespace: data.namespace,
+    inputLength: data.inputLength,
+    outputLength: data.outputLength,
+    latency: data.latency,
+    errorType: data.errorType || null
+  });
+}
+
 // 🔥 PRE-ROUTER
 function handleSimpleCases(input = "") {
   const text = input.toLowerCase().trim();
@@ -77,6 +132,9 @@ export default fp(async function chatRoute(fastify) {
     "/api/chat",
     { preHandler: requireAuth() },
     async (req, reply) => {
+      const start = Date.now();
+      const requestId = Math.random().toString(36).substring(2, 10);
+
       try {
         const { message = "", namespace: requestedNamespace, ephemeralContext } = req.body || {};
         const identity = req.user;
@@ -89,12 +147,20 @@ export default fp(async function chatRoute(fastify) {
           return reply.code(401).send({ error: "Invalid identity" });
         }
 
+        if (!checkRateLimit(userId)) {
+          return reply.code(429).send({ error: "Rate limit exceeded" });
+        }
+
         if (requestedNamespace && requestedNamespace !== namespace) {
           return reply.code(403).send({ error: "Forbidden" });
         }
 
         if (!message.trim()) {
           return reply.code(400).send({ error: "Message required" });
+        }
+
+        if (message.length > MAX_INPUT) {
+          return reply.code(400).send({ error: "Input too large" });
         }
 
         const initialDLP = runDLPScan(message);
@@ -151,9 +217,7 @@ export default fp(async function chatRoute(fastify) {
           let parsed = {};
           try {
             parsed = JSON.parse(retrieveRes.body);
-          } catch (e) {
-            console.error("RETRIEVE PARSE ERROR:", retrieveRes.body);
-          }
+          } catch (e) {}
 
           ragResults = (parsed.results || []).map(r => ({
             content: r.content,
@@ -163,33 +227,33 @@ export default fp(async function chatRoute(fastify) {
           ragContext = ragResults.map(r => r.content).join("\n\n---\n\n");
         }
 
-        let finalAnswer = await synthesizeFinalAnswer({
-          userMessage: sanitizedMessage,
-          contextWindow: ragContext,
-          model: openai
-        });
+        async function runSynthesis() {
+          return synthesizeFinalAnswer({
+            userMessage: sanitizedMessage,
+            contextWindow: ragContext,
+            model: openai
+          });
+        }
+
+        let finalAnswer;
+
+        try {
+          finalAnswer = await withTimeout(runSynthesis(), TIMEOUT_MS);
+        } catch (err) {
+          try {
+            finalAnswer = await withTimeout(runSynthesis(), TIMEOUT_MS);
+          } catch {
+            throw new Error("model_failure");
+          }
+        }
 
         if (wantsContact && wantsSummary) {
           finalAnswer += "\n\nContact information is not available.";
         }
 
-        // ----------------------------------------------------
-        // 🔒 OUTPUT CONTROL — FINAL (GLOBAL ADDRESS SUPPRESSION)
-        // ----------------------------------------------------
-
         if (typeof finalAnswer === "string") {
-
-          // Remove labeled address lines
-          finalAnswer = finalAnswer.replace(
-            /(Address:|Location:)[^\n]*/gi,
-            ""
-          );
-
-          // Remove city/state/zip patterns
-          finalAnswer = finalAnswer.replace(
-            /\b[A-Z][a-zA-Z]+,\s?[A-Z]{2}\s\d{5}(-\d{4})?\b/g,
-            ""
-          );
+          finalAnswer = finalAnswer.replace(/(Address:|Location:)[^\n]*/gi, "");
+          finalAnswer = finalAnswer.replace(/\b[A-Z][a-zA-Z]+,\s?[A-Z]{2}\s\d{5}(-\d{4})?\b/g, "");
         }
 
         let identityMerged = applyIdentityLayer(
@@ -200,12 +264,43 @@ export default fp(async function chatRoute(fastify) {
 
         identityMerged.finalAnswer = stripSensitiveFields(identityMerged.finalAnswer);
 
+        logEvent(fastify, {
+          requestId,
+          userId,
+          namespace,
+          inputLength: sanitizedMessage.length,
+          outputLength: identityMerged.finalAnswer.length,
+          latency: Date.now() - start
+        });
+
         return reply.send(identityMerged);
 
       } catch (err) {
-        console.error(err);
-        return reply.code(500).send({ error: "Failure" });
+
+        logEvent(fastify, {
+          requestId,
+          userId: req.user?.userId,
+          namespace: req.user?.namespace,
+          inputLength: 0,
+          outputLength: 0,
+          latency: Date.now() - start,
+          errorType:
+            err.message === "timeout"
+              ? "timeout"
+              : err.message === "model_failure"
+              ? "model"
+              : "unknown"
+        });
+
+        return reply.code(500).send({ error: "Temporary issue — please retry" });
       }
     }
   );
+
+  // ----------------------------------------------------
+  // ❤️ HEALTH CHECK (PUBLIC ROUTE — AUTH BYPASS IN MIDDLEWARE)
+  // ----------------------------------------------------
+  fastify.get("/health", async () => {
+    return { status: "OK" };
+  });
 });
