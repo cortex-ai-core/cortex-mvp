@@ -29,7 +29,7 @@ const RATE_LIMIT = 20;
 const userBuckets = new Map();
 
 // ----------------------------------------------------
-// 🚦 RATE LIMIT
+// 🚦 RATE LIMIT (UPGRADED — NO DRIFT)
 // ----------------------------------------------------
 function checkRateLimit(userId) {
   const now = Date.now();
@@ -40,11 +40,27 @@ function checkRateLimit(userId) {
   }
 
   const timestamps = userBuckets.get(userId).filter(ts => now - ts < windowMs);
-  timestamps.push(now);
+
+  const allowed = timestamps.length < RATE_LIMIT;
+
+  if (allowed) {
+    timestamps.push(now);
+  }
 
   userBuckets.set(userId, timestamps);
 
-  return timestamps.length <= RATE_LIMIT;
+  const remaining = Math.max(0, RATE_LIMIT - timestamps.length);
+
+  const retryAfter =
+    timestamps.length > 0
+      ? Math.ceil((windowMs - (now - timestamps[0])) / 1000)
+      : 0;
+
+  return {
+    allowed,
+    remaining,
+    retryAfter
+  };
 }
 
 // ----------------------------------------------------
@@ -146,9 +162,25 @@ export default fp(async function chatRoute(fastify) {
           return reply.code(401).send({ error: "Unauthorized" });
         }
 
-        if (!checkRateLimit(userId)) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength: message.length, outputLength: 0, latency: Date.now() - start, errorType: "rate_limit" });
-          return reply.code(429).send({ error: "Rate limit exceeded" });
+        // 🔥 UPDATED RATE LIMIT CHECK
+        const rate = checkRateLimit(userId);
+
+        if (!rate.allowed) {
+          logEvent(fastify, {
+            requestId,
+            userId,
+            namespace,
+            inputLength: message.length,
+            outputLength: 0,
+            latency: Date.now() - start,
+            errorType: "rate_limit"
+          });
+
+          return reply.code(429).send({
+            error: "Rate limit exceeded",
+            retryAfter: rate.retryAfter,
+            remaining: 0
+          });
         }
 
         if (!message.trim()) {

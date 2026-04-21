@@ -29,7 +29,7 @@ const RATE_LIMIT = 20;
 const userBuckets = new Map();
 
 // ----------------------------------------------------
-// 🚦 RATE LIMIT (UPGRADED — NO DRIFT)
+// 🚦 RATE LIMIT (UPGRADED — SAFE)
 // ----------------------------------------------------
 function checkRateLimit(userId) {
   const now = Date.now();
@@ -76,7 +76,7 @@ function withTimeout(promise, ms) {
 }
 
 // ----------------------------------------------------
-// 📊 STRUCTURED LOGGER (UPGRADED)
+// 📊 STRUCTURED LOGGER
 // ----------------------------------------------------
 function logEvent(fastify, data) {
   fastify.log.info({
@@ -154,7 +154,12 @@ export default fp(async function chatRoute(fastify) {
       const namespace = identity?.namespace || "unknown";
 
       try {
-        const { message = "", ephemeralContext } = req.body || {};
+        const body = req.body || {};
+        const message = typeof body.message === "string" ? body.message : "";
+        const ephemeralContext =
+          typeof body.ephemeralContext === "string" ? body.ephemeralContext : "";
+
+        const inputLength = message.length;
 
         // ---------------- VALIDATION ----------------
         if (!identity) {
@@ -162,7 +167,7 @@ export default fp(async function chatRoute(fastify) {
           return reply.code(401).send({ error: "Unauthorized" });
         }
 
-        // 🔥 UPDATED RATE LIMIT CHECK
+        // 🔥 RATE LIMIT
         const rate = checkRateLimit(userId);
 
         if (!rate.allowed) {
@@ -170,7 +175,7 @@ export default fp(async function chatRoute(fastify) {
             requestId,
             userId,
             namespace,
-            inputLength: message.length,
+            inputLength,
             outputLength: 0,
             latency: Date.now() - start,
             errorType: "rate_limit"
@@ -189,14 +194,14 @@ export default fp(async function chatRoute(fastify) {
         }
 
         if (message.length > MAX_INPUT) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength: message.length, outputLength: 0, latency: Date.now() - start, errorType: "input_too_large" });
+          logEvent(fastify, { requestId, userId, namespace, inputLength, outputLength: 0, latency: Date.now() - start, errorType: "input_too_large" });
           return reply.code(400).send({ error: "Input too large" });
         }
 
         const initialDLP = runDLPScan(message);
 
         if (initialDLP.block) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength: message.length, outputLength: 0, latency: Date.now() - start, errorType: "dlp_block" });
+          logEvent(fastify, { requestId, userId, namespace, inputLength, outputLength: 0, latency: Date.now() - start, errorType: "dlp_block" });
           return reply.send({ error: "Sensitive data blocked" });
         }
 
@@ -208,7 +213,7 @@ export default fp(async function chatRoute(fastify) {
             requestId,
             userId,
             namespace,
-            inputLength: sanitizedMessage.length,
+            inputLength,
             outputLength: simpleResponse.finalAnswer.length,
             latency: Date.now() - start
           });
@@ -219,7 +224,7 @@ export default fp(async function chatRoute(fastify) {
         // ---------------- RAG ----------------
         let ragContext = "";
 
-        if (ephemeralContext?.trim()) {
+        if (ephemeralContext.trim()) {
           ragContext = ephemeralContext;
         } else {
           const retrieveRes = await fastify.inject({
@@ -245,12 +250,11 @@ export default fp(async function chatRoute(fastify) {
 
         finalAnswer = stripSensitiveFields(finalAnswer);
 
-        // ---------------- LOG SUCCESS ----------------
         logEvent(fastify, {
           requestId,
           userId,
           namespace,
-          inputLength: sanitizedMessage.length,
+          inputLength,
           outputLength: finalAnswer.length,
           latency: Date.now() - start
         });
