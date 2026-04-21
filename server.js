@@ -7,6 +7,14 @@ dotenv.config({ path: "./.env" });
 
 console.log("ENV JWT_SECRET:", process.env.JWT_SECRET);
 
+// 🔥 NEW — ENV DEBUG (NO DRIFT)
+console.log("ENV CHECK:", {
+  JWT_SECRET: process.env.JWT_SECRET,
+  SUPABASE_URL: process.env.SUPABASE_URL,
+  HAS_SUPABASE: !!process.env.SUPABASE_URL,
+  OPENAI_KEY: process.env.OPENAI_API_KEY ? "SET" : "MISSING"
+});
+
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import { createClient } from "@supabase/supabase-js";
