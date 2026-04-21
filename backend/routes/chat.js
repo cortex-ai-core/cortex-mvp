@@ -23,7 +23,7 @@ import { resolveToneForNamespace } from "../identity/toneRouter.js";
 // 🔒 CONFIG
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
-const TIMEOUT_MS = 12000;
+const TIMEOUT_MS = 30000; // 🔥 FIXED (was 12000)
 const RATE_LIMIT = 20;
 
 const userBuckets = new Map();
@@ -161,13 +161,11 @@ export default fp(async function chatRoute(fastify) {
 
         const inputLength = message.length;
 
-        // ---------------- VALIDATION ----------------
         if (!identity) {
           logEvent(fastify, { requestId, userId, namespace, inputLength: 0, outputLength: 0, latency: Date.now() - start, errorType: "unauthorized" });
           return reply.code(401).send({ error: "Unauthorized" });
         }
 
-        // 🔥 RATE LIMIT
         const rate = checkRateLimit(userId);
 
         if (!rate.allowed) {
@@ -189,19 +187,16 @@ export default fp(async function chatRoute(fastify) {
         }
 
         if (!message.trim()) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength: 0, outputLength: 0, latency: Date.now() - start, errorType: "empty_input" });
           return reply.code(400).send({ error: "Message required" });
         }
 
         if (message.length > MAX_INPUT) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength, outputLength: 0, latency: Date.now() - start, errorType: "input_too_large" });
           return reply.code(400).send({ error: "Input too large" });
         }
 
         const initialDLP = runDLPScan(message);
 
         if (initialDLP.block) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength, outputLength: 0, latency: Date.now() - start, errorType: "dlp_block" });
           return reply.send({ error: "Sensitive data blocked" });
         }
 
@@ -209,19 +204,9 @@ export default fp(async function chatRoute(fastify) {
 
         const simpleResponse = handleSimpleCases(sanitizedMessage);
         if (simpleResponse) {
-          logEvent(fastify, {
-            requestId,
-            userId,
-            namespace,
-            inputLength,
-            outputLength: simpleResponse.finalAnswer.length,
-            latency: Date.now() - start
-          });
-
           return reply.send(simpleResponse);
         }
 
-        // ---------------- RAG ----------------
         let ragContext = "";
 
         if (ephemeralContext.trim()) {
@@ -238,15 +223,33 @@ export default fp(async function chatRoute(fastify) {
           ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
         }
 
-        // ---------------- MODEL ----------------
-        let finalAnswer = await withTimeout(
-          synthesizeFinalAnswer({
-            userMessage: sanitizedMessage,
-            contextWindow: ragContext,
-            model: openai
-          }),
-          TIMEOUT_MS
-        );
+        let finalAnswer;
+
+        try {
+          finalAnswer = await withTimeout(
+            synthesizeFinalAnswer({
+              userMessage: sanitizedMessage,
+              contextWindow: ragContext,
+              model: openai
+            }),
+            TIMEOUT_MS
+          );
+        } catch (timeoutErr) {
+          if (timeoutErr.message === "timeout") {
+            logEvent(fastify, {
+              requestId,
+              userId,
+              namespace,
+              inputLength,
+              outputLength: 0,
+              latency: Date.now() - start,
+              errorType: "timeout"
+            });
+
+            return reply.code(504).send({ error: "Model timeout — retry" });
+          }
+          throw timeoutErr;
+        }
 
         finalAnswer = stripSensitiveFields(finalAnswer);
 
@@ -262,7 +265,6 @@ export default fp(async function chatRoute(fastify) {
         return reply.send({ finalAnswer });
 
       } catch (err) {
-
         logEvent(fastify, {
           requestId,
           userId,
