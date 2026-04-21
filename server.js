@@ -24,7 +24,11 @@ import path from "path";
 
 import authPlugin from "./backend/lib/authMiddleware.js";
 
-const fastify = Fastify({ logger: true });
+// ✅ FIX APPLIED — bodyLimit added (NO OTHER CHANGES)
+const fastify = Fastify({
+  logger: true,
+  bodyLimit: 1048576 // 1MB
+});
 
 // -------------------------------------------------------------
 // CORS
