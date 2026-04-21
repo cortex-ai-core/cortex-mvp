@@ -64,8 +64,6 @@ fastify.get("/api/health", async () => ({
 // =============================================================
 const routesDir = path.join(process.cwd(), "backend", "routes");
 
-// 🔒 OPTIONAL: STRICT WHITELIST (SAFEST)
-// Comment this out if you want dynamic expansion later
 const allowedRoutes = new Set([
   "auth.js",
   "chat.js",
@@ -75,17 +73,10 @@ const allowedRoutes = new Set([
 ]);
 
 for (const file of fs.readdirSync(routesDir)) {
-
-  // ----------------------------------------------------------
-  // FILTER: Only valid route files
-  // ----------------------------------------------------------
   if (!file.endsWith(".js")) continue;
   if (file.includes(".bak")) continue;
-
-  // 🔥 Skip middleware / utilities explicitly
   if (file.toLowerCase().includes("middleware")) continue;
 
-  // 🔥 Enforce whitelist (prevents accidental route overrides)
   if (!allowedRoutes.has(file)) {
     console.warn(`⚠️ Skipping ${file} — not in allowed route list`);
     continue;
@@ -104,11 +95,18 @@ for (const file of fs.readdirSync(routesDir)) {
 }
 
 // =============================================================
-//  START SERVER
+//  START SERVER (✅ FIXED FOR RAILWAY)
 // =============================================================
 try {
-  await fastify.listen({ port: 8080 });
-  console.log("🔥 CORTÉX SERVER RUNNING — PORT 8080 [STAGE-46 + 47.6G]");
+  const PORT = process.env.PORT || 8080;
+
+  await fastify.listen({
+    port: PORT,
+    host: "0.0.0.0"
+  });
+
+  console.log(`🔥 CORTÉX SERVER RUNNING — PORT ${PORT} [STAGE-46 + 47.6G]`);
+
 } catch (err) {
   fastify.log.error(err);
   process.exit(1);
