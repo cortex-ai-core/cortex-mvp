@@ -5,14 +5,9 @@
 import jwt from "jsonwebtoken";
 
 const JWT_SECRET = process.env.JWT_SECRET;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 if (!JWT_SECRET) {
   throw new Error("JWT_SECRET is not defined.");
-}
-
-if (!ADMIN_PASSWORD) {
-  throw new Error("ADMIN_PASSWORD is not defined.");
 }
 
 // -------------------------------------------------------------
@@ -24,21 +19,14 @@ export default async function authRoutes(fastify) {
     try {
       const { username, password } = req.body;
 
-      // 🔥 ONE PASSWORD FOR ALL (SECURE)
-      if (password !== ADMIN_PASSWORD) {
-        return reply.code(401).send({
-          error: "Invalid credentials"
-        });
-      }
-
       // ======================================================
       // 👑 CORE (YOU — SUPER ADMIN)
       // ======================================================
-      if (username === "chan") {
+      if (username === "king" && password === "king123") {
         return {
           token: jwt.sign(
             {
-              userId: "chan",
+              userId: "king",
               role: "super_admin",
               namespace: "core"
             },
@@ -51,12 +39,12 @@ export default async function authRoutes(fastify) {
       // ======================================================
       // 🌴 HAWAII (CLIENT PILOT)
       // ======================================================
-      if (username === "hawaii") {
+      if (username === "hawaii" && password === "hawaii") {
         return {
           token: jwt.sign(
             {
               userId: "hawaii_user",
-              role: "super_admin",
+              role: "super_admin", // 🔥 UPDATED
               namespace: "hawaii"
             },
             JWT_SECRET,
@@ -68,12 +56,12 @@ export default async function authRoutes(fastify) {
       // ======================================================
       // 🧠 ADVISORY (INTERNAL)
       // ======================================================
-      if (username === "advisory") {
+      if (username === "advisory" && password === "advisory") {
         return {
           token: jwt.sign(
             {
               userId: "advisory_user",
-              role: "super_admin",
+              role: "super_admin", // 🔥 UPDATED
               namespace: "advisory"
             },
             JWT_SECRET,
@@ -85,12 +73,12 @@ export default async function authRoutes(fastify) {
       // ======================================================
       // 🎯 RECRUITING (INTERNAL)
       // ======================================================
-      if (username === "recruiting") {
+      if (username === "recruiting" && password === "recruiting") {
         return {
           token: jwt.sign(
             {
               userId: "recruiting_user",
-              role: "super_admin",
+              role: "super_admin", // 🔥 UPDATED
               namespace: "recruiting"
             },
             JWT_SECRET,
@@ -102,12 +90,12 @@ export default async function authRoutes(fastify) {
       // ======================================================
       // 🔐 CYBERSECURITY (INTERNAL)
       // ======================================================
-      if (username === "cyber") {
+      if (username === "cyber" && password === "cyber") {
         return {
           token: jwt.sign(
             {
               userId: "cyber_user",
-              role: "super_admin",
+              role: "super_admin", // 🔥 UPDATED
               namespace: "cybersecurity"
             },
             JWT_SECRET,
@@ -119,12 +107,12 @@ export default async function authRoutes(fastify) {
       // ======================================================
       // 📊 DATA MANAGEMENT (INTERNAL)
       // ======================================================
-      if (username === "data") {
+      if (username === "data" && password === "data") {
         return {
           token: jwt.sign(
             {
               userId: "data_user",
-              role: "super_admin",
+              role: "super_admin", // 🔥 UPDATED
               namespace: "datamanagement"
             },
             JWT_SECRET,
@@ -134,7 +122,7 @@ export default async function authRoutes(fastify) {
       }
 
       // ======================================================
-      // ❌ INVALID USERNAME
+      // ❌ INVALID LOGIN
       // ======================================================
       return reply.code(401).send({
         error: "Invalid credentials"
