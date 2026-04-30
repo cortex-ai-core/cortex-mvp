@@ -57,11 +57,12 @@ async function authPlugin(fastify) {
   // 🔥 GLOBAL HOOK — RUNS ON EVERY REQUEST (WITH SAFE BYPASS)
   fastify.addHook("preHandler", async (req, reply) => {
 
-    // ✅ ALLOW PUBLIC ROUTES
+    // ✅ ALLOW PUBLIC ROUTES (PATCHED)
     if (
       req.url.startsWith("/api/auth") ||
       req.method === "OPTIONS" ||
-      req.url === "/api/health"
+      req.url === "/health" ||        // ✅ FIXED
+      req.url === "/api/health"       // (kept for safety)
     ) {
       return;
     }

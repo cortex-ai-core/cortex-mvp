@@ -20,8 +20,13 @@ async function authHandler(req, reply) {
 
     const token = header.replace("Bearer ", "").trim();
 
-    // ✅ RESOLVE SECRET AT RUNTIME
-    const jwtSecret = process.env.JWT_SECRET || "cortex-dev-secret";
+    // 🔥 STRICT SECRET (NO FALLBACK)
+    const jwtSecret = process.env.JWT_SECRET;
+
+    if (!jwtSecret) {
+      console.error("❌ JWT_SECRET NOT SET");
+      return reply.code(500).send({ error: "Server misconfigured." });
+    }
 
     // 🔍 DEBUG LOGS
     console.log("TOKEN RECEIVED:", token);
@@ -50,19 +55,19 @@ export function requireAuth() {
 requireAuth.handler = authHandler;
 
 // =============================================================
-// FASTIFY PLUGIN (🔥 FIX APPLIED HERE)
+// FASTIFY PLUGIN
 // =============================================================
 async function authPlugin(fastify) {
 
   // 🔥 GLOBAL HOOK — RUNS ON EVERY REQUEST (WITH SAFE BYPASS)
   fastify.addHook("preHandler", async (req, reply) => {
 
-    // ✅ ALLOW PUBLIC ROUTES (PATCHED)
+    // ✅ ALLOW PUBLIC ROUTES
     if (
       req.url.startsWith("/api/auth") ||
       req.method === "OPTIONS" ||
-      req.url === "/health" ||        // ✅ FIXED
-      req.url === "/api/health"       // (kept for safety)
+      req.url === "/health" ||
+      req.url === "/api/health"
     ) {
       return;
     }
