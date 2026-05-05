@@ -1,5 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
+//  v1.4 FINAL — INTENT GATING (FIXED)
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -136,7 +137,6 @@ export default fp(async function chatRoute(fastify) {
         const ephemeralContext =
           typeof body.ephemeralContext === "string" ? body.ephemeralContext : "";
 
-        // 🔒 v1.3 PRIVATE MODE FLAG
         const privateMode = body.privateMode === true;
 
         const inputLength = message.length;
@@ -187,7 +187,19 @@ export default fp(async function chatRoute(fastify) {
           return reply.send(simpleResponse);
         }
 
-        // 🔥 v1.2 IDENTITY RESOLUTION
+        // 🔥 v1.4 INTENT DETECTION
+        const intent = decodeIntent(sanitizedMessage);
+
+        // ✅ FIXED — expanded intent coverage
+        const requiresKnowledge = [
+          "analysis",
+          "question",
+          "lookup",
+          "summarize",
+          "summary"
+        ].includes(intent);
+
+        // 🔥 IDENTITY
         const tone = resolveToneForNamespace(namespace);
 
         const identityContext = applyIdentityLayer({
@@ -199,19 +211,18 @@ export default fp(async function chatRoute(fastify) {
 
         let ragContext = "";
 
-        // 🔒 v1.3 PRIVATE MODE ENFORCEMENT
         if (privateMode) {
-          // ❌ NO DB CALLS
           ragContext = ephemeralContext;
 
         } else {
           if (ephemeralContext.trim()) {
             ragContext = ephemeralContext;
-          } else {
+
+          } else if (requiresKnowledge) {
             const retrieveRes = await fastify.inject({
               method: "POST",
               url: "/api/retrieve",
-              payload: { query: sanitizedMessage, namespace, topK: 5 },
+              payload: { query: sanitizedMessage, namespace },
               headers: { authorization: req.headers.authorization }
             });
 
@@ -223,6 +234,9 @@ export default fp(async function chatRoute(fastify) {
             }
 
             ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
+
+          } else {
+            ragContext = "";
           }
         }
 
@@ -231,6 +245,7 @@ export default fp(async function chatRoute(fastify) {
         try {
           finalAnswer = await withTimeout(
             synthesizeFinalAnswer({
+              intent,
               userMessage: sanitizedMessage,
               contextWindow: ragContext,
               model: openai,
@@ -240,43 +255,12 @@ export default fp(async function chatRoute(fastify) {
           );
         } catch (timeoutErr) {
           if (timeoutErr.message === "timeout") {
-            logEvent(fastify, {
-              requestId,
-              userId,
-              namespace,
-              inputLength,
-              outputLength: 0,
-              latency: Date.now() - start,
-              errorType: "timeout"
-            });
-
             return reply.code(504).send({ error: "Model timeout — retry" });
           }
-
-          logEvent(fastify, {
-            requestId,
-            userId,
-            namespace,
-            inputLength,
-            outputLength: 0,
-            latency: Date.now() - start,
-            errorType: "model_failure"
-          });
-
           return reply.code(502).send({ error: "Upstream model failure" });
         }
 
         if (!finalAnswer || typeof finalAnswer !== "string") {
-          logEvent(fastify, {
-            requestId,
-            userId,
-            namespace,
-            inputLength,
-            outputLength: 0,
-            latency: Date.now() - start,
-            errorType: "invalid_model_output"
-          });
-
           return reply.code(502).send({ error: "Invalid model response" });
         }
 
