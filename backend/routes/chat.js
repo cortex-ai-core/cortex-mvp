@@ -7,7 +7,7 @@ import OpenAI from "openai";
 import { requireAuth } from "../lib/authMiddleware.js";
 
 // 🔒 DLP
-import { runDLPScan } from "../lib/dlp.js";
+import { runDLPScan, stripSensitiveFields } from "../lib/dlp.js";
 
 // 🔥 Step 46 Reasoning Modules
 import { decodeIntent } from "../reasoning/intent.js";
@@ -23,7 +23,7 @@ import { resolveToneForNamespace } from "../identity/toneRouter.js";
 // 🔒 CONFIG
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
-const TIMEOUT_MS = 30000; // 🔥 FIXED (was 12000)
+const TIMEOUT_MS = 30000;
 const RATE_LIMIT = 20;
 
 const userBuckets = new Map();
@@ -109,31 +109,6 @@ function handleSimpleCases(input = "") {
   }
 
   return null;
-}
-
-// ----------------------------------------------------
-// 🔥 OUTPUT DLP
-// ----------------------------------------------------
-function stripSensitiveFields(text = "") {
-  if (!text || typeof text !== "string") return text;
-
-  let output = text;
-
-  output = output.replace(
-    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-    "[REDACTED_EMAIL]"
-  );
-
-  const phonePatterns = [
-    /\+?1?\s*\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}\b/g,
-    /\b\d{3}[\s.-]\d{3}[\s.-]\d{4}\b/g
-  ];
-
-  phonePatterns.forEach((pattern) => {
-    output = output.replace(pattern, "[REDACTED_PHONE]");
-  });
-
-  return output;
 }
 
 // ============================================================
@@ -251,6 +226,7 @@ export default fp(async function chatRoute(fastify) {
           throw timeoutErr;
         }
 
+        // 🔥 FINAL ENFORCED OUTPUT DLP (from lib — NOT local)
         finalAnswer = stripSensitiveFields(finalAnswer);
 
         logEvent(fastify, {
