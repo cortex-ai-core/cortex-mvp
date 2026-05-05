@@ -167,26 +167,20 @@ export default fp(async function chatRoute(fastify) {
           ragContext = results.map(r => r.content).join("\n\n");
 
           // ============================================================
-          // 🔥 FINAL ENTITY RESOLUTION (HARD GUARANTEE — FIXED)
+          // 🔥 FINAL ENTITY RESOLUTION (CORRECT + SAFE)
           // ============================================================
           let resolvedName = null;
 
-          // 1️⃣ Try context first
           if (ragContext) {
-            const match = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (match) resolvedName = match[0];
+            const nameMatch = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+            if (nameMatch) resolvedName = nameMatch[0];
           }
 
-          // 2️⃣ Fallback to user input
-          if (!resolvedName) {
-            const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (userMatch) resolvedName = userMatch[0];
-          }
-
-          // 3️⃣ ALWAYS inject if found
           if (resolvedName) {
+            // 1️⃣ Inject strong anchor
             ragContext = `PRIMARY ENTITY (SOURCE OF TRUTH): ${resolvedName}\n\n${ragContext}`;
 
+            // 2️⃣ Normalize ONLY conflicting user name
             const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
 
             if (userMatch) {

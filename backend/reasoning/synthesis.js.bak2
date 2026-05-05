@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE (Step 46 + 47.6B + v1.2 Identity)
-//  v1.4 FINAL — CONTEXT ENFORCEMENT + ENTITY LOCK (DETERMINISTIC + COMPLETE)
+//  v1.4 FINAL — CONTEXT ENFORCEMENT + ENTITY LOCK (DETERMINISTIC)
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -42,23 +42,14 @@ export async function synthesizeFinalAnswer({
     contextWindow.trim().length > 0;
 
   // ============================================================
-  // 🔥 ENTITY DETECTION (FINAL — INJECTED + FALLBACK)
+  // 🔥 ENTITY DETECTION (GENERIC)
   // ============================================================
   let primaryEntity = null;
 
   if (hasContext) {
-    // 1️⃣ Preferred: injected entity
-    const injected = contextWindow.match(/PRIMARY ENTITY \(SOURCE OF TRUTH\):\s*(.+)/i);
-    if (injected) {
-      primaryEntity = injected[1].trim();
-    }
-
-    // 2️⃣ Fallback: extract first valid full name from context
-    if (!primaryEntity) {
-      const fallback = contextWindow.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-      if (fallback) {
-        primaryEntity = fallback[0];
-      }
+    const match = contextWindow.match(/PRIMARY ENTITY \(SOURCE OF TRUTH\):\s*(.+)/i);
+    if (match) {
+      primaryEntity = match[1].trim();
     }
   }
 
@@ -112,7 +103,7 @@ ${
     : "None";
 
   // ============================================================
-  // 🔥 TASK-LEVEL ENFORCEMENT
+  // 🔥 TASK-LEVEL ENFORCEMENT (HARD)
   // ============================================================
   const userPrompt = `
 CONTEXT WINDOW:
@@ -161,7 +152,7 @@ Do NOT reference system structure.
     "I need more information.";
 
   // ============================================================
-  // 🔥 FINAL SAFETY — ENTITY GUARANTEE
+  // 🔥 FINAL SAFETY — ENTITY GUARANTEE (NON-NEGOTIABLE)
   // ============================================================
   if (primaryEntity && !output.includes(primaryEntity)) {
     output = `${primaryEntity} — ${output}`;
