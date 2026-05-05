@@ -1,5 +1,5 @@
 // ============================================================
-//  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP)
+//  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -76,7 +76,7 @@ function withTimeout(promise, ms) {
 }
 
 // ----------------------------------------------------
-// 📊 STRUCTURED LOGGER
+// 📊 STRUCTURED LOGGER (PRIVATE MODE SAFE)
 // ----------------------------------------------------
 function logEvent(fastify, data) {
   fastify.log.info({
@@ -135,6 +135,9 @@ export default fp(async function chatRoute(fastify) {
         const message = typeof body.message === "string" ? body.message : "";
         const ephemeralContext =
           typeof body.ephemeralContext === "string" ? body.ephemeralContext : "";
+
+        // 🔒 v1.3 PRIVATE MODE FLAG
+        const privateMode = body.privateMode === true;
 
         const inputLength = message.length;
 
@@ -196,24 +199,31 @@ export default fp(async function chatRoute(fastify) {
 
         let ragContext = "";
 
-        if (ephemeralContext.trim()) {
+        // 🔒 v1.3 PRIVATE MODE ENFORCEMENT
+        if (privateMode) {
+          // ❌ NO DB CALLS
           ragContext = ephemeralContext;
+
         } else {
-          const retrieveRes = await fastify.inject({
-            method: "POST",
-            url: "/api/retrieve",
-            payload: { query: sanitizedMessage, namespace, topK: 5 },
-            headers: { authorization: req.headers.authorization }
-          });
+          if (ephemeralContext.trim()) {
+            ragContext = ephemeralContext;
+          } else {
+            const retrieveRes = await fastify.inject({
+              method: "POST",
+              url: "/api/retrieve",
+              payload: { query: sanitizedMessage, namespace, topK: 5 },
+              headers: { authorization: req.headers.authorization }
+            });
 
-          let parsed;
-          try {
-            parsed = JSON.parse(retrieveRes.body || "{}");
-          } catch {
-            parsed = {};
+            let parsed;
+            try {
+              parsed = JSON.parse(retrieveRes.body || "{}");
+            } catch {
+              parsed = {};
+            }
+
+            ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
           }
-
-          ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
         }
 
         let finalAnswer;
@@ -224,7 +234,7 @@ export default fp(async function chatRoute(fastify) {
               userMessage: sanitizedMessage,
               contextWindow: ragContext,
               model: openai,
-              identityContext // 🔥 v1.2 PASS THROUGH
+              identityContext
             }),
             TIMEOUT_MS
           );
