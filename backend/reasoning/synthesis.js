@@ -1,5 +1,5 @@
 // ============================================================
-//  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE (Step 46 + 47.6B)
+//  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE (Step 46 + 47.6B + v1.2 Identity)
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -8,7 +8,8 @@ export async function synthesizeFinalAnswer({
   fusedEvidence = [],
   inferencePaths = {},
   contextWindow = "",
-  model, // <- full OpenAI client
+  model,
+  identityContext = null, // 🔥 v1.2 ADD
 }) {
 
   // ============================================================
@@ -26,13 +27,32 @@ export async function synthesizeFinalAnswer({
   }
 
   // -----------------------------
+  // 🔥 Identity Extraction (v1.2)
+  // -----------------------------
+  const role = identityContext?.role || "user";
+  const namespace = identityContext?.namespace || "general";
+  const tone = identityContext?.tone || "neutral";
+
+  // -----------------------------
   // Build system prompt
   // -----------------------------
   const systemPrompt = `
 You are Cortéx — the sovereign reasoning engine.
+
+IDENTITY CONTEXT:
+- Role: ${role}
+- Namespace: ${namespace}
+- Tone Mode: ${tone}
+
 Respond with clarity, precision, and alignment to the intent: ${intent}.
-Do NOT mention internal reasoning steps.
-  `.trim();
+
+Behavior Rules:
+- Adapt tone based on Tone Mode
+- Maintain authority and structure
+- Do NOT expose internal reasoning
+- Do NOT fabricate missing data
+- Respect data boundaries and security controls
+`.trim();
 
   // -----------------------------
   // Build evidence + reasoning text

@@ -128,7 +128,7 @@ export default fp(async function chatRoute(fastify) {
       const userId = identity?.userId || "unknown";
       const namespace = identity?.namespace || "unknown";
 
-      let responded = false; // 🔥 retry shield
+      let responded = false;
 
       try {
         const body = req.body || {};
@@ -184,6 +184,16 @@ export default fp(async function chatRoute(fastify) {
           return reply.send(simpleResponse);
         }
 
+        // 🔥 v1.2 IDENTITY RESOLUTION
+        const tone = resolveToneForNamespace(namespace);
+
+        const identityContext = applyIdentityLayer({
+          userId,
+          role: identity.role,
+          namespace,
+          tone
+        });
+
         let ragContext = "";
 
         if (ephemeralContext.trim()) {
@@ -213,7 +223,8 @@ export default fp(async function chatRoute(fastify) {
             synthesizeFinalAnswer({
               userMessage: sanitizedMessage,
               contextWindow: ragContext,
-              model: openai
+              model: openai,
+              identityContext // 🔥 v1.2 PASS THROUGH
             }),
             TIMEOUT_MS
           );
@@ -245,7 +256,6 @@ export default fp(async function chatRoute(fastify) {
           return reply.code(502).send({ error: "Upstream model failure" });
         }
 
-        // 🔥 OUTPUT GUARD (prevent null/invalid responses)
         if (!finalAnswer || typeof finalAnswer !== "string") {
           logEvent(fastify, {
             requestId,
@@ -260,7 +270,6 @@ export default fp(async function chatRoute(fastify) {
           return reply.code(502).send({ error: "Invalid model response" });
         }
 
-        // 🔥 FINAL ENFORCED OUTPUT DLP
         finalAnswer = stripSensitiveFields(finalAnswer);
 
         logEvent(fastify, {
