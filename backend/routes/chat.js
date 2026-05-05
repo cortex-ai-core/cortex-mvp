@@ -128,6 +128,8 @@ export default fp(async function chatRoute(fastify) {
       const userId = identity?.userId || "unknown";
       const namespace = identity?.namespace || "unknown";
 
+      let responded = false; // 🔥 retry shield
+
       try {
         const body = req.body || {};
         const message = typeof body.message === "string" ? body.message : "";
@@ -194,7 +196,13 @@ export default fp(async function chatRoute(fastify) {
             headers: { authorization: req.headers.authorization }
           });
 
-          let parsed = JSON.parse(retrieveRes.body || "{}");
+          let parsed;
+          try {
+            parsed = JSON.parse(retrieveRes.body || "{}");
+          } catch {
+            parsed = {};
+          }
+
           ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
         }
 
@@ -223,10 +231,36 @@ export default fp(async function chatRoute(fastify) {
 
             return reply.code(504).send({ error: "Model timeout — retry" });
           }
-          throw timeoutErr;
+
+          logEvent(fastify, {
+            requestId,
+            userId,
+            namespace,
+            inputLength,
+            outputLength: 0,
+            latency: Date.now() - start,
+            errorType: "model_failure"
+          });
+
+          return reply.code(502).send({ error: "Upstream model failure" });
         }
 
-        // 🔥 FINAL ENFORCED OUTPUT DLP (from lib — NOT local)
+        // 🔥 OUTPUT GUARD (prevent null/invalid responses)
+        if (!finalAnswer || typeof finalAnswer !== "string") {
+          logEvent(fastify, {
+            requestId,
+            userId,
+            namespace,
+            inputLength,
+            outputLength: 0,
+            latency: Date.now() - start,
+            errorType: "invalid_model_output"
+          });
+
+          return reply.code(502).send({ error: "Invalid model response" });
+        }
+
+        // 🔥 FINAL ENFORCED OUTPUT DLP
         finalAnswer = stripSensitiveFields(finalAnswer);
 
         logEvent(fastify, {
@@ -238,9 +272,12 @@ export default fp(async function chatRoute(fastify) {
           latency: Date.now() - start
         });
 
+        responded = true;
         return reply.send({ finalAnswer });
 
       } catch (err) {
+        if (responded) return;
+
         logEvent(fastify, {
           requestId,
           userId,
