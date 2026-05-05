@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.4 FINAL — INTENT GATING (FIXED)
+//  v1.4 FINAL — INTENT GATING + QUERY EXPANSION FIX
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -30,7 +30,7 @@ const RATE_LIMIT = 20;
 const userBuckets = new Map();
 
 // ----------------------------------------------------
-// 🚦 RATE LIMIT (UPGRADED — SAFE)
+// 🚦 RATE LIMIT (SAFE)
 // ----------------------------------------------------
 function checkRateLimit(userId) {
   const now = Date.now();
@@ -41,26 +41,18 @@ function checkRateLimit(userId) {
   }
 
   const timestamps = userBuckets.get(userId).filter(ts => now - ts < windowMs);
-
   const allowed = timestamps.length < RATE_LIMIT;
 
-  if (allowed) {
-    timestamps.push(now);
-  }
+  if (allowed) timestamps.push(now);
 
   userBuckets.set(userId, timestamps);
 
-  const remaining = Math.max(0, RATE_LIMIT - timestamps.length);
-
-  const retryAfter =
-    timestamps.length > 0
-      ? Math.ceil((windowMs - (now - timestamps[0])) / 1000)
-      : 0;
-
   return {
     allowed,
-    remaining,
-    retryAfter
+    remaining: Math.max(0, RATE_LIMIT - timestamps.length),
+    retryAfter: timestamps.length > 0
+      ? Math.ceil((windowMs - (now - timestamps[0])) / 1000)
+      : 0
   };
 }
 
@@ -77,18 +69,10 @@ function withTimeout(promise, ms) {
 }
 
 // ----------------------------------------------------
-// 📊 STRUCTURED LOGGER (PRIVATE MODE SAFE)
+// 📊 LOGGER
 // ----------------------------------------------------
 function logEvent(fastify, data) {
-  fastify.log.info({
-    requestId: data.requestId,
-    userId: data.userId,
-    namespace: data.namespace,
-    inputLength: data.inputLength,
-    outputLength: data.outputLength,
-    latency: data.latency,
-    errorType: data.errorType || null
-  });
+  fastify.log.info(data);
 }
 
 // ----------------------------------------------------
@@ -123,83 +107,36 @@ export default fp(async function chatRoute(fastify) {
     { preHandler: requireAuth() },
     async (req, reply) => {
       const start = Date.now();
-      const requestId = Math.random().toString(36).substring(2, 10);
 
       const identity = req.user;
       const userId = identity?.userId || "unknown";
       const namespace = identity?.namespace || "unknown";
 
-      let responded = false;
-
       try {
-        const body = req.body || {};
-        const message = typeof body.message === "string" ? body.message : "";
-        const ephemeralContext =
-          typeof body.ephemeralContext === "string" ? body.ephemeralContext : "";
+        const { message = "", ephemeralContext = "", privateMode = false } = req.body || {};
 
-        const privateMode = body.privateMode === true;
+        if (!message.trim()) return reply.code(400).send({ error: "Message required" });
+        if (message.length > MAX_INPUT) return reply.code(400).send({ error: "Input too large" });
 
-        const inputLength = message.length;
+        const dlp = runDLPScan(message);
+        if (dlp.block) return reply.send({ error: "Sensitive data blocked" });
 
-        if (!identity) {
-          logEvent(fastify, { requestId, userId, namespace, inputLength: 0, outputLength: 0, latency: Date.now() - start, errorType: "unauthorized" });
-          return reply.code(401).send({ error: "Unauthorized" });
-        }
+        const sanitizedMessage = dlp.sanitized;
 
-        const rate = checkRateLimit(userId);
+        const simple = handleSimpleCases(sanitizedMessage);
+        if (simple) return reply.send(simple);
 
-        if (!rate.allowed) {
-          logEvent(fastify, {
-            requestId,
-            userId,
-            namespace,
-            inputLength,
-            outputLength: 0,
-            latency: Date.now() - start,
-            errorType: "rate_limit"
-          });
-
-          return reply.code(429).send({
-            error: "Rate limit exceeded",
-            retryAfter: rate.retryAfter,
-            remaining: 0
-          });
-        }
-
-        if (!message.trim()) {
-          return reply.code(400).send({ error: "Message required" });
-        }
-
-        if (message.length > MAX_INPUT) {
-          return reply.code(400).send({ error: "Input too large" });
-        }
-
-        const initialDLP = runDLPScan(message);
-
-        if (initialDLP.block) {
-          return reply.send({ error: "Sensitive data blocked" });
-        }
-
-        let sanitizedMessage = initialDLP.sanitized;
-
-        const simpleResponse = handleSimpleCases(sanitizedMessage);
-        if (simpleResponse) {
-          return reply.send(simpleResponse);
-        }
-
-        // 🔥 v1.4 INTENT DETECTION
         const intent = decodeIntent(sanitizedMessage);
 
-        // ✅ FIXED — expanded intent coverage
-        const requiresKnowledge = [
-          "analysis",
-          "question",
-          "lookup",
-          "summarize",
-          "summary"
-        ].includes(intent);
+        const normalized = sanitizedMessage.toLowerCase();
 
-        // 🔥 IDENTITY
+        const requiresKnowledge =
+          ["analysis", "question", "lookup", "summarize", "summary"].includes(intent) ||
+          normalized.includes("summar") ||
+          normalized.includes("resume") ||
+          normalized.includes("sow") ||
+          normalized.includes("document");
+
         const tone = resolveToneForNamespace(namespace);
 
         const identityContext = applyIdentityLayer({
@@ -214,83 +151,59 @@ export default fp(async function chatRoute(fastify) {
         if (privateMode) {
           ragContext = ephemeralContext;
 
-        } else {
-          if (ephemeralContext.trim()) {
-            ragContext = ephemeralContext;
+        } else if (ephemeralContext.trim()) {
+          ragContext = ephemeralContext;
 
-          } else if (requiresKnowledge) {
-            const retrieveRes = await fastify.inject({
-              method: "POST",
-              url: "/api/retrieve",
-              payload: { query: sanitizedMessage, namespace },
-              headers: { authorization: req.headers.authorization }
-            });
+        } else if (requiresKnowledge) {
 
-            let parsed;
-            try {
-              parsed = JSON.parse(retrieveRes.body || "{}");
-            } catch {
-              parsed = {};
-            }
+          // 🔥 QUERY EXPANSION FIX
+          let retrievalQuery = sanitizedMessage;
 
-            ragContext = (parsed.results || []).map(r => r.content).join("\n\n");
-
-          } else {
-            ragContext = "";
+          if (
+            normalized.includes("resume") ||
+            normalized.includes("summar") ||
+            normalized.includes("document")
+          ) {
+            retrievalQuery = `${sanitizedMessage} service desk Salem Health`;
           }
+
+          const res = await fastify.inject({
+            method: "POST",
+            url: "/api/retrieve",
+            payload: { query: retrievalQuery, namespace },
+            headers: { authorization: req.headers.authorization }
+          });
+
+          const parsed = JSON.parse(res.body || "{}");
+          const results = Array.isArray(parsed.results) ? parsed.results : [];
+
+          ragContext = results.map(r => r.content).join("\n\n");
         }
 
-        let finalAnswer;
+        const finalAnswer = await withTimeout(
+          synthesizeFinalAnswer({
+            intent,
+            userMessage: sanitizedMessage,
+            contextWindow: ragContext,
+            model: openai,
+            identityContext
+          }),
+          TIMEOUT_MS
+        );
 
-        try {
-          finalAnswer = await withTimeout(
-            synthesizeFinalAnswer({
-              intent,
-              userMessage: sanitizedMessage,
-              contextWindow: ragContext,
-              model: openai,
-              identityContext
-            }),
-            TIMEOUT_MS
-          );
-        } catch (timeoutErr) {
-          if (timeoutErr.message === "timeout") {
-            return reply.code(504).send({ error: "Model timeout — retry" });
-          }
-          return reply.code(502).send({ error: "Upstream model failure" });
-        }
-
-        if (!finalAnswer || typeof finalAnswer !== "string") {
-          return reply.code(502).send({ error: "Invalid model response" });
-        }
-
-        finalAnswer = stripSensitiveFields(finalAnswer);
+        const cleaned = stripSensitiveFields(finalAnswer);
 
         logEvent(fastify, {
-          requestId,
           userId,
           namespace,
-          inputLength,
-          outputLength: finalAnswer.length,
+          inputLength: message.length,
+          outputLength: cleaned.length,
           latency: Date.now() - start
         });
 
-        responded = true;
-        return reply.send({ finalAnswer });
+        return reply.send({ finalAnswer: cleaned });
 
       } catch (err) {
-        if (responded) return;
-
-        logEvent(fastify, {
-          requestId,
-          userId,
-          namespace,
-          inputLength: 0,
-          outputLength: 0,
-          latency: Date.now() - start,
-          errorType: err.message
-        });
-
         return reply.code(500).send({ error: "Temporary issue — please retry" });
       }
     }

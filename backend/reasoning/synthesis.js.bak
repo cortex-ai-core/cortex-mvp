@@ -1,6 +1,5 @@
 // ============================================================
-//  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE (Step 46 + 47.6B + v1.2 Identity)
-//  v1.4 FIX — CONTEXT ENFORCEMENT (SAFE)
+//  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE (Step 46 + 47.6B)
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -9,8 +8,7 @@ export async function synthesizeFinalAnswer({
   fusedEvidence = [],
   inferencePaths = {},
   contextWindow = "",
-  model,
-  identityContext = null,
+  model, // <- full OpenAI client
 }) {
 
   // ============================================================
@@ -28,54 +26,13 @@ export async function synthesizeFinalAnswer({
   }
 
   // -----------------------------
-  // 🔥 Identity Extraction (v1.2)
+  // Build system prompt
   // -----------------------------
-  const role = identityContext?.role || "user";
-  const namespace = identityContext?.namespace || "general";
-  const tone = identityContext?.tone || "neutral";
-
-  // ============================================================
-  // 🔥 NEW — CONTEXT DETECTION (SAFE)
-  // ============================================================
-  const hasContext = typeof contextWindow === "string" && contextWindow.trim().length > 0;
-
-  // ============================================================
-  // Build system prompt (ENHANCED — NOT REPLACED)
-  // ============================================================
   const systemPrompt = `
 You are Cortéx — the sovereign reasoning engine.
-
-IDENTITY CONTEXT:
-- Role: ${role}
-- Namespace: ${namespace}
-- Tone Mode: ${tone}
-
 Respond with clarity, precision, and alignment to the intent: ${intent}.
-
-Behavior Rules:
-- Adapt tone based on Tone Mode
-- Maintain authority and structure
-- Do NOT expose internal reasoning
-- Do NOT fabricate missing data
-- Respect data boundaries and security controls
-
-CONTEXT RULES:
-${
-  hasContext
-    ? `
-- CONTEXT WINDOW is provided.
-- You MUST prioritize and use the CONTEXT to answer.
-- Do NOT say "I don’t see the document".
-- Ground your answer in the provided context.
-- You may synthesize across context, but do not invent outside it.
-`
-    : `
-- No relevant context was found.
-- Respond: "No matching documents found in the system."
-- Do NOT attempt to answer from general knowledge.
-`
-}
-`.trim();
+Do NOT mention internal reasoning steps.
+  `.trim();
 
   // -----------------------------
   // Build evidence + reasoning text
@@ -89,7 +46,7 @@ ${
     : "None";
 
   // -----------------------------
-  // Build user prompt (UNCHANGED STRUCTURE)
+  // Build user prompt
   // -----------------------------
   const userPrompt = `
 USER MESSAGE:
