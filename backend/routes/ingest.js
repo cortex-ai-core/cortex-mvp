@@ -46,6 +46,57 @@ function hasPermission(identity, action) {
 }
 
 // -------------------------------------------------------------
+// v1.6 — ENTITY EXTRACTION (DETERMINISTIC, NO LLM, SAFE FILTER)
+// -------------------------------------------------------------
+function extractPrimaryEntity({ fileName, text }) {
+  if (!fileName) return null;
+
+  const baseName = fileName.replace(/\.[^/.]+$/, "");
+
+  const cleanedFileName = baseName
+    .replace(/\b(resume|cv|profile|candidate|bio)\b/gi, "")
+    .replace(/[-_()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const nameRegex = /\b[A-Z][a-z]+(?:\s[A-Z]\.)?\s[A-Z][a-z]+\b/;
+
+  const isLikelyPerson = (str) => {
+    if (!str) return false;
+
+    const words = str.split(" ");
+    if (words.length < 2 || words.length > 3) return false;
+
+    const banned = [
+      "Playbook", "Guide", "Report", "Document", "Policy",
+      "Procedure", "Plan", "Workflow", "System", "Strategy"
+    ];
+
+    for (const word of words) {
+      if (banned.includes(word)) return false;
+    }
+
+    return true;
+  };
+
+  const fileNameMatch = cleanedFileName.match(nameRegex);
+  if (fileNameMatch && isLikelyPerson(fileNameMatch[0])) {
+    return fileNameMatch[0].trim();
+  }
+
+  if (text) {
+    const firstBlock = text.slice(0, 300);
+
+    const textMatch = firstBlock.match(nameRegex);
+    if (textMatch && isLikelyPerson(textMatch[0])) {
+      return textMatch[0].trim();
+    }
+  }
+
+  return null;
+}
+
+// -------------------------------------------------------------
 // CHUNKER
 // -------------------------------------------------------------
 function chunkText(text, chunkSize = 500, overlap = 50) {
@@ -75,7 +126,6 @@ async function ingestRoute(fastify, opts) {
         const user = req.user?.user || req.user;
         const namespace = user.namespace;
 
-        // 🔥 FIX — NORMALIZE FILE NAME (CRITICAL PATCH)
         const { text, file_name, filename } = req.body;
 
         const resolvedFileName =
@@ -96,8 +146,6 @@ async function ingestRoute(fastify, opts) {
         if (!text) {
           return reply.code(400).send({ error: "Missing required field: text." });
         }
-
-        // 🔥 REMOVED HARD FAIL ON file_name
 
         // -----------------------------------------------------
         // STEP 1 — CREATE DOCUMENT RECORD
@@ -123,7 +171,18 @@ async function ingestRoute(fastify, opts) {
         // -----------------------------------------------------
         // STEP 2 — CHUNK + EMBED
         // -----------------------------------------------------
-        const chunks = chunkText(text);
+        const rawChunks = chunkText(text);
+
+        const primaryEntity = extractPrimaryEntity({
+          fileName: resolvedFileName,
+          text
+        });
+
+        const chunkHeader = primaryEntity
+          ? `PRIMARY ENTITY: ${primaryEntity}\nSOURCE FILE: ${resolvedFileName}\n\n`
+          : `SOURCE FILE: ${resolvedFileName}\n\n`;
+
+        const chunks = rawChunks.map(chunk => `${chunkHeader}${chunk}`);
         const insertedChunks = [];
 
         let index = 0;
@@ -158,13 +217,11 @@ async function ingestRoute(fastify, opts) {
           insertedChunks.push(data[0].id);
         }
 
-        // -----------------------------------------------------
-        // RESPONSE
-        // -----------------------------------------------------
         return reply.send({
           success: true,
           document_id: documentId,
-          file_name: resolvedFileName, // 🔥 added for visibility
+          file_name: resolvedFileName,
+          primary_entity: primaryEntity,
           namespace,
           chunksStored: insertedChunks.length,
           chunkIds: insertedChunks,
