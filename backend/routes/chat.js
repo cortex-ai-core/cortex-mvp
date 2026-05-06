@@ -1,6 +1,7 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.7.3 CLEAN ENTITY SIGNAL TO FORMATTER
+//  v1.7.8 SAFE POSSESSIVE RESUME TOKEN PATCH
+//  Deterministic chat route with neutral retrieval + bounded entity handling
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -83,6 +84,64 @@ function handleSimpleCases(input = "") {
   return null;
 }
 
+// ----------------------------------------------------
+// 🎯 User-message entity extraction only
+// ----------------------------------------------------
+function resolveUserMessageEntity(input = "") {
+  const match = String(input || "").match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+
+  if (match && match[0]) {
+    return match[0].trim();
+  }
+
+  return null;
+}
+
+// ----------------------------------------------------
+// 🎯 Generic resume owner token extraction
+// Examples:
+// - summarize brads resume  -> Brad
+// - summarize brad's resume -> Brad
+// - summarize brad’s resume -> Brad
+// - summarize Hiyab resume  -> Hiyab
+// ----------------------------------------------------
+function resolveRequestedResumeToken(input = "") {
+  const match = String(input || "").match(
+    /\bsummar(?:ize|ise|y)?\s+([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
+  );
+
+  if (!match || !match[1]) return null;
+
+  let raw = match[1].trim();
+
+  if (!raw) return null;
+
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+// ----------------------------------------------------
+// 🎯 Context-bounded full-name resolution
+// Only promotes a full name from context when it starts with
+// the exact requested resume token.
+// ----------------------------------------------------
+function resolveFullNameFromContextByToken(context = "", token = "") {
+  if (!context || !token) return null;
+
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`, "i");
+  const match = String(context || "").match(pattern);
+
+  if (match && match[1]) {
+    return match[1]
+      .split(" ")
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ")
+      .trim();
+  }
+
+  return null;
+}
+
 // ============================================================
 // 🚀 ROUTE
 // ============================================================
@@ -134,25 +193,26 @@ export default fp(async function chatRoute(fastify) {
 
         let ragContext = "";
         let normalizedMessage = sanitizedMessage;
-        let resolvedName = null;
+
+        const requestedResumeToken = resolveRequestedResumeToken(sanitizedMessage);
+        let resolvedName = resolveUserMessageEntity(sanitizedMessage);
 
         if (privateMode) {
           ragContext = ephemeralContext;
 
+          if (!resolvedName && requestedResumeToken) {
+            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
+          }
+
         } else if (ephemeralContext.trim()) {
           ragContext = ephemeralContext;
 
-        } else if (requiresKnowledge) {
-
-          let retrievalQuery = sanitizedMessage;
-
-          if (
-            normalized.includes("resume") ||
-            normalized.includes("summar") ||
-            normalized.includes("document")
-          ) {
-            retrievalQuery = `${sanitizedMessage} service desk Salem Health`;
+          if (!resolvedName && requestedResumeToken) {
+            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
           }
+
+        } else if (requiresKnowledge) {
+          const retrievalQuery = sanitizedMessage;
 
           const res = await fastify.inject({
             method: "POST",
@@ -166,21 +226,13 @@ export default fp(async function chatRoute(fastify) {
 
           ragContext = results.map(r => r.content).join("\n\n");
 
-          // ============================================================
-          // 🔥 FINAL ENTITY RESOLUTION
-          // ============================================================
-
-          const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-          if (userMatch) resolvedName = userMatch[0];
-
-          if (!resolvedName && ragContext) {
-            const contextMatch = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (contextMatch) resolvedName = contextMatch[0];
+          if (!resolvedName && requestedResumeToken) {
+            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
           }
+        }
 
-          if (resolvedName) {
-            ragContext = `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
-          }
+        if (resolvedName) {
+          ragContext = `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
         }
 
         const rawAnswer = await withTimeout(
