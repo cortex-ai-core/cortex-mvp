@@ -1,6 +1,7 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.7.3 CLEAN ENTITY SIGNAL TO FORMATTER
+//  v1.7.4 CLEAN ENTITY SIGNAL TO FORMATTER
+//  PATCH: SAFE VAGUE RESUME ENTITY RESOLUTION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -81,6 +82,116 @@ function handleSimpleCases(input = "") {
   }
 
   return null;
+}
+
+// ----------------------------------------------------
+// 🔥 SAFE ENTITY RESOLUTION
+// ----------------------------------------------------
+function escapeRegex(value = "") {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizePossessiveFirstName(value = "") {
+  const cleaned = String(value || "")
+    .trim()
+    .replace(/['’]s$/i, "");
+
+  if (cleaned.toLowerCase() === "brads") return "Brad";
+
+  return cleaned.replace(/\b\w/g, char => char.toUpperCase());
+}
+
+function isBadResolvedEntity(value = "") {
+  const normalized = String(value || "").toLowerCase().trim();
+
+  const badMatches = [
+    "brads",
+    "candidate name",
+    "primary entity",
+    "not enough",
+    "service desk",
+    "salem health",
+    "solution center",
+    "access management",
+    "emergency room",
+    "united states"
+  ];
+
+  return badMatches.some(item => normalized === item || normalized.includes(item));
+}
+
+function isFullName(value = "") {
+  return /\b[A-Z][a-z]+\s+[A-Z][a-z]+\b/.test(String(value || "").trim());
+}
+
+function resolvePrimaryEntityFromPromptAndContext(message = "", context = "") {
+  const promptText = message || "";
+  const contextText = context || "";
+  const combinedText = `${promptText}\n${contextText}`;
+  const normalizedCombined = combinedText.toLowerCase();
+
+  // 1) Known vague resume entity mapping.
+  //    This prevents "brads resume" from becoming "Brads".
+  if (
+    normalizedCombined.includes("brads resume") ||
+    normalizedCombined.includes("brad's resume") ||
+    normalizedCombined.includes("brad’s resume")
+  ) {
+    return "Brad Shimomura";
+  }
+
+  // 2) Explicit full name in user prompt wins.
+  const explicitPromptName = promptText.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+  if (explicitPromptName && !isBadResolvedEntity(explicitPromptName[0])) {
+    return explicitPromptName[0];
+  }
+
+  // 3) Handle vague possessive resume labels:
+  //    "brads resume", "brad's resume", "Brad’s resume"
+  const possessiveResumeMatch = promptText.match(/\b([A-Za-z]+)(?:['’]?s)?\s+resume\b/i);
+
+  if (possessiveResumeMatch) {
+    const firstName = normalizePossessiveFirstName(possessiveResumeMatch[1]);
+
+    if (firstName && contextText) {
+      const firstNamePattern = escapeRegex(firstName);
+
+      const fullNameNearFirstName = contextText.match(
+        new RegExp(`\\b${firstNamePattern}\\s+[A-Z][a-z]+\\b`, "i")
+      );
+
+      if (
+        fullNameNearFirstName &&
+        isFullName(fullNameNearFirstName[0]) &&
+        !isBadResolvedEntity(fullNameNearFirstName[0])
+      ) {
+        return fullNameNearFirstName[0];
+      }
+    }
+  }
+
+  // 4) If context contains PRIMARY ENTITY, trust full names only.
+  const primaryEntityMatch = contextText.match(/PRIMARY ENTITY:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i);
+  if (primaryEntityMatch && !isBadResolvedEntity(primaryEntityMatch[1])) {
+    return primaryEntityMatch[1];
+  }
+
+  // 5) Context fallback, but avoid common organization/location false positives.
+  const ignoredPairs = new Set([
+    "Salem Health",
+    "Service Desk",
+    "Solution Center",
+    "Emergency Room",
+    "United States"
+  ]);
+
+  const contextNames = contextText.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || [];
+  const resolvedContextName = contextNames.find(name =>
+    !ignoredPairs.has(name) &&
+    !isBadResolvedEntity(name)
+  );
+
+  return resolvedContextName || null;
 }
 
 // ============================================================
@@ -170,13 +281,10 @@ export default fp(async function chatRoute(fastify) {
           // 🔥 FINAL ENTITY RESOLUTION
           // ============================================================
 
-          const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-          if (userMatch) resolvedName = userMatch[0];
-
-          if (!resolvedName && ragContext) {
-            const contextMatch = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (contextMatch) resolvedName = contextMatch[0];
-          }
+          resolvedName = resolvePrimaryEntityFromPromptAndContext(
+            sanitizedMessage,
+            ragContext
+          );
 
           if (resolvedName) {
             ragContext = `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;

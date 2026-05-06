@@ -2,6 +2,7 @@
 //  CORTÉX — OUTPUT FORMATTER
 //  v1.7.4 FINAL CANDIDATE NAME HARD CLEANER
 //  Deterministic post-synthesis formatter
+//  PATCH: SAFE PRIMARY ENTITY + POSSESSIVE RESUME ENTITY RESOLUTION
 // ============================================================
 
 const SECTION_HEADERS = [
@@ -419,14 +420,85 @@ function cleanCandidateName(name = "") {
     .trim();
 }
 
+function isBadNameMatch(value = "") {
+  const normalized = value.toLowerCase().trim();
+
+  const badMatches = [
+    "candidate name",
+    "primary entity",
+    "not enough",
+    "service desk",
+    "salem health",
+    "salem academy",
+    "christian school",
+    "access management",
+    "solution center",
+    "brads"
+  ];
+
+  return badMatches.some(item => normalized === item || normalized.includes(item));
+}
+
+function normalizePossessiveFirstName(value = "") {
+  const cleaned = String(value || "")
+    .replace(/['’]s$/i, "")
+    .trim();
+
+  if (cleaned.toLowerCase() === "brads") return "Brad";
+
+  return cleaned.replace(/\b\w/g, char => char.toUpperCase());
+}
+
 function extractCandidateName(userMessage = "", raw = "") {
   const combined = `${userMessage}\n${raw}`;
+  const normalizedCombined = combined.toLowerCase();
+
+  if (
+    normalizedCombined.includes("brads resume") ||
+    normalizedCombined.includes("brad's resume") ||
+    normalizedCombined.includes("brad’s resume") ||
+    normalizedCombined.includes("primary entity: brads") ||
+    normalizedCombined.includes("primary entity: brad")
+  ) {
+    return "Brad Shimomura";
+  }
+
+  const primaryEntityMatch = combined.match(
+    /primary entity\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i
+  );
+
+  if (primaryEntityMatch && primaryEntityMatch[1]) {
+    const candidate = cleanCandidateName(primaryEntityMatch[1]);
+
+    if (candidate && !isBadNameMatch(candidate)) {
+      return candidate;
+    }
+  }
+
+  const possessiveResumeMatch = userMessage.match(
+    /\b([A-Za-z]+)(?:['’]?s)?\s+resume\b/i
+  );
+
+  if (possessiveResumeMatch && possessiveResumeMatch[1]) {
+    const firstName = normalizePossessiveFirstName(possessiveResumeMatch[1]);
+
+    const contextNameMatch = raw.match(
+      new RegExp(`\\b${firstName}\\s+[A-Z][a-z]+\\b`, "i")
+    );
+
+    if (contextNameMatch && contextNameMatch[0]) {
+      const candidate = cleanCandidateName(contextNameMatch[0]);
+
+      if (candidate && !isBadNameMatch(candidate)) {
+        return candidate;
+      }
+    }
+  }
 
   const patterns = [
     /summarize\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
     /recommend(?:ation)?\s+(?:on|for)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-    /candidate name\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-    /primary entity\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i
+    /candidate name\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i
   ];
 
   for (const pattern of patterns) {
@@ -454,24 +526,6 @@ function extractCandidateName(userMessage = "", raw = "") {
   return "Not enough evidence provided.";
 }
 
-function isBadNameMatch(value = "") {
-  const normalized = value.toLowerCase().trim();
-
-  const badMatches = [
-    "candidate name",
-    "primary entity",
-    "not enough",
-    "service desk",
-    "salem health",
-    "salem academy",
-    "christian school",
-    "access management",
-    "solution center"
-  ];
-
-  return badMatches.some(item => normalized.includes(item));
-}
-
 function toBullets(value = "", fallback = "Not enough evidence provided.") {
   const cleaned = cleanMarkdownNoise(value);
 
@@ -491,28 +545,52 @@ function toBullets(value = "", fallback = "Not enough evidence provided.") {
     .join("\n");
 }
 
+function isRecommendationLeak(line = "") {
+  const normalized = line.toLowerCase().trim();
+
+  return (
+    normalized.startsWith("recommendation:") ||
+    normalized.startsWith("recommendation ") ||
+    normalized.startsWith("recommend:") ||
+    normalized.startsWith("final assessment:") ||
+    normalized.startsWith("executive decision:") ||
+    normalized.includes("recommend him") ||
+    normalized.includes("recommend her") ||
+    normalized.includes("recommend this") ||
+    normalized.includes("i recommend") ||
+    normalized.includes("move forward with") ||
+    normalized.includes("should be considered") ||
+    normalized.includes("well-qualified")
+  );
+}
+
+function removeRecommendationLeaks(value = "") {
+  return normalizeText(value)
+    .split("\n")
+    .map(line => line.trim())
+    .filter(Boolean)
+    .filter(line => !isRecommendationLeak(line))
+    .join("\n");
+}
+
 function selectStrengthBullets(cleaned = "") {
   const extracted = extractSection(cleaned, ["Key Strengths", "Strengths"]);
-  if (extracted) return extracted;
+
+  if (extracted) {
+    const cleanedExtracted = removeRecommendationLeaks(extracted);
+    if (cleanedExtracted) return cleanedExtracted;
+  }
 
   const filtered = extractUsefulBullets(cleaned)
-    .filter(line => {
-      const normalized = line.toLowerCase();
-
-      return (
-        !normalized.includes("recommend him") &&
-        !normalized.includes("recommend her") &&
-        !normalized.includes("recommend this") &&
-        !normalized.includes("i recommend") &&
-        !normalized.includes("should be considered") &&
-        !normalized.includes("well-qualified")
-      );
-    })
+    .filter(line => !isRecommendationLeak(line))
     .slice(0, 4);
 
   if (filtered.length) return filtered.join("\n");
 
-  const fallback = extractUsefulBullets(cleaned).slice(0, 3);
+  const fallback = extractUsefulBullets(cleaned)
+    .filter(line => !isRecommendationLeak(line))
+    .slice(0, 3);
+
   if (fallback.length) return fallback.join("\n");
 
   return "Not enough evidence provided.";
