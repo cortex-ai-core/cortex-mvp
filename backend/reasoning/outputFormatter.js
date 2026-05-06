@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.5 OUTPUT QUALITY LAYER
+//  v1.7.4 FINAL CANDIDATE NAME HARD CLEANER
 //  Deterministic post-synthesis formatter
 // ============================================================
 
@@ -11,6 +11,7 @@ const SECTION_HEADERS = [
   "Summary",
   "Key Findings",
   "Strengths",
+  "Key Strengths",
   "Watch Areas",
   "Gaps",
   "Risks",
@@ -23,6 +24,8 @@ const SECTION_HEADERS = [
   "Supporting Analysis",
   "Operational Summary",
   "Candidate Summary",
+  "Candidate Name",
+  "Interview Focus",
   "Remediation Priority"
 ];
 
@@ -60,9 +63,6 @@ const SIGNAL_TERMS = [
   "scale"
 ];
 
-// ------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------
 function normalizeText(value = "") {
   return String(value || "")
     .replace(/\r\n/g, "\n")
@@ -72,10 +72,7 @@ function normalizeText(value = "") {
 
 function hasExistingStructure(text = "") {
   const normalized = text.toLowerCase();
-
-  return SECTION_HEADERS.some(header =>
-    normalized.includes(header.toLowerCase())
-  );
+  return SECTION_HEADERS.some(header => normalized.includes(header.toLowerCase()));
 }
 
 function isOverlong(text = "") {
@@ -111,6 +108,62 @@ function isResumeOrCandidateRequest(userMessage = "") {
     normalized.includes("culture fit") ||
     normalized.includes("submittal")
   );
+}
+
+function isCandidateDecisionRequest(userMessage = "", rawAnswer = "") {
+  const normalizedMessage = userMessage.toLowerCase();
+  const normalizedAnswer = rawAnswer.toLowerCase();
+
+  const candidateSignals = [
+    "resume",
+    "candidate",
+    "interview",
+    "alignment score",
+    "technical match",
+    "culture fit",
+    "submittal",
+    "submit this person",
+    "submit him",
+    "submit her",
+    "hire",
+    "hiring",
+    "job fit",
+    "role fit",
+    "recommendation on this profile",
+    "recommend this profile"
+  ];
+
+  const recommendationSignals = [
+    "recommend",
+    "recommendation",
+    "should we",
+    "would you submit",
+    "should i submit",
+    "should we submit",
+    "good fit",
+    "fit for the role"
+  ];
+
+  const hasCandidateSignal = candidateSignals.some(term =>
+    normalizedMessage.includes(term)
+  );
+
+  const hasRecommendationSignal = recommendationSignals.some(term =>
+    normalizedMessage.includes(term)
+  );
+
+  const answerLooksCandidateRelated =
+    normalizedAnswer.includes("candidate") ||
+    normalizedAnswer.includes("resume") ||
+    normalizedAnswer.includes("interview") ||
+    normalizedAnswer.includes("experience") ||
+    normalizedAnswer.includes("role") ||
+    normalizedAnswer.includes("skills") ||
+    normalizedAnswer.includes("service desk") ||
+    normalizedAnswer.includes("support") ||
+    normalizedAnswer.includes("healthcare");
+
+  return hasCandidateSignal || (hasRecommendationSignal && answerLooksCandidateRelated);
 }
 
 function isIncidentRequest(userMessage = "") {
@@ -157,6 +210,15 @@ function cleanMarkdownNoise(text = "") {
     .trim();
 }
 
+function cleanSectionText(text = "") {
+  return cleanMarkdownNoise(text)
+    .replace(/^of fit:\s*/i, "")
+    .replace(/^fit:\s*/i, "")
+    .replace(/^candidate summary:\s*/i, "")
+    .replace(/^summary:\s*/i, "")
+    .trim();
+}
+
 function splitFirstParagraph(text = "") {
   const parts = normalizeText(text).split(/\n\s*\n/);
   const first = parts.shift() || "";
@@ -170,7 +232,6 @@ function splitFirstParagraph(text = "") {
 
 function hasSignalTerm(text = "") {
   const normalized = text.toLowerCase();
-
   return SIGNAL_TERMS.some(term => normalized.includes(term));
 }
 
@@ -182,6 +243,7 @@ function isWeakLine(line = "") {
     normalized === "problem" ||
     normalized === "value of a quality layer" ||
     normalized === "impact on decision-making" ||
+    normalized === "of fit" ||
     normalized.startsWith("below is") ||
     normalized.startsWith("for example") ||
     normalized.startsWith("examples include") ||
@@ -218,6 +280,25 @@ function isDuplicateBullet(candidate = "", existing = []) {
   });
 }
 
+function isCandidateEvidenceLine(line = "") {
+  const normalized = line.toLowerCase();
+
+  return (
+    normalized.includes("service desk") ||
+    normalized.includes("tier 1") ||
+    normalized.includes("tier 2") ||
+    normalized.includes("access management") ||
+    normalized.includes("healthcare") ||
+    normalized.includes("hospital") ||
+    normalized.includes("support") ||
+    normalized.includes("tickets") ||
+    normalized.includes("technical issues") ||
+    normalized.includes("escalated") ||
+    normalized.includes("lean") ||
+    normalized.includes("process")
+  );
+}
+
 function isCompleteThought(line = "") {
   const normalized = line.toLowerCase();
 
@@ -227,6 +308,15 @@ function isCompleteThought(line = "") {
     (
       normalized.includes(" is ") ||
       normalized.includes(" are ") ||
+      normalized.includes(" has ") ||
+      normalized.includes(" have ") ||
+      normalized.includes(" worked ") ||
+      normalized.includes(" managed ") ||
+      normalized.includes(" handled ") ||
+      normalized.includes(" resolved ") ||
+      normalized.includes(" supported ") ||
+      normalized.includes(" provided ") ||
+      normalized.includes(" demonstrated ") ||
       normalized.includes(" enables ") ||
       normalized.includes(" ensures ") ||
       normalized.includes(" reduces ") ||
@@ -241,6 +331,15 @@ function isCompleteThought(line = "") {
       normalized.includes(" tracks ")
     )
   );
+}
+
+function firstSentence(text = "") {
+  const cleaned = cleanMarkdownNoise(text);
+  const match = cleaned.match(/[^.!?]+[.!?]/);
+
+  if (match) return cleanSectionText(match[0].trim());
+
+  return ensureTerminalPeriod(cleanSectionText(cleaned.slice(0, 240).trim()));
 }
 
 function extractUsefulBullets(text = "") {
@@ -259,9 +358,9 @@ function extractUsefulBullets(text = "") {
     const lower = normalized.toLowerCase();
 
     if (!normalized) continue;
-    if (normalized.length < 40) continue;
+    if (normalized.length < 35) continue;
     if (isWeakLine(normalized)) continue;
-    if (!hasSignalTerm(normalized)) continue;
+    if (!hasSignalTerm(normalized) && !isCandidateEvidenceLine(normalized)) continue;
     if (!isCompleteThought(normalized)) continue;
     if (lower === first || first.includes(lower) || lower.includes(first)) continue;
     if (isDuplicateBullet(normalized, bullets)) continue;
@@ -271,14 +370,13 @@ function extractUsefulBullets(text = "") {
     if (bullets.length >= MAX_BULLETS) break;
   }
 
-  // Fallback: if signal filtering was too strict, keep the best non-weak complete thoughts.
   if (!bullets.length) {
     for (const line of lines) {
       const normalized = line.trim();
       const lower = normalized.toLowerCase();
 
       if (!normalized) continue;
-      if (normalized.length < 40) continue;
+      if (normalized.length < 35) continue;
       if (isWeakLine(normalized)) continue;
       if (!isCompleteThought(normalized)) continue;
       if (lower === first || first.includes(lower) || lower.includes(first)) continue;
@@ -293,13 +391,201 @@ function extractUsefulBullets(text = "") {
   return bullets;
 }
 
-function firstSentence(text = "") {
+function extractSection(text = "", labels = []) {
   const cleaned = cleanMarkdownNoise(text);
-  const match = cleaned.match(/[^.!?]+[.!?]/);
+  const escapedLabels = labels.map(label =>
+    label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  );
 
-  if (match) return match[0].trim();
+  const escapedSectionHeaders = SECTION_HEADERS.map(header =>
+    header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  );
 
-  return ensureTerminalPeriod(cleaned.slice(0, 240).trim());
+  const pattern = new RegExp(
+    `(?:^|\\n)\\s*(?:${escapedLabels.join("|")})\\s*:?\\s*\\n?([\\s\\S]*?)(?=\\n\\s*(?:${escapedSectionHeaders.join("|")})\\s*:?\\s*\\n|$)`,
+    "i"
+  );
+
+  const match = cleaned.match(pattern);
+
+  if (!match || !match[1]) return "";
+
+  return cleanSectionText(match[1]);
+}
+
+function cleanCandidateName(name = "") {
+  return String(name || "")
+    .replace(/\b(and|for|with|the|a|an)\b.*$/i, "")
+    .trim();
+}
+
+function extractCandidateName(userMessage = "", raw = "") {
+  const combined = `${userMessage}\n${raw}`;
+
+  const patterns = [
+    /summarize\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+    /recommend(?:ation)?\s+(?:on|for)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+    /candidate name\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+    /primary entity\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = combined.match(pattern);
+
+    if (match && match[1]) {
+      const candidate = cleanCandidateName(match[1]);
+
+      if (candidate && !isBadNameMatch(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  const fallback = combined.match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/);
+
+  if (fallback && fallback[1]) {
+    const candidate = cleanCandidateName(fallback[1]);
+
+    if (candidate && !isBadNameMatch(candidate)) {
+      return candidate;
+    }
+  }
+
+  return "Not enough evidence provided.";
+}
+
+function isBadNameMatch(value = "") {
+  const normalized = value.toLowerCase().trim();
+
+  const badMatches = [
+    "candidate name",
+    "primary entity",
+    "not enough",
+    "service desk",
+    "salem health",
+    "salem academy",
+    "christian school",
+    "access management",
+    "solution center"
+  ];
+
+  return badMatches.some(item => normalized.includes(item));
+}
+
+function toBullets(value = "", fallback = "Not enough evidence provided.") {
+  const cleaned = cleanMarkdownNoise(value);
+
+  if (!cleaned) return `- ${fallback}`;
+
+  const lines = cleaned
+    .split("\n")
+    .map(line => normalizeBulletLine(line))
+    .filter(Boolean)
+    .filter(line => !isWeakLine(line));
+
+  if (!lines.length) return `- ${fallback}`;
+
+  return lines
+    .slice(0, 5)
+    .map(line => `- ${ensureTerminalPeriod(line)}`)
+    .join("\n");
+}
+
+function selectStrengthBullets(cleaned = "") {
+  const extracted = extractSection(cleaned, ["Key Strengths", "Strengths"]);
+  if (extracted) return extracted;
+
+  const filtered = extractUsefulBullets(cleaned)
+    .filter(line => {
+      const normalized = line.toLowerCase();
+
+      return (
+        !normalized.includes("recommend him") &&
+        !normalized.includes("recommend her") &&
+        !normalized.includes("recommend this") &&
+        !normalized.includes("i recommend") &&
+        !normalized.includes("should be considered") &&
+        !normalized.includes("well-qualified")
+      );
+    })
+    .slice(0, 4);
+
+  if (filtered.length) return filtered.join("\n");
+
+  const fallback = extractUsefulBullets(cleaned).slice(0, 3);
+  if (fallback.length) return fallback.join("\n");
+
+  return "Not enough evidence provided.";
+}
+
+function selectInterviewFocus(cleaned = "") {
+  const extracted = extractSection(cleaned, ["Interview Focus", "Next Steps", "Action Plan"]);
+  if (extracted) return extracted;
+
+  const normalized = cleaned.toLowerCase();
+  const focus = [];
+
+  if (normalized.includes("access management")) {
+    focus.push("Clarify depth of access management experience and systems used.");
+  }
+
+  if (normalized.includes("tier 2") || normalized.includes("tier 1")) {
+    focus.push("Validate Tier 1 versus Tier 2 ownership and escalation judgment.");
+  }
+
+  if (normalized.includes("healthcare") || normalized.includes("hospital")) {
+    focus.push("Confirm comfort supporting healthcare users in high-volume environments.");
+  }
+
+  if (normalized.includes("lean") || normalized.includes("process")) {
+    focus.push("Ask for examples of process improvement or knowledge base contributions.");
+  }
+
+  if (!focus.length) return "Not enough evidence provided.";
+
+  return focus.slice(0, 4).join("\n");
+}
+
+function buildCandidateDecisionOutput(raw = "", userMessage = "") {
+  const cleaned = cleanMarkdownNoise(raw);
+
+  const candidateName = extractCandidateName(userMessage, cleaned);
+
+  const summary =
+    extractSection(cleaned, ["Summary", "Candidate Summary"]) ||
+    firstSentence(cleaned) ||
+    "Not enough evidence provided.";
+
+  const strengths = selectStrengthBullets(cleaned);
+
+  const watchAreas =
+    extractSection(cleaned, ["Watch Areas", "Gaps", "Risks"]) ||
+    "No major watch areas identified from available context.";
+
+  const recommendation =
+    extractSection(cleaned, ["Recommendation", "Executive Decision", "Final Assessment"]) ||
+    firstSentence(cleaned) ||
+    "Not enough evidence provided.";
+
+  const interviewFocus = selectInterviewFocus(cleaned);
+
+  return `## Candidate Name
+${candidateName}
+
+## Summary
+${ensureTerminalPeriod(cleanSectionText(summary))}
+
+## Key Strengths
+${toBullets(strengths)}
+
+## Watch Areas
+${toBullets(watchAreas, "No major watch areas identified from available context.")}
+
+## Recommendation
+${ensureTerminalPeriod(cleanSectionText(recommendation))}
+
+## Interview Focus
+${toBullets(interviewFocus)}`;
 }
 
 function buildCompressedOutput({
@@ -350,9 +636,6 @@ ${rest}
 Use the available information as the current decision basis. Do not treat missing data as confirmed fact.`;
 }
 
-// ------------------------------------------------------------
-// Main formatter
-// ------------------------------------------------------------
 export function formatOutput(rawAnswer = "", options = {}) {
   const {
     intent = "general",
@@ -369,12 +652,16 @@ export function formatOutput(rawAnswer = "", options = {}) {
     return "I need more information.";
   }
 
-  // Preserve explicit missing-data responses.
   if (isMissingDataResponse(text)) {
     return text;
   }
 
-  // Preserve short direct answers.
+  const candidateDecisionRequest = isCandidateDecisionRequest(userMessage, text);
+
+  if (candidateDecisionRequest) {
+    return buildCandidateDecisionOutput(text, userMessage);
+  }
+
   if (isShortAnswer(text)) {
     return text;
   }
@@ -385,12 +672,10 @@ export function formatOutput(rawAnswer = "", options = {}) {
   const structured = hasExistingStructure(text);
   const overlong = isOverlong(text);
 
-  // Preserve already-structured synthesis output only when it is not bloated.
   if (structured && !overlong) {
     return text;
   }
 
-  // Candidate / resume / submittal formatting.
   if (resumeRequest) {
     return buildCompressedOutput({
       decisionLabel: "Recommendation",
@@ -400,7 +685,6 @@ export function formatOutput(rawAnswer = "", options = {}) {
     });
   }
 
-  // Incident / operations formatting.
   if (incidentRequest) {
     return buildCompressedOutput({
       decisionLabel: "Executive Decision",
@@ -410,7 +694,6 @@ export function formatOutput(rawAnswer = "", options = {}) {
     });
   }
 
-  // Strategy / advisory formatting.
   if (strategyRequest) {
     return buildCompressedOutput({
       decisionLabel: "Strategic Recommendation",
@@ -420,7 +703,6 @@ export function formatOutput(rawAnswer = "", options = {}) {
     });
   }
 
-  // Compress long structured/general outputs into Cortéx-style advisory format.
   if (structured || overlong) {
     return buildCompressedOutput({
       decisionLabel: "Summary",
@@ -430,7 +712,6 @@ export function formatOutput(rawAnswer = "", options = {}) {
     });
   }
 
-  // General longer response formatting.
   return buildStructuredOutput({
     decisionLabel: "Summary",
     title: "Details",

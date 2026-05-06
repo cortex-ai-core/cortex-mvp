@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.5 OUTPUT LAYER — MINIMAL INTEGRATION ONLY
+//  v1.7.3 CLEAN ENTITY SIGNAL TO FORMATTER
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -12,8 +12,6 @@ import { runDLPScan, stripSensitiveFields } from "../lib/dlp.js";
 
 // 🔥 Step 46 Reasoning Modules
 import { decodeIntent } from "../reasoning/intent.js";
-import { assembleContext } from "../reasoning/context.js";
-import { inferPaths } from "../reasoning/inference.js";
 import { synthesizeFinalAnswer } from "../reasoning/synthesis.js";
 import { formatOutput } from "../reasoning/outputFormatter.js";
 
@@ -136,6 +134,7 @@ export default fp(async function chatRoute(fastify) {
 
         let ragContext = "";
         let normalizedMessage = sanitizedMessage;
+        let resolvedName = null;
 
         if (privateMode) {
           ragContext = ephemeralContext;
@@ -168,35 +167,19 @@ export default fp(async function chatRoute(fastify) {
           ragContext = results.map(r => r.content).join("\n\n");
 
           // ============================================================
-          // 🔥 FINAL ENTITY RESOLUTION (HARD GUARANTEE — FIXED)
+          // 🔥 FINAL ENTITY RESOLUTION
           // ============================================================
-          let resolvedName = null;
 
-          // 1️⃣ Try context first
-          if (ragContext) {
-            const match = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (match) resolvedName = match[0];
+          const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+          if (userMatch) resolvedName = userMatch[0];
+
+          if (!resolvedName && ragContext) {
+            const contextMatch = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+            if (contextMatch) resolvedName = contextMatch[0];
           }
 
-          // 2️⃣ Fallback to user input
-          if (!resolvedName) {
-            const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (userMatch) resolvedName = userMatch[0];
-          }
-
-          // 3️⃣ ALWAYS inject if found
           if (resolvedName) {
-            ragContext = `PRIMARY ENTITY (SOURCE OF TRUTH): ${resolvedName}\n\n${ragContext}`;
-
-            const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-
-            if (userMatch) {
-              const userName = userMatch[0];
-
-              if (userName !== resolvedName) {
-                normalizedMessage = sanitizedMessage.replace(userName, resolvedName);
-              }
-            }
+            ragContext = `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
           }
         }
 
@@ -211,9 +194,13 @@ export default fp(async function chatRoute(fastify) {
           TIMEOUT_MS
         );
 
+        const formatterUserMessage = resolvedName
+          ? `${normalizedMessage}\nPrimary Entity: ${resolvedName}`
+          : normalizedMessage;
+
         const formattedAnswer = formatOutput(rawAnswer, {
           intent,
-          userMessage: normalizedMessage,
+          userMessage: formatterUserMessage,
           hasContext: Boolean(ragContext && ragContext.trim()),
           privateMode,
           namespace,
