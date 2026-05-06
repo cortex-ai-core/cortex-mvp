@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.4 FINAL — INTENT GATING + QUERY EXPANSION + ENTITY RESOLUTION FIX
+//  v1.5 OUTPUT LAYER — MINIMAL INTEGRATION ONLY
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -15,6 +15,7 @@ import { decodeIntent } from "../reasoning/intent.js";
 import { assembleContext } from "../reasoning/context.js";
 import { inferPaths } from "../reasoning/inference.js";
 import { synthesizeFinalAnswer } from "../reasoning/synthesis.js";
+import { formatOutput } from "../reasoning/outputFormatter.js";
 
 // 🔥 Step 47 Identity Layer
 import { applyIdentityLayer } from "../identity/applyIdentity.js";
@@ -199,7 +200,7 @@ export default fp(async function chatRoute(fastify) {
           }
         }
 
-        const finalAnswer = await withTimeout(
+        const rawAnswer = await withTimeout(
           synthesizeFinalAnswer({
             intent,
             userMessage: normalizedMessage,
@@ -210,7 +211,16 @@ export default fp(async function chatRoute(fastify) {
           TIMEOUT_MS
         );
 
-        const cleaned = stripSensitiveFields(finalAnswer);
+        const formattedAnswer = formatOutput(rawAnswer, {
+          intent,
+          userMessage: normalizedMessage,
+          hasContext: Boolean(ragContext && ragContext.trim()),
+          privateMode,
+          namespace,
+          tone
+        });
+
+        const cleaned = stripSensitiveFields(formattedAnswer);
 
         logEvent(fastify, {
           userId,
