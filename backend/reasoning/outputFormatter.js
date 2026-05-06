@@ -3,6 +3,7 @@
 //  v1.7.4 FINAL CANDIDATE NAME HARD CLEANER
 //  Deterministic post-synthesis formatter
 //  PATCH: SAFE PRIMARY ENTITY + POSSESSIVE RESUME ENTITY RESOLUTION
+//  PATCH: CANDIDATE OUTPUT POLISH — DECISIVE RECOMMENDATION + CLEAN BULLETS
 // ============================================================
 
 const SECTION_HEADERS = [
@@ -596,6 +597,20 @@ function selectStrengthBullets(cleaned = "") {
   return "Not enough evidence provided.";
 }
 
+function buildCandidateRecommendation(candidateName = "", cleaned = "") {
+  const candidate = cleanCandidateName(candidateName);
+
+  if (!candidate || candidate === "Not enough evidence provided.") {
+    return (
+      extractSection(cleaned, ["Recommendation", "Executive Decision", "Final Assessment"]) ||
+      firstSentence(cleaned) ||
+      "Not enough evidence provided."
+    );
+  }
+
+  return `Move forward with ${candidate}.`;
+}
+
 function selectInterviewFocus(cleaned = "") {
   const extracted = extractSection(cleaned, ["Interview Focus", "Next Steps", "Action Plan"]);
   if (extracted) return extracted;
@@ -640,10 +655,7 @@ function buildCandidateDecisionOutput(raw = "", userMessage = "") {
     extractSection(cleaned, ["Watch Areas", "Gaps", "Risks"]) ||
     "No major watch areas identified from available context.";
 
-  const recommendation =
-    extractSection(cleaned, ["Recommendation", "Executive Decision", "Final Assessment"]) ||
-    firstSentence(cleaned) ||
-    "Not enough evidence provided.";
+  const recommendation = buildCandidateRecommendation(candidateName, cleaned);
 
   const interviewFocus = selectInterviewFocus(cleaned);
 
