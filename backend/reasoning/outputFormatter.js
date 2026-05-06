@@ -422,6 +422,12 @@ function cleanCandidateName(name = "") {
 function extractCandidateName(userMessage = "", raw = "") {
   const combined = `${userMessage}\n${raw}`;
 
+  const primaryEntityMatch = combined.match(/primary entity\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i);
+
+  if (primaryEntityMatch && primaryEntityMatch[1]) {
+    return primaryEntityMatch[1].trim();
+  }
+
   const patterns = [
     /summarize\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
     /recommend(?:ation)?\s+(?:on|for)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
