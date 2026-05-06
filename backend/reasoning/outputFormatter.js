@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.7.10 BALANCED CANDIDATE EVIDENCE PATCH
+//  v1.7.11 ADAPTIVE CANDIDATE DEPTH PATCH
 //  Deterministic post-synthesis formatter
 // ============================================================
 
@@ -120,6 +120,23 @@ function isResumeOrCandidateRequest(userMessage = "") {
   );
 }
 
+function isDetailedCandidateRequest(userMessage = "") {
+  const normalized = userMessage.toLowerCase();
+
+  return (
+    normalized.includes("full") ||
+    normalized.includes("detailed") ||
+    normalized.includes("detail") ||
+    normalized.includes("deep") ||
+    normalized.includes("analysis") ||
+    normalized.includes("analyze") ||
+    normalized.includes("assessment") ||
+    normalized.includes("profile") ||
+    normalized.includes("overview") ||
+    normalized.includes("breakdown")
+  );
+}
+
 function isCandidateDecisionRequest(userMessage = "", rawAnswer = "") {
   const normalizedMessage = userMessage.toLowerCase();
   const normalizedAnswer = rawAnswer.toLowerCase();
@@ -154,11 +171,30 @@ function isCandidateDecisionRequest(userMessage = "", rawAnswer = "") {
     "fit for the role"
   ];
 
+  const depthSignals = [
+    "summary",
+    "summarize",
+    "full",
+    "detailed",
+    "detail",
+    "deep",
+    "analysis",
+    "analyze",
+    "assessment",
+    "profile",
+    "overview",
+    "breakdown"
+  ];
+
   const hasCandidateSignal = candidateSignals.some(term =>
     normalizedMessage.includes(term)
   );
 
   const hasRecommendationSignal = recommendationSignals.some(term =>
+    normalizedMessage.includes(term)
+  );
+
+  const hasDepthSignal = depthSignals.some(term =>
     normalizedMessage.includes(term)
   );
 
@@ -175,9 +211,15 @@ function isCandidateDecisionRequest(userMessage = "", rawAnswer = "") {
     normalizedAnswer.includes("epic") ||
     normalizedAnswer.includes("reporting") ||
     normalizedAnswer.includes("analytics") ||
-    normalizedAnswer.includes("workflow");
+    normalizedAnswer.includes("workflow") ||
+    normalizedAnswer.includes("professional") ||
+    normalizedAnswer.includes("technical") ||
+    normalizedAnswer.includes("leadership");
 
-  return hasCandidateSignal || (hasRecommendationSignal && answerLooksCandidateRelated);
+  return (
+    hasCandidateSignal ||
+    ((hasRecommendationSignal || hasDepthSignal) && answerLooksCandidateRelated)
+  );
 }
 
 function isIncidentRequest(userMessage = "") {
@@ -332,7 +374,18 @@ function isCandidateEvidenceLine(line = "") {
     normalized.includes("documentation") ||
     normalized.includes("requirements") ||
     normalized.includes("testing") ||
-    normalized.includes("validation")
+    normalized.includes("validation") ||
+    normalized.includes("network") ||
+    normalized.includes("hardware") ||
+    normalized.includes("software") ||
+    normalized.includes("database") ||
+    normalized.includes("sql") ||
+    normalized.includes("application") ||
+    normalized.includes("applications") ||
+    normalized.includes("leadership") ||
+    normalized.includes("communication") ||
+    normalized.includes("planning") ||
+    normalized.includes("stakeholder")
   );
 }
 
@@ -376,7 +429,13 @@ function isCompleteThought(line = "") {
       normalized.includes(" troubleshoot") ||
       normalized.includes(" document") ||
       normalized.includes(" train") ||
-      normalized.includes(" test")
+      normalized.includes(" test") ||
+      normalized.includes(" lead") ||
+      normalized.includes(" led ") ||
+      normalized.includes(" design") ||
+      normalized.includes(" develop") ||
+      normalized.includes(" implement") ||
+      normalized.includes(" coordinate")
     )
   );
 }
@@ -524,7 +583,8 @@ function extractCandidateName(userMessage = "", raw = "") {
     /summarize\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
     /recommend(?:ation)?\s+(?:on|for)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
     /candidate name\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-    /primary entity\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i
+    /primary entity\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+    /^([A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|has)\b/m
   ];
 
   for (const pattern of patterns) {
@@ -584,7 +644,7 @@ function toBullets(value = "", fallback = "Not enough evidence provided.") {
   if (!lines.length) return `- ${fallback}`;
 
   return lines
-    .slice(0, 5)
+    .slice(0, 6)
     .map(line => `- ${ensureTerminalPeriod(line)}`)
     .join("\n");
 }
@@ -604,18 +664,18 @@ function selectStrengthBullets(cleaned = "") {
 
   const filtered = extractUsefulBullets(cleaned)
     .filter(line => isUsableCandidateStrength(line))
-    .slice(0, 4);
+    .slice(0, 5);
 
   if (filtered.length) return filtered.join("\n");
 
   const summary = extractSection(cleaned, ["Summary", "Candidate Summary"]);
   const summarySentences = sentenceList(summary)
     .filter(sentence => isUsableCandidateStrength(sentence))
-    .slice(0, 2);
+    .slice(0, 3);
 
   if (summarySentences.length) return summarySentences.join("\n");
 
-  const fallback = extractUsefulBullets(cleaned).slice(0, 3);
+  const fallback = extractUsefulBullets(cleaned).slice(0, 4);
   if (fallback.length) return fallback.join("\n");
 
   return "Not enough evidence provided.";
@@ -648,13 +708,25 @@ function selectInterviewFocus(cleaned = "") {
     focus.push("Ask for examples of reports, dashboards, or analytics work delivered.");
   }
 
+  if (normalized.includes("network") || normalized.includes("hardware") || normalized.includes("software")) {
+    focus.push("Confirm depth of hands-on troubleshooting across hardware, software, and network environments.");
+  }
+
+  if (normalized.includes("database") || normalized.includes("sql") || normalized.includes("application")) {
+    focus.push("Ask for examples of database, SQL, or application work completed independently.");
+  }
+
+  if (normalized.includes("leadership") || normalized.includes("communication") || normalized.includes("planning")) {
+    focus.push("Explore how leadership and communication experience translates into IT team or user support settings.");
+  }
+
   if (normalized.includes("lean") || normalized.includes("process")) {
     focus.push("Ask for examples of process improvement or knowledge base contributions.");
   }
 
   if (!focus.length) return "Not enough evidence provided.";
 
-  return focus.slice(0, 4).join("\n");
+  return focus.slice(0, 5).join("\n");
 }
 
 function buildCandidateDecisionOutput(raw = "", userMessage = "") {
@@ -768,6 +840,7 @@ export function formatOutput(rawAnswer = "", options = {}) {
   }
 
   const candidateDecisionRequest = isCandidateDecisionRequest(userMessage, text);
+  const detailedCandidateRequest = isDetailedCandidateRequest(userMessage);
 
   if (candidateDecisionRequest) {
     return buildCandidateDecisionOutput(text, userMessage);
@@ -785,6 +858,10 @@ export function formatOutput(rawAnswer = "", options = {}) {
 
   if (structured && !overlong) {
     return text;
+  }
+
+  if (resumeRequest && detailedCandidateRequest) {
+    return buildCandidateDecisionOutput(text, userMessage);
   }
 
   if (resumeRequest) {
