@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.7.4 FINAL CANDIDATE NAME HARD CLEANER
+//  v1.7.10 BALANCED CANDIDATE EVIDENCE PATCH
 //  Deterministic post-synthesis formatter
 // ============================================================
 
@@ -42,6 +42,7 @@ const SIGNAL_TERMS = [
   "decision",
   "trust",
   "workflow",
+  "workflows",
   "compliance",
   "reliable",
   "reliability",
@@ -51,10 +52,19 @@ const SIGNAL_TERMS = [
   "standardized",
   "oversight",
   "operational",
+  "operations",
   "executive",
   "enterprise",
   "roi",
   "accuracy",
+  "analytics",
+  "analysis",
+  "reporting",
+  "dashboard",
+  "dashboards",
+  "data",
+  "epic",
+  "ehr",
   "explainable",
   "explainability",
   "safe",
@@ -161,7 +171,11 @@ function isCandidateDecisionRequest(userMessage = "", rawAnswer = "") {
     normalizedAnswer.includes("skills") ||
     normalizedAnswer.includes("service desk") ||
     normalizedAnswer.includes("support") ||
-    normalizedAnswer.includes("healthcare");
+    normalizedAnswer.includes("healthcare") ||
+    normalizedAnswer.includes("epic") ||
+    normalizedAnswer.includes("reporting") ||
+    normalizedAnswer.includes("analytics") ||
+    normalizedAnswer.includes("workflow");
 
   return hasCandidateSignal || (hasRecommendationSignal && answerLooksCandidateRelated);
 }
@@ -244,6 +258,8 @@ function isWeakLine(line = "") {
     normalized === "value of a quality layer" ||
     normalized === "impact on decision-making" ||
     normalized === "of fit" ||
+    normalized === "not enough evidence provided" ||
+    normalized === "not enough evidence provided." ||
     normalized.startsWith("below is") ||
     normalized.startsWith("for example") ||
     normalized.startsWith("examples include") ||
@@ -295,7 +311,28 @@ function isCandidateEvidenceLine(line = "") {
     normalized.includes("technical issues") ||
     normalized.includes("escalated") ||
     normalized.includes("lean") ||
-    normalized.includes("process")
+    normalized.includes("process") ||
+    normalized.includes("epic") ||
+    normalized.includes("ehr") ||
+    normalized.includes("workflow") ||
+    normalized.includes("workflows") ||
+    normalized.includes("report") ||
+    normalized.includes("reports") ||
+    normalized.includes("reporting") ||
+    normalized.includes("dashboard") ||
+    normalized.includes("dashboards") ||
+    normalized.includes("analytics") ||
+    normalized.includes("analysis") ||
+    normalized.includes("data") ||
+    normalized.includes("clinical") ||
+    normalized.includes("operational") ||
+    normalized.includes("operations") ||
+    normalized.includes("end-user") ||
+    normalized.includes("training") ||
+    normalized.includes("documentation") ||
+    normalized.includes("requirements") ||
+    normalized.includes("testing") ||
+    normalized.includes("validation")
   );
 }
 
@@ -328,9 +365,40 @@ function isCompleteThought(line = "") {
       normalized.includes(" supports ") ||
       normalized.includes(" prevents ") ||
       normalized.includes(" validates ") ||
-      normalized.includes(" tracks ")
+      normalized.includes(" tracks ") ||
+      normalized.includes(" focused ") ||
+      normalized.includes(" collaborat") ||
+      normalized.includes(" build") ||
+      normalized.includes(" maintain") ||
+      normalized.includes(" monitor") ||
+      normalized.includes(" perform") ||
+      normalized.includes(" analyz") ||
+      normalized.includes(" troubleshoot") ||
+      normalized.includes(" document") ||
+      normalized.includes(" train") ||
+      normalized.includes(" test")
     )
   );
+}
+
+function isUsableCandidateStrength(line = "") {
+  const normalized = line.toLowerCase();
+
+  if (!line || line.length < 25) return false;
+  if (isWeakLine(line)) return false;
+
+  if (
+    normalized.includes("recommend him") ||
+    normalized.includes("recommend her") ||
+    normalized.includes("recommend this") ||
+    normalized.includes("i recommend") ||
+    normalized.includes("should be considered") ||
+    normalized.includes("well-qualified")
+  ) {
+    return false;
+  }
+
+  return isCandidateEvidenceLine(line) || hasSignalTerm(line);
 }
 
 function firstSentence(text = "") {
@@ -340,6 +408,13 @@ function firstSentence(text = "") {
   if (match) return cleanSectionText(match[0].trim());
 
   return ensureTerminalPeriod(cleanSectionText(cleaned.slice(0, 240).trim()));
+}
+
+function sentenceList(text = "") {
+  return cleanMarkdownNoise(text)
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => cleanSectionText(sentence))
+    .filter(Boolean);
 }
 
 function extractUsefulBullets(text = "") {
@@ -358,10 +433,10 @@ function extractUsefulBullets(text = "") {
     const lower = normalized.toLowerCase();
 
     if (!normalized) continue;
-    if (normalized.length < 35) continue;
+    if (normalized.length < 25) continue;
     if (isWeakLine(normalized)) continue;
     if (!hasSignalTerm(normalized) && !isCandidateEvidenceLine(normalized)) continue;
-    if (!isCompleteThought(normalized)) continue;
+    if (!isCompleteThought(normalized) && normalized.length < 55) continue;
     if (lower === first || first.includes(lower) || lower.includes(first)) continue;
     if (isDuplicateBullet(normalized, bullets)) continue;
 
@@ -371,14 +446,31 @@ function extractUsefulBullets(text = "") {
   }
 
   if (!bullets.length) {
+    const sentences = sentenceList(cleaned);
+
+    for (const sentence of sentences) {
+      const normalized = sentence.trim();
+      const lower = normalized.toLowerCase();
+
+      if (!isUsableCandidateStrength(normalized)) continue;
+      if (lower === first || first.includes(lower) || lower.includes(first)) continue;
+      if (isDuplicateBullet(normalized, bullets)) continue;
+
+      bullets.push(ensureTerminalPeriod(normalized));
+
+      if (bullets.length >= 4) break;
+    }
+  }
+
+  if (!bullets.length) {
     for (const line of lines) {
       const normalized = line.trim();
       const lower = normalized.toLowerCase();
 
       if (!normalized) continue;
-      if (normalized.length < 35) continue;
+      if (normalized.length < 25) continue;
       if (isWeakLine(normalized)) continue;
-      if (!isCompleteThought(normalized)) continue;
+      if (!isCompleteThought(normalized) && !isCandidateEvidenceLine(normalized)) continue;
       if (lower === first || first.includes(lower) || lower.includes(first)) continue;
       if (isDuplicateBullet(normalized, bullets)) continue;
 
@@ -499,24 +591,29 @@ function toBullets(value = "", fallback = "Not enough evidence provided.") {
 
 function selectStrengthBullets(cleaned = "") {
   const extracted = extractSection(cleaned, ["Key Strengths", "Strengths"]);
-  if (extracted) return extracted;
+
+  if (extracted) {
+    const extractedLines = extracted
+      .split("\n")
+      .map(line => normalizeBulletLine(line))
+      .filter(Boolean)
+      .filter(line => isUsableCandidateStrength(line));
+
+    if (extractedLines.length) return extractedLines.join("\n");
+  }
 
   const filtered = extractUsefulBullets(cleaned)
-    .filter(line => {
-      const normalized = line.toLowerCase();
-
-      return (
-        !normalized.includes("recommend him") &&
-        !normalized.includes("recommend her") &&
-        !normalized.includes("recommend this") &&
-        !normalized.includes("i recommend") &&
-        !normalized.includes("should be considered") &&
-        !normalized.includes("well-qualified")
-      );
-    })
+    .filter(line => isUsableCandidateStrength(line))
     .slice(0, 4);
 
   if (filtered.length) return filtered.join("\n");
+
+  const summary = extractSection(cleaned, ["Summary", "Candidate Summary"]);
+  const summarySentences = sentenceList(summary)
+    .filter(sentence => isUsableCandidateStrength(sentence))
+    .slice(0, 2);
+
+  if (summarySentences.length) return summarySentences.join("\n");
 
   const fallback = extractUsefulBullets(cleaned).slice(0, 3);
   if (fallback.length) return fallback.join("\n");
@@ -541,6 +638,14 @@ function selectInterviewFocus(cleaned = "") {
 
   if (normalized.includes("healthcare") || normalized.includes("hospital")) {
     focus.push("Confirm comfort supporting healthcare users in high-volume environments.");
+  }
+
+  if (normalized.includes("epic") || normalized.includes("ehr")) {
+    focus.push("Confirm depth of Epic/EHR workflow experience and modules supported.");
+  }
+
+  if (normalized.includes("reporting") || normalized.includes("analytics") || normalized.includes("dashboard")) {
+    focus.push("Ask for examples of reports, dashboards, or analytics work delivered.");
   }
 
   if (normalized.includes("lean") || normalized.includes("process")) {
