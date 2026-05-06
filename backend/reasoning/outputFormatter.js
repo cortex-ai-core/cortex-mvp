@@ -447,7 +447,7 @@ function extractCandidateName(userMessage = "", raw = "") {
     }
   }
 
-  const fallback = combined.match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/);
+  const fallback = String(userMessage || "").match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/);
 
   if (fallback && fallback[1]) {
     const candidate = cleanCandidateName(fallback[1]);
