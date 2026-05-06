@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.7.8 SAFE POSSESSIVE RESUME TOKEN PATCH
+//  v1.7.9 FLEXIBLE RESUME TOKEN PATCH
 //  Deterministic chat route with neutral retrieval + bounded entity handling
 // ============================================================
 
@@ -104,15 +104,16 @@ function resolveUserMessageEntity(input = "") {
 // - summarize brad's resume -> Brad
 // - summarize brad’s resume -> Brad
 // - summarize Hiyab resume  -> Hiyab
+// - detailed summary of Hiyab's resume -> Hiyab
 // ----------------------------------------------------
 function resolveRequestedResumeToken(input = "") {
   const match = String(input || "").match(
-    /\bsummar(?:ize|ise|y)?\s+([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
+    /\b([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
   );
 
   if (!match || !match[1]) return null;
 
-  let raw = match[1].trim();
+  const raw = match[1].trim();
 
   if (!raw) return null;
 
