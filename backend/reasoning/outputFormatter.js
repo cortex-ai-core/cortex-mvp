@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.7.11 ADAPTIVE CANDIDATE DEPTH PATCH
+//  v1.7.12 REWRITE MODE PATCH
 //  Deterministic post-synthesis formatter
 // ============================================================
 
@@ -104,6 +104,25 @@ function isMissingDataResponse(text = "") {
 
 function isShortAnswer(text = "") {
   return text.length < 450;
+}
+
+function isRewriteRequest(userMessage = "") {
+  const normalized = userMessage.toLowerCase();
+
+  return (
+    normalized.includes("rewrite") ||
+    normalized.includes("restructure") ||
+    normalized.includes("redraft") ||
+    normalized.includes("revise") ||
+    normalized.includes("clean this up") ||
+    normalized.includes("make this professional") ||
+    normalized.includes("improve this") ||
+    normalized.includes("refine this") ||
+    normalized.includes("update this") ||
+    normalized.includes("rework this") ||
+    normalized.includes("edit this") ||
+    normalized.includes("polish this")
+  );
 }
 
 function isResumeOrCandidateRequest(userMessage = "") {
@@ -836,6 +855,12 @@ export function formatOutput(rawAnswer = "", options = {}) {
   }
 
   if (isMissingDataResponse(text)) {
+    return text;
+  }
+
+  const rewriteRequest = isRewriteRequest(userMessage);
+
+  if (rewriteRequest) {
     return text;
   }
 
