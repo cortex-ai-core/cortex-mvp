@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
 //  Step 46 + 47.6B + v1.2 Identity
-//  v1.7.1 — MODE-AWARE CONTEXT ENFORCEMENT
+//  v1.7.2 — INTENT-AWARE GROUNDING POLICY
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -50,12 +50,15 @@ export async function synthesizeFinalAnswer({
     userMessage.split(":")[1]?.trim().length > 10;
 
   // ============================================================
-  // 🔥 MODE-AWARE NO-CONTEXT HANDLING
+  // 🔥 INTENT-AWARE GROUNDING POLICY
   // ============================================================
   const generativeIntents = [
     "rewrite",
     "communication",
     "business_document",
+    "analysis",
+    "question",
+    "general"
   ];
 
   const requiresGrounding =
@@ -74,6 +77,11 @@ export async function synthesizeFinalAnswer({
   if (
     !hasContext &&
     !requiresGrounding &&
+    (
+      intent === "rewrite" ||
+      intent === "communication" ||
+      intent === "business_document"
+    ) &&
     !hasInlineSourceText
   ) {
     return "Please provide the source text or upload the document you'd like Cortéx to rewrite or enhance.";

@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.7.15 STABILIZATION PATCH
+//  v1.7.16 STABILIZATION PATCH
 //  Lightweight post-synthesis formatter
 // ============================================================
 
@@ -367,9 +367,6 @@ function buildCandidateDecisionOutput(
       cleaned
     );
 
-  // ========================================================
-  // 🔥 MISSING CONTEXT HANDLING
-  // ========================================================
   const normalized = cleaned.toLowerCase();
 
   const missingContext =
@@ -465,6 +462,25 @@ function buildCompressedOutput({
     ? bullets.map(item => `- ${item}`).join("\n")
     : `- ${firstSentence(raw)}`;
 
+  // ========================================================
+  // 🔥 SOFTENED OPERATIONAL CLOSING LANGUAGE
+  // ========================================================
+  let closingText =
+    "This reflects the current operational assessment based on available evidence.";
+
+  if (
+    title.toLowerCase().includes("incident") ||
+    title.toLowerCase().includes("operational")
+  ) {
+    closingText =
+      "This reflects the current operational assessment based on available evidence.";
+  } else if (
+    title.toLowerCase().includes("analysis")
+  ) {
+    closingText =
+      "Use this as the current analytical summary.";
+  }
+
   return `## ${decisionLabel}
 ${ensureTerminalPeriod(decision)}
 
@@ -472,7 +488,7 @@ ${ensureTerminalPeriod(decision)}
 ${bulletText}
 
 ## ${finalLabel}
-Use this as the current operational understanding.`;
+${closingText}`;
 }
 
 export function formatOutput(rawAnswer = "", options = {}) {
