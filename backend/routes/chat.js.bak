@@ -1,6 +1,7 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.4 FINAL — INTENT GATING + QUERY EXPANSION + ENTITY RESOLUTION FIX
+//  v1.7.9 FLEXIBLE RESUME TOKEN PATCH
+//  Deterministic chat route with neutral retrieval + bounded entity handling
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -12,9 +13,8 @@ import { runDLPScan, stripSensitiveFields } from "../lib/dlp.js";
 
 // 🔥 Step 46 Reasoning Modules
 import { decodeIntent } from "../reasoning/intent.js";
-import { assembleContext } from "../reasoning/context.js";
-import { inferPaths } from "../reasoning/inference.js";
 import { synthesizeFinalAnswer } from "../reasoning/synthesis.js";
+import { formatOutput } from "../reasoning/outputFormatter.js";
 
 // 🔥 Step 47 Identity Layer
 import { applyIdentityLayer } from "../identity/applyIdentity.js";
@@ -84,6 +84,65 @@ function handleSimpleCases(input = "") {
   return null;
 }
 
+// ----------------------------------------------------
+// 🎯 User-message entity extraction only
+// ----------------------------------------------------
+function resolveUserMessageEntity(input = "") {
+  const match = String(input || "").match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+
+  if (match && match[0]) {
+    return match[0].trim();
+  }
+
+  return null;
+}
+
+// ----------------------------------------------------
+// 🎯 Generic resume owner token extraction
+// Examples:
+// - summarize brads resume  -> Brad
+// - summarize brad's resume -> Brad
+// - summarize brad’s resume -> Brad
+// - summarize Hiyab resume  -> Hiyab
+// - detailed summary of Hiyab's resume -> Hiyab
+// ----------------------------------------------------
+function resolveRequestedResumeToken(input = "") {
+  const match = String(input || "").match(
+    /\b([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
+  );
+
+  if (!match || !match[1]) return null;
+
+  const raw = match[1].trim();
+
+  if (!raw) return null;
+
+  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+}
+
+// ----------------------------------------------------
+// 🎯 Context-bounded full-name resolution
+// Only promotes a full name from context when it starts with
+// the exact requested resume token.
+// ----------------------------------------------------
+function resolveFullNameFromContextByToken(context = "", token = "") {
+  if (!context || !token) return null;
+
+  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp(`\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`, "i");
+  const match = String(context || "").match(pattern);
+
+  if (match && match[1]) {
+    return match[1]
+      .split(" ")
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ")
+      .trim();
+  }
+
+  return null;
+}
+
 // ============================================================
 // 🚀 ROUTE
 // ============================================================
@@ -136,23 +195,25 @@ export default fp(async function chatRoute(fastify) {
         let ragContext = "";
         let normalizedMessage = sanitizedMessage;
 
+        const requestedResumeToken = resolveRequestedResumeToken(sanitizedMessage);
+        let resolvedName = resolveUserMessageEntity(sanitizedMessage);
+
         if (privateMode) {
           ragContext = ephemeralContext;
+
+          if (!resolvedName && requestedResumeToken) {
+            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
+          }
 
         } else if (ephemeralContext.trim()) {
           ragContext = ephemeralContext;
 
-        } else if (requiresKnowledge) {
-
-          let retrievalQuery = sanitizedMessage;
-
-          if (
-            normalized.includes("resume") ||
-            normalized.includes("summar") ||
-            normalized.includes("document")
-          ) {
-            retrievalQuery = `${sanitizedMessage} service desk Salem Health`;
+          if (!resolvedName && requestedResumeToken) {
+            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
           }
+
+        } else if (requiresKnowledge) {
+          const retrievalQuery = sanitizedMessage;
 
           const res = await fastify.inject({
             method: "POST",
@@ -166,34 +227,16 @@ export default fp(async function chatRoute(fastify) {
 
           ragContext = results.map(r => r.content).join("\n\n");
 
-          // ============================================================
-          // 🔥 FINAL ENTITY RESOLUTION (CORRECT + SAFE)
-          // ============================================================
-          let resolvedName = null;
-
-          if (ragContext) {
-            const nameMatch = ragContext.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-            if (nameMatch) resolvedName = nameMatch[0];
-          }
-
-          if (resolvedName) {
-            // 1️⃣ Inject strong anchor
-            ragContext = `PRIMARY ENTITY (SOURCE OF TRUTH): ${resolvedName}\n\n${ragContext}`;
-
-            // 2️⃣ Normalize ONLY conflicting user name
-            const userMatch = sanitizedMessage.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
-
-            if (userMatch) {
-              const userName = userMatch[0];
-
-              if (userName !== resolvedName) {
-                normalizedMessage = sanitizedMessage.replace(userName, resolvedName);
-              }
-            }
+          if (!resolvedName && requestedResumeToken) {
+            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
           }
         }
 
-        const finalAnswer = await withTimeout(
+        if (resolvedName) {
+          ragContext = `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
+        }
+
+        const rawAnswer = await withTimeout(
           synthesizeFinalAnswer({
             intent,
             userMessage: normalizedMessage,
@@ -204,7 +247,20 @@ export default fp(async function chatRoute(fastify) {
           TIMEOUT_MS
         );
 
-        const cleaned = stripSensitiveFields(finalAnswer);
+        const formatterUserMessage = resolvedName
+          ? `${normalizedMessage}\nPrimary Entity: ${resolvedName}`
+          : normalizedMessage;
+
+        const formattedAnswer = formatOutput(rawAnswer, {
+          intent,
+          userMessage: formatterUserMessage,
+          hasContext: Boolean(ragContext && ragContext.trim()),
+          privateMode,
+          namespace,
+          tone
+        });
+
+        const cleaned = stripSensitiveFields(formattedAnswer);
 
         logEvent(fastify, {
           userId,

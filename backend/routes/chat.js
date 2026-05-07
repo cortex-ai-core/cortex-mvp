@@ -1,7 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.7.9 FLEXIBLE RESUME TOKEN PATCH
-//  Deterministic chat route with neutral retrieval + bounded entity handling
+//  v1.7.10 PRIVATE MODE CONTEXT STABILIZATION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -22,10 +21,23 @@ import { resolveToneForNamespace } from "../identity/toneRouter.js";
 
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
+const MAX_EPHEMERAL_CONTEXT = 18000;
 const TIMEOUT_MS = 30000;
 const RATE_LIMIT = 20;
 
 const userBuckets = new Map();
+
+// ----------------------------------------------------
+function trimEphemeralContext(context = "") {
+
+  if (!context) return "";
+
+  if (context.length <= MAX_EPHEMERAL_CONTEXT) {
+    return context;
+  }
+
+  return context.slice(0, MAX_EPHEMERAL_CONTEXT);
+}
 
 // ----------------------------------------------------
 function checkRateLimit(userId) {
@@ -85,8 +97,6 @@ function handleSimpleCases(input = "") {
 }
 
 // ----------------------------------------------------
-// 🎯 User-message entity extraction only
-// ----------------------------------------------------
 function resolveUserMessageEntity(input = "") {
   const match = String(input || "").match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
 
@@ -97,14 +107,6 @@ function resolveUserMessageEntity(input = "") {
   return null;
 }
 
-// ----------------------------------------------------
-// 🎯 Generic resume owner token extraction
-// Examples:
-// - summarize brads resume  -> Brad
-// - summarize brad's resume -> Brad
-// - summarize brad’s resume -> Brad
-// - summarize Hiyab resume  -> Hiyab
-// - detailed summary of Hiyab's resume -> Hiyab
 // ----------------------------------------------------
 function resolveRequestedResumeToken(input = "") {
   const match = String(input || "").match(
@@ -121,15 +123,14 @@ function resolveRequestedResumeToken(input = "") {
 }
 
 // ----------------------------------------------------
-// 🎯 Context-bounded full-name resolution
-// Only promotes a full name from context when it starts with
-// the exact requested resume token.
-// ----------------------------------------------------
 function resolveFullNameFromContextByToken(context = "", token = "") {
+
   if (!context || !token) return null;
 
   const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
   const pattern = new RegExp(`\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`, "i");
+
   const match = String(context || "").match(pattern);
 
   if (match && match[1]) {
@@ -146,13 +147,18 @@ function resolveFullNameFromContextByToken(context = "", token = "") {
 // ============================================================
 // 🚀 ROUTE
 // ============================================================
+
 export default fp(async function chatRoute(fastify) {
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
 
   fastify.post(
     "/api/chat",
     { preHandler: requireAuth() },
     async (req, reply) => {
+
       const start = Date.now();
 
       const identity = req.user;
@@ -160,20 +166,41 @@ export default fp(async function chatRoute(fastify) {
       const namespace = identity?.namespace || "unknown";
 
       try {
-        const { message = "", ephemeralContext = "", privateMode = false } = req.body || {};
 
-        if (!message.trim()) return reply.code(400).send({ error: "Message required" });
-        if (message.length > MAX_INPUT) return reply.code(400).send({ error: "Input too large" });
+        const {
+          message = "",
+          ephemeralContext = "",
+          privateMode = false
+        } = req.body || {};
+
+        if (!message.trim()) {
+          return reply.code(400).send({
+            error: "Message required"
+          });
+        }
+
+        if (message.length > MAX_INPUT) {
+          return reply.code(400).send({
+            error: "Input too large"
+          });
+        }
 
         const dlp = runDLPScan(message);
-        if (dlp.block) return reply.send({ error: "Sensitive data blocked" });
+
+        if (dlp.block) {
+          return reply.send({
+            error: "Sensitive data blocked"
+          });
+        }
 
         const sanitizedMessage = dlp.sanitized;
 
         const simple = handleSimpleCases(sanitizedMessage);
+
         if (simple) return reply.send(simple);
 
         const intent = decodeIntent(sanitizedMessage);
+
         const normalized = sanitizedMessage.toLowerCase();
 
         const requiresKnowledge =
@@ -195,48 +222,86 @@ export default fp(async function chatRoute(fastify) {
         let ragContext = "";
         let normalizedMessage = sanitizedMessage;
 
-        const requestedResumeToken = resolveRequestedResumeToken(sanitizedMessage);
-        let resolvedName = resolveUserMessageEntity(sanitizedMessage);
+        const requestedResumeToken =
+          resolveRequestedResumeToken(sanitizedMessage);
+
+        let resolvedName =
+          resolveUserMessageEntity(sanitizedMessage);
+
+        // ----------------------------------------------------
+        // 🔒 PRIVATE MODE CONTEXT BOUNDING
+        // ----------------------------------------------------
+
+        const boundedEphemeralContext =
+          trimEphemeralContext(ephemeralContext);
 
         if (privateMode) {
-          ragContext = ephemeralContext;
+
+          ragContext = boundedEphemeralContext;
 
           if (!resolvedName && requestedResumeToken) {
-            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
+            resolvedName =
+              resolveFullNameFromContextByToken(
+                ragContext,
+                requestedResumeToken
+              );
           }
 
-        } else if (ephemeralContext.trim()) {
-          ragContext = ephemeralContext;
+        } else if (boundedEphemeralContext.trim()) {
+
+          ragContext = boundedEphemeralContext;
 
           if (!resolvedName && requestedResumeToken) {
-            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
+            resolvedName =
+              resolveFullNameFromContextByToken(
+                ragContext,
+                requestedResumeToken
+              );
           }
 
         } else if (requiresKnowledge) {
+
           const retrievalQuery = sanitizedMessage;
 
           const res = await fastify.inject({
             method: "POST",
             url: "/api/retrieve",
-            payload: { query: retrievalQuery, namespace },
-            headers: { authorization: req.headers.authorization }
+            payload: {
+              query: retrievalQuery,
+              namespace
+            },
+            headers: {
+              authorization: req.headers.authorization
+            }
           });
 
           const parsed = JSON.parse(res.body || "{}");
-          const results = Array.isArray(parsed.results) ? parsed.results : [];
 
-          ragContext = results.map(r => r.content).join("\n\n");
+          const results =
+            Array.isArray(parsed.results)
+              ? parsed.results
+              : [];
+
+          ragContext =
+            results.map(r => r.content).join("\n\n");
 
           if (!resolvedName && requestedResumeToken) {
-            resolvedName = resolveFullNameFromContextByToken(ragContext, requestedResumeToken);
+
+            resolvedName =
+              resolveFullNameFromContextByToken(
+                ragContext,
+                requestedResumeToken
+              );
           }
         }
 
         if (resolvedName) {
-          ragContext = `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
+          ragContext =
+            `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
         }
 
         const rawAnswer = await withTimeout(
+
           synthesizeFinalAnswer({
             intent,
             userMessage: normalizedMessage,
@@ -244,6 +309,7 @@ export default fp(async function chatRoute(fastify) {
             model: openai,
             identityContext
           }),
+
           TIMEOUT_MS
         );
 
@@ -260,20 +326,27 @@ export default fp(async function chatRoute(fastify) {
           tone
         });
 
-        const cleaned = stripSensitiveFields(formattedAnswer);
+        const cleaned =
+          stripSensitiveFields(formattedAnswer);
 
         logEvent(fastify, {
           userId,
           namespace,
           inputLength: message.length,
+          contextLength: ragContext.length,
           outputLength: cleaned.length,
           latency: Date.now() - start
         });
 
-        return reply.send({ finalAnswer: cleaned });
+        return reply.send({
+          finalAnswer: cleaned
+        });
 
       } catch (err) {
-        return reply.code(500).send({ error: "Temporary issue — please retry" });
+
+        return reply.code(500).send({
+          error: "Temporary issue — please retry"
+        });
       }
     }
   );
