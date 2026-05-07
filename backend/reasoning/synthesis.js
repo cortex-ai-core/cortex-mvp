@@ -1,6 +1,7 @@
 // ============================================================
-//  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE (Step 46 + 47.6B + v1.2 Identity)
-//  v1.4 FINAL — CONTEXT ENFORCEMENT + ENTITY LOCK (DETERMINISTIC + COMPLETE)
+//  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
+//  Step 46 + 47.6B + v1.2 Identity
+//  v1.7 — MODE-AWARE CONTEXT ENFORCEMENT
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -42,20 +43,52 @@ export async function synthesizeFinalAnswer({
     contextWindow.trim().length > 0;
 
   // ============================================================
+  // 🔥 MODE-AWARE NO-CONTEXT HANDLING
+  // ============================================================
+  const generativeIntents = [
+    "rewrite",
+    "communication",
+    "business_document",
+  ];
+
+  const requiresGrounding = !generativeIntents.includes(intent);
+
+  // ============================================================
+  // 🔥 EARLY EXIT — NO CONTEXT FOR GROUNDED TASKS
+  // ============================================================
+  if (!hasContext && requiresGrounding) {
+    return "No matching documents found in the system.";
+  }
+
+  // ============================================================
+  // 🔥 EARLY EXIT — GENERATIVE TASKS NEED SOURCE TEXT
+  // ============================================================
+  if (!hasContext && !requiresGrounding) {
+    return "Please provide the source text or upload the document you'd like Cortéx to rewrite or enhance.";
+  }
+
+  // ============================================================
   // 🔥 ENTITY DETECTION (FINAL — INJECTED + FALLBACK)
   // ============================================================
   let primaryEntity = null;
 
   if (hasContext) {
+
     // 1️⃣ Preferred: injected entity
-    const injected = contextWindow.match(/PRIMARY ENTITY \(SOURCE OF TRUTH\):\s*(.+)/i);
+    const injected = contextWindow.match(
+      /PRIMARY ENTITY \(SOURCE OF TRUTH\):\s*(.+)/i
+    );
+
     if (injected) {
       primaryEntity = injected[1].trim();
     }
 
     // 2️⃣ Fallback: extract first valid full name from context
     if (!primaryEntity) {
-      const fallback = contextWindow.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+      const fallback = contextWindow.match(
+        /\b[A-Z][a-z]+ [A-Z][a-z]+\b/
+      );
+
       if (fallback) {
         primaryEntity = fallback[0];
       }
@@ -87,17 +120,9 @@ ENTITY RULES:
 - You MUST NOT rename it
 
 CONTEXT RULES:
-${
-  hasContext
-    ? `
 - CONTEXT is the source of truth
 - You MUST use it
 - Do NOT say context is missing
-`
-    : `
-- No context → respond: "No matching documents found in the system."
-`
-}
 `.trim();
 
   // -----------------------------
