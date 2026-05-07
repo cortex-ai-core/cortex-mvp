@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
 //  Step 46 + 47.6B + v1.2 Identity
-//  v1.7 — MODE-AWARE CONTEXT ENFORCEMENT
+//  v1.7.1 — MODE-AWARE CONTEXT ENFORCEMENT
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -43,6 +43,13 @@ export async function synthesizeFinalAnswer({
     contextWindow.trim().length > 0;
 
   // ============================================================
+  // 🔥 INLINE SOURCE DETECTION
+  // ============================================================
+  const hasInlineSourceText =
+    userMessage.includes(":") &&
+    userMessage.split(":")[1]?.trim().length > 10;
+
+  // ============================================================
   // 🔥 MODE-AWARE NO-CONTEXT HANDLING
   // ============================================================
   const generativeIntents = [
@@ -51,7 +58,8 @@ export async function synthesizeFinalAnswer({
     "business_document",
   ];
 
-  const requiresGrounding = !generativeIntents.includes(intent);
+  const requiresGrounding =
+    !generativeIntents.includes(intent);
 
   // ============================================================
   // 🔥 EARLY EXIT — NO CONTEXT FOR GROUNDED TASKS
@@ -63,7 +71,11 @@ export async function synthesizeFinalAnswer({
   // ============================================================
   // 🔥 EARLY EXIT — GENERATIVE TASKS NEED SOURCE TEXT
   // ============================================================
-  if (!hasContext && !requiresGrounding) {
+  if (
+    !hasContext &&
+    !requiresGrounding &&
+    !hasInlineSourceText
+  ) {
     return "Please provide the source text or upload the document you'd like Cortéx to rewrite or enhance.";
   }
 
