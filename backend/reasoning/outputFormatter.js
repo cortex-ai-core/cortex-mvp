@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.7.13 STABILIZATION PATCH
+//  v1.7.15 STABILIZATION PATCH
 //  Lightweight post-synthesis formatter
 // ============================================================
 
@@ -366,6 +366,40 @@ function buildCandidateDecisionOutput(
       userMessage,
       cleaned
     );
+
+  // ========================================================
+  // 🔥 MISSING CONTEXT HANDLING
+  // ========================================================
+  const normalized = cleaned.toLowerCase();
+
+  const missingContext =
+    normalized.includes("i don’t have") ||
+    normalized.includes("i don't have") ||
+    normalized.includes("i don’t see") ||
+    normalized.includes("i don't see") ||
+    normalized.includes("no resume content") ||
+    normalized.includes("unable to summarize") ||
+    normalized.includes("can't generate an accurate summary") ||
+    normalized.includes("cannot generate an accurate summary");
+
+  if (missingContext) {
+    return `## Candidate Name
+${candidateName}
+
+## Status
+No resume content was found in the available context.
+
+Please provide:
+- Resume text
+- Uploaded resume
+- Supporting candidate documents
+
+Then Cortéx can:
+- Summarize experience
+- Identify strengths
+- Assess alignment
+- Professionally enhance the resume`;
+  }
 
   const summary =
     extractSection(cleaned, [
