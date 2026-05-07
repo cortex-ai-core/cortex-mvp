@@ -1,5 +1,6 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE (48A.5 + SECURED + NAMESPACE SAFE)
+//  v1.4 FINAL — RETRIEVAL CONTROL (SIMILARITY CORRECT — NO DRIFT)
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -58,6 +59,13 @@ function hasPermission(identity, action) {
 }
 
 // ============================================================
+// 🔥 v1.4 RETRIEVAL CONTROL CONSTANTS
+// ============================================================
+
+const SIMILARITY_THRESHOLD = 0.45;
+const TOP_K = 3;
+
+// ============================================================
 // ROUTE
 // ============================================================
 
@@ -68,7 +76,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
     { preHandler: requireAuth() },
     async (req, reply) => {
       try {
-        const { query, namespace = "default", topK = 5 } = req.body || {};
+        const { query, namespace = "default" } = req.body || {};
 
         const identity = {
           userId: req.user?.id,
@@ -98,7 +106,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
           return reply.code(400).send({ error: "Query text is required." });
         }
 
-        // Supabase client
         const supabase = createClient(
           process.env.SUPABASE_URL,
           process.env.SUPABASE_SERVICE_KEY
@@ -119,12 +126,12 @@ export default fp(async function retrieveRoute(fastify, opts) {
         }
 
         // -----------------------------------------------------
-        // 2️⃣ VECTOR SEARCH
+        // 2️⃣ VECTOR SEARCH (OVERFETCH)
         // -----------------------------------------------------
         const { data, error } = await supabase.rpc("match_documents", {
           query_embedding: embedding,
           match_threshold: 0.1,
-          match_count: topK,
+          match_count: 10,
           query_namespace: namespace,
         });
 
@@ -134,13 +141,44 @@ export default fp(async function retrieveRoute(fastify, opts) {
         }
 
         // -----------------------------------------------------
-        // 🧠 FORMAT (FIXED COLUMN)
+        // 🧠 FORMAT + CLEAN
         // -----------------------------------------------------
-        const formatted = (data || []).map((row) => ({
-          content: row.chunk_text,   // ✅ FIXED
+        let formatted = (data || []).map((row) => ({
+          content: (row.chunk_text || "").trim(),
           similarity: row.similarity,
           filename: row.filename
         }));
+
+        // -----------------------------------------------------
+        // 🔥 v1.4 FILTERING (FINAL)
+        // -----------------------------------------------------
+
+        // 1. Remove empty
+        formatted = formatted.filter(r => r.content);
+
+        // 2. Similarity threshold (HIGHER = BETTER)
+        formatted = formatted.filter(r => r.similarity >= SIMILARITY_THRESHOLD);
+
+        // 3. Deduplicate
+        const seen = new Set();
+        formatted = formatted.filter(r => {
+          if (seen.has(r.content)) return false;
+          seen.add(r.content);
+          return true;
+        });
+
+        // 4. Top-K limit
+        formatted = formatted.slice(0, TOP_K);
+
+        // -----------------------------------------------------
+        // 📊 LIGHT LOGGING (NO CONTENT)
+        // -----------------------------------------------------
+        fastify.log.info({
+          route: "/api/retrieve",
+          namespace,
+          matchCount: formatted.length,
+          ragUsed: formatted.length > 0
+        });
 
         return reply.send({ results: formatted });
 
