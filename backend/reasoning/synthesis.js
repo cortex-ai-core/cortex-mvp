@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
 //  Step 46 + 47.6B + v1.2 Identity
-//  v1.7.2 — INTENT-AWARE GROUNDING POLICY
+//  v1.7.3 — EVIDENCE DISCIPLINE REFINEMENT
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -116,6 +116,18 @@ export async function synthesizeFinalAnswer({
   }
 
   // ============================================================
+  // 🔥 EVIDENCE SIGNAL ANALYSIS
+  // ============================================================
+  const totalEvidenceLength = fusedEvidence.reduce(
+    (sum, e) => sum + (e.content || "").length,
+    0
+  );
+
+  const lowEvidence =
+    fusedEvidence.length <= 2 ||
+    totalEvidenceLength < 1200;
+
+  // ============================================================
   // 🔥 SYSTEM PROMPT
   // ============================================================
   const systemPrompt = `
@@ -132,6 +144,19 @@ Behavior Rules:
 - Maintain authority and structure
 - Do NOT expose internal reasoning
 - Do NOT fabricate missing data
+- Only state conclusions directly supported by supplied evidence
+
+EVIDENCE DISCIPLINE RULES:
+- Treat retrieved evidence as separate informational sources
+- Do NOT merge unrelated evidence into unified conclusions
+- Prioritize the most directly relevant evidence
+- Supporting context may inform interpretation but must not override primary evidence
+- Do NOT infer relationships between documents unless explicitly supported
+- Do NOT convert guidance, criteria, recommendations, or reference material into factual statements
+- Do NOT assume ownership, leadership, implementation authority, or strategic influence unless directly supported by evidence
+- If evidence is fragmented, weak, or incomplete, remain conservative
+- Avoid executive extrapolation
+- Preserve generalized reasoning without hardcoding domain assumptions
 
 ENTITY RULES:
 - If a PRIMARY ENTITY exists, it is the ONLY valid entity reference
@@ -143,6 +168,19 @@ CONTEXT RULES:
 - CONTEXT is the source of truth
 - You MUST use it
 - Do NOT say context is missing
+
+${
+  lowEvidence
+    ? `
+LOW EVIDENCE MODE:
+- Evidence confidence is limited
+- Be conservative in conclusions
+- Avoid extrapolation
+- Prefer precision over completeness
+- Do not fill informational gaps with assumptions
+`
+    : ``
+}
 `.trim();
 
   // -----------------------------
@@ -173,7 +211,20 @@ REASONING NOTES:
 - ${reasoningNotes}
 
 TASK:
-Return a direct, helpful answer.
+Return a direct, structured, and evidence-grounded answer.
+
+Prioritize:
+1. Direct evidence
+2. Relevance
+3. Precision
+4. Clarity
+
+Do NOT:
+- merge unrelated evidence
+- invent missing experience
+- infer unsupported responsibility
+- convert recommendations into facts
+- blend reference material into subject analysis
 
 ${
   primaryEntity
