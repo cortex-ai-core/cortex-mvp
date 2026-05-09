@@ -1,58 +1,42 @@
 // ============================================================
 //  CORTÉX — OUTPUT FORMATTER
-//  v1.7.16 STABILIZATION PATCH
-//  Lightweight post-synthesis formatter
+//  v1.7.7 — THIN FORMATTER STABILIZATION
+// ============================================================
+//
+// PURPOSE:
+// Lightweight post-synthesis cleanup layer.
+//
+// FORMATTER SHOULD:
+// - preserve synthesis intelligence
+// - lightly normalize formatting
+// - avoid structural corruption
+// - avoid domain assumptions
+//
+// FORMATTER SHOULD NOT:
+// - invent sections
+// - infer candidate names
+// - rewrite reasoning
+// - force templates
+// - reconstruct outputs
 // ============================================================
 
 const SECTION_HEADERS = [
-  "Executive Decision",
-  "Strategic Recommendation",
-  "Recommendation",
   "Summary",
-  "Key Findings",
-  "Strengths",
+  "Recommendation",
   "Key Strengths",
   "Watch Areas",
-  "Gaps",
   "Risks",
-  "Action Plan",
   "Next Steps",
-  "Final Assessment",
+  "Executive Summary",
+  "Operational Analysis",
   "Root Cause",
   "Impact",
-  "Remediation",
-  "Supporting Analysis",
-  "Operational Summary",
-  "Candidate Summary",
-  "Candidate Name",
-  "Interview Focus",
-  "Remediation Priority",
-  "Executive Summary",
-  "Operational Analysis"
+  "Remediation"
 ];
 
-const MAX_BULLETS = 6;
-
-const SIGNAL_TERMS = [
-  "risk",
-  "governance",
-  "audit",
-  "workflow",
-  "compliance",
-  "quality",
-  "operational",
-  "operations",
-  "executive",
-  "enterprise",
-  "analytics",
-  "analysis",
-  "reporting",
-  "dashboard",
-  "data",
-  "epic",
-  "ehr"
-];
-
+// ------------------------------------------------------------
+// 🔥 Normalize Text
+// ------------------------------------------------------------
 function normalizeText(value = "") {
   return String(value || "")
     .replace(/\r\n/g, "\n")
@@ -60,6 +44,38 @@ function normalizeText(value = "") {
     .trim();
 }
 
+// ------------------------------------------------------------
+// 🔥 Missing Data Detection
+// ------------------------------------------------------------
+function isMissingDataResponse(text = "") {
+  const normalized = text.toLowerCase();
+
+  return (
+    normalized.includes("no matching documents found") ||
+    normalized.includes("i need more information") ||
+    normalized.includes("not enough information") ||
+    normalized.includes("insufficient information")
+  );
+}
+
+// ------------------------------------------------------------
+// 🔥 Rewrite Detection
+// ------------------------------------------------------------
+function isRewriteRequest(userMessage = "") {
+  const normalized = userMessage.toLowerCase();
+
+  return (
+    normalized.includes("rewrite") ||
+    normalized.includes("restructure") ||
+    normalized.includes("revise") ||
+    normalized.includes("redraft") ||
+    normalized.includes("edit this")
+  );
+}
+
+// ------------------------------------------------------------
+// 🔥 Preserve Existing Structure
+// ------------------------------------------------------------
 function hasExistingStructure(text = "") {
   const normalized = text.toLowerCase();
 
@@ -68,509 +84,146 @@ function hasExistingStructure(text = "") {
   );
 }
 
-function isMissingDataResponse(text = "") {
-  const normalized = text.toLowerCase();
-
-  return (
-    normalized.includes("no matching documents found") ||
-    normalized.includes("i need more information") ||
-    normalized.includes("not enough information") ||
-    normalized.includes("insufficient information") ||
-    normalized.includes("missing information") ||
-    normalized.includes("unable to determine")
-  );
-}
-
-function isRewriteRequest(userMessage = "") {
-  const normalized = userMessage.toLowerCase();
-
-  return (
-    normalized.includes("rewrite") ||
-    normalized.includes("restructure") ||
-    normalized.includes("redraft") ||
-    normalized.includes("revise") ||
-    normalized.includes("clean this up") ||
-    normalized.includes("make this professional") ||
-    normalized.includes("improve this") ||
-    normalized.includes("refine this") ||
-    normalized.includes("update this") ||
-    normalized.includes("rework this") ||
-    normalized.includes("edit this") ||
-    normalized.includes("polish this")
-  );
-}
-
-function isResumeOrCandidateRequest(userMessage = "") {
-  const normalized = userMessage.toLowerCase();
-
-  return (
-    normalized.includes("resume") ||
-    normalized.includes("candidate") ||
-    normalized.includes("interview") ||
-    normalized.includes("alignment score") ||
-    normalized.includes("technical match") ||
-    normalized.includes("culture fit") ||
-    normalized.includes("submittal") ||
-    normalized.includes("job fit") ||
-    normalized.includes("role fit") ||
-    normalized.includes("hire") ||
-    normalized.includes("hiring")
-  );
-}
-
-function isIncidentRequest(userMessage = "") {
-  const normalized = userMessage.toLowerCase();
-
-  return (
-    normalized.includes("incident") ||
-    normalized.includes("outage") ||
-    normalized.includes("root cause") ||
-    normalized.includes("remediation") ||
-    normalized.includes("impacted systems") ||
-    normalized.includes("network issue") ||
-    normalized.includes("escalation") ||
-    normalized.includes("sev") ||
-    normalized.includes("severity") ||
-    normalized.includes("disruption")
-  );
-}
-
-function ensureTerminalPeriod(text = "") {
-  if (!text) return text;
-
-  if (/[.!?]$/.test(text.trim())) {
-    return text.trim();
-  }
-
-  return `${text.trim()}.`;
-}
-
-function cleanMarkdownNoise(text = "") {
+// ------------------------------------------------------------
+// 🔥 Clean Structural Noise
+// ------------------------------------------------------------
+function cleanStructuralNoise(text = "") {
   return normalizeText(text)
-    .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\*\*/g, "")
-    .replace(/---+/g, "")
+
+    // remove markdown corruption
+    .replace(/:\./g, ":")
+    .replace(/-\s*\/\s*/g, "- ")
+    .replace(/\n\d+\.\s*\n/g, "\n")
+
+    // remove duplicated blank bullets
+    .replace(/^-+\s*$/gm, "")
+
+    // remove repetitive spacing
     .replace(/\n{3,}/g, "\n\n")
+
     .trim();
 }
 
-function cleanSectionText(text = "") {
-  return cleanMarkdownNoise(text)
-    .replace(/^summary:\s*/i, "")
-    .trim();
-}
+// ------------------------------------------------------------
+// 🔥 Light Compression
+//
+// Only removes obvious duplicate adjacent lines.
+// Does NOT reinterpret reasoning.
+// ------------------------------------------------------------
+function removeDuplicateLines(text = "") {
+  const lines = text.split("\n");
 
-function normalizeBulletLine(line = "") {
-  return line
-    .replace(/^[-•*\d.)\s]+/, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function firstSentence(text = "") {
-  const cleaned = cleanMarkdownNoise(text);
-
-  const match = cleaned.match(/[^.!?]+[.!?]/);
-
-  if (match) {
-    return cleanSectionText(match[0].trim());
-  }
-
-  return ensureTerminalPeriod(
-    cleanSectionText(cleaned.slice(0, 240).trim())
-  );
-}
-
-function sentenceList(text = "") {
-  return cleanMarkdownNoise(text)
-    .split(/(?<=[.!?])\s+/)
-    .map(sentence => cleanSectionText(sentence))
-    .filter(Boolean);
-}
-
-function hasSignalTerm(text = "") {
-  const normalized = text.toLowerCase();
-
-  return SIGNAL_TERMS.some(term =>
-    normalized.includes(term)
-  );
-}
-
-function extractUsefulBullets(text = "") {
-  const cleaned = cleanMarkdownNoise(text);
-
-  const lines = cleaned
-    .split("\n")
-    .map(line => normalizeBulletLine(line))
-    .filter(Boolean);
-
-  const bullets = [];
+  const cleaned = [];
+  const seen = new Set();
 
   for (const line of lines) {
-    if (line.length < 25) continue;
+    const normalized =
+      line.trim().toLowerCase();
 
-    if (
-      hasSignalTerm(line) ||
-      line.includes("supported") ||
-      line.includes("managed") ||
-      line.includes("resolved") ||
-      line.includes("implemented") ||
-      line.includes("experience")
-    ) {
-      bullets.push(
-        ensureTerminalPeriod(line)
-      );
+    // preserve empty spacing
+    if (!normalized) {
+      cleaned.push(line);
+      continue;
     }
 
-    if (bullets.length >= MAX_BULLETS) {
-      break;
+    // skip obvious duplicates
+    if (seen.has(normalized)) {
+      continue;
     }
+
+    seen.add(normalized);
+    cleaned.push(line);
   }
 
-  if (!bullets.length) {
-    const sentences = sentenceList(cleaned);
-
-    for (const sentence of sentences) {
-      if (sentence.length < 25) continue;
-
-      bullets.push(
-        ensureTerminalPeriod(sentence)
-      );
-
-      if (bullets.length >= 4) {
-        break;
-      }
-    }
-  }
-
-  return bullets;
+  return cleaned.join("\n");
 }
 
-function extractSection(text = "", labels = []) {
-  const cleaned = cleanMarkdownNoise(text);
+// ------------------------------------------------------------
+// 🔥 Minimal Operational Compression
+//
+// Used ONLY when synthesis returns large
+// unstructured blobs.
+//
+// DOES NOT rebuild structure.
+// ------------------------------------------------------------
+function lightlyCompress(text = "") {
+  const sentences = text
+    .split(/(?<=[.!?])\s+/)
+    .filter(Boolean);
 
-  const escapedLabels = labels.map(label =>
-    label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  );
-
-  const escapedSectionHeaders = SECTION_HEADERS.map(header =>
-    header.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  );
-
-  const pattern = new RegExp(
-    `(?:^|\\n)\\s*(?:${escapedLabels.join("|")})\\s*:?\\s*\\n?([\\s\\S]*?)(?=\\n\\s*(?:${escapedSectionHeaders.join("|")})\\s*:?\\s*\\n|$)`,
-    "i"
-  );
-
-  const match = cleaned.match(pattern);
-
-  if (!match || !match[1]) {
-    return "";
+  // preserve concise outputs
+  if (sentences.length <= 10) {
+    return text;
   }
 
-  return cleanSectionText(match[1]);
-}
-
-function cleanCandidateName(name = "") {
-  return String(name || "")
-    .replace(/\b(and|for|with|the|a|an)\b.*$/i, "")
+  return sentences
+    .slice(0, 10)
+    .join(" ")
     .trim();
 }
 
-function isBadNameMatch(value = "") {
-  const normalized = value.toLowerCase().trim();
-
-  const badMatches = [
-    "candidate name",
-    "primary entity",
-    "not enough",
-    "service desk",
-    "salem health",
-    "access management"
-  ];
-
-  return badMatches.some(item =>
-    normalized.includes(item)
-  );
-}
-
-function extractCandidateName(userMessage = "", raw = "") {
-  const combined = `${userMessage}\n${raw}`;
-
-  const patterns = [
-    /summarize\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-    /candidate name\s*:\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-    /^([A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:is|has)\b/m
-  ];
-
-  for (const pattern of patterns) {
-    const match = combined.match(pattern);
-
-    if (match && match[1]) {
-      const candidate = cleanCandidateName(match[1]);
-
-      if (!isBadNameMatch(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
-  const fallback =
-    String(userMessage || "")
-      .match(/\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/);
-
-  if (fallback && fallback[1]) {
-    const candidate = cleanCandidateName(fallback[1]);
-
-    if (!isBadNameMatch(candidate)) {
-      return candidate;
-    }
-  }
-
-  return "Not enough evidence provided.";
-}
-
-function toBullets(
-  value = "",
-  fallback = "Not enough evidence provided."
+// ============================================================
+// 🔥 MAIN FORMATTER
+// ============================================================
+export function formatOutput(
+  rawAnswer = "",
+  options = {}
 ) {
-  const cleaned = cleanMarkdownNoise(value);
 
-  if (!cleaned) {
-    return `- ${fallback}`;
-  }
-
-  const lines = cleaned
-    .split("\n")
-    .map(line => normalizeBulletLine(line))
-    .filter(Boolean);
-
-  if (!lines.length) {
-    return `- ${fallback}`;
-  }
-
-  return lines
-    .slice(0, 6)
-    .map(line => `- ${ensureTerminalPeriod(line)}`)
-    .join("\n");
-}
-
-function buildCandidateDecisionOutput(
-  raw = "",
-  userMessage = ""
-) {
-  const cleaned = cleanMarkdownNoise(raw);
-
-  const candidateName =
-    extractCandidateName(
-      userMessage,
-      cleaned
-    );
-
-  const normalized = cleaned.toLowerCase();
-
-  const missingContext =
-    normalized.includes("i don’t have") ||
-    normalized.includes("i don't have") ||
-    normalized.includes("i don’t see") ||
-    normalized.includes("i don't see") ||
-    normalized.includes("no resume content") ||
-    normalized.includes("unable to summarize") ||
-    normalized.includes("can't generate an accurate summary") ||
-    normalized.includes("cannot generate an accurate summary");
-
-  if (missingContext) {
-    return `## Candidate Name
-${candidateName}
-
-## Status
-No resume content was found in the available context.
-
-Please provide:
-- Resume text
-- Uploaded resume
-- Supporting candidate documents
-
-Then Cortéx can:
-- Summarize experience
-- Identify strengths
-- Assess alignment
-- Professionally enhance the resume`;
-  }
-
-  const summary =
-    extractSection(cleaned, [
-      "Summary",
-      "Candidate Summary"
-    ]) ||
-    firstSentence(cleaned) ||
-    "Not enough evidence provided.";
-
-  const strengths =
-    extractUsefulBullets(cleaned)
-      .slice(0, 5)
-      .join("\n") ||
-    "Not enough evidence provided.";
-
-  const watchAreas =
-    extractSection(cleaned, [
-      "Watch Areas",
-      "Gaps",
-      "Risks"
-    ]) ||
-    "No major watch areas identified from available context.";
-
-  const recommendation =
-    extractSection(cleaned, [
-      "Recommendation",
-      "Executive Decision",
-      "Final Assessment"
-    ]) ||
-    firstSentence(cleaned) ||
-    "Not enough evidence provided.";
-
-  return `## Candidate Name
-${candidateName}
-
-## Summary
-${ensureTerminalPeriod(cleanSectionText(summary))}
-
-## Key Strengths
-${toBullets(strengths)}
-
-## Watch Areas
-${toBullets(
-  watchAreas,
-  "No major watch areas identified from available context."
-)}
-
-## Recommendation
-${ensureTerminalPeriod(cleanSectionText(recommendation))}`;
-}
-
-function buildCompressedOutput({
-  decisionLabel = "Executive Summary",
-  title = "Analysis",
-  raw = "",
-  finalLabel = "Next Step"
-}) {
-  const decision = firstSentence(raw);
-
-  const bullets = extractUsefulBullets(raw);
-
-  const bulletText = bullets.length
-    ? bullets.map(item => `- ${item}`).join("\n")
-    : `- ${firstSentence(raw)}`;
-
-  // ========================================================
-  // 🔥 SOFTENED OPERATIONAL CLOSING LANGUAGE
-  // ========================================================
-  let closingText =
-    "This reflects the current operational assessment based on available evidence.";
-
-  if (
-    title.toLowerCase().includes("incident") ||
-    title.toLowerCase().includes("operational")
-  ) {
-    closingText =
-      "This reflects the current operational assessment based on available evidence.";
-  } else if (
-    title.toLowerCase().includes("analysis")
-  ) {
-    closingText =
-      "Use this as the current analytical summary.";
-  }
-
-  return `## ${decisionLabel}
-${ensureTerminalPeriod(decision)}
-
-## ${title}
-${bulletText}
-
-## ${finalLabel}
-${closingText}`;
-}
-
-export function formatOutput(rawAnswer = "", options = {}) {
   const {
-    intent = "general",
     userMessage = ""
   } = options || {};
 
-  const text = normalizeText(rawAnswer);
+  // ----------------------------------------------------------
+  // Normalize
+  // ----------------------------------------------------------
+  let text = normalizeText(rawAnswer);
 
-  // ------------------------------------------------
-  // Empty response guard
-  // ------------------------------------------------
+  // ----------------------------------------------------------
+  // Empty Guard
+  // ----------------------------------------------------------
   if (!text) {
     return "I need more information.";
   }
 
-  // ------------------------------------------------
+  // ----------------------------------------------------------
   // Preserve missing-data responses
-  // ------------------------------------------------
+  // ----------------------------------------------------------
   if (isMissingDataResponse(text)) {
     return text;
   }
 
-  // ------------------------------------------------
+  // ----------------------------------------------------------
   // Preserve rewrites EXACTLY
-  // ------------------------------------------------
+  // ----------------------------------------------------------
   if (isRewriteRequest(userMessage)) {
     return text;
   }
 
-  // ------------------------------------------------
-  // Candidate mode
-  // ONLY from explicit USER intent
-  // ------------------------------------------------
-  if (isResumeOrCandidateRequest(userMessage)) {
-    return buildCandidateDecisionOutput(
-      text,
-      userMessage
-    );
-  }
+  // ----------------------------------------------------------
+  // Clean structural corruption
+  // ----------------------------------------------------------
+  text = cleanStructuralNoise(text);
 
-  // ------------------------------------------------
-  // Incident mode
-  // ------------------------------------------------
-  if (isIncidentRequest(userMessage)) {
-    return buildCompressedOutput({
-      decisionLabel: "Executive Summary",
-      title: "Operational Analysis",
-      raw: text,
-      finalLabel: "Recommended Next Step"
-    });
-  }
+  // ----------------------------------------------------------
+  // Remove duplicate adjacent lines
+  // ----------------------------------------------------------
+  text = removeDuplicateLines(text);
 
-  // ------------------------------------------------
-  // Analysis mode
-  // ------------------------------------------------
-  const analysisRequest =
-    intent === "analysis" ||
-    /analyze|analysis|assess|evaluate|compare|review|breakdown|explain why/i.test(
-      userMessage
-    );
-
-  if (analysisRequest) {
-    return buildCompressedOutput({
-      decisionLabel: "Summary",
-      title: "Analysis",
-      raw: text,
-      finalLabel: "Next Step"
-    });
-  }
-
-  // ------------------------------------------------
-  // Preserve already-structured responses
-  // ------------------------------------------------
+  // ----------------------------------------------------------
+  // Preserve already-structured outputs
+  // ----------------------------------------------------------
   if (hasExistingStructure(text)) {
     return text;
   }
 
-  // ------------------------------------------------
-  // DEFAULT:
-  // preserve raw model intelligence
-  // ------------------------------------------------
+  // ----------------------------------------------------------
+  // Light compression ONLY if needed
+  // ----------------------------------------------------------
+  text = lightlyCompress(text);
+
+  // ----------------------------------------------------------
+  // Preserve synthesis intelligence
+  // ----------------------------------------------------------
   return text;
 }

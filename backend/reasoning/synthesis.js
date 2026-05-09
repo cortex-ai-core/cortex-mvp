@@ -1,7 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  Step 46 + 47.6B + v1.2 Identity
-//  v1.7.3 — EVIDENCE DISCIPLINE REFINEMENT
+//  v1.7.6 — STRUCTURAL INTELLIGENCE STABILIZATION
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -15,22 +14,20 @@ export async function synthesizeFinalAnswer({
 }) {
 
   // ============================================================
-  //  LITERAL MODE SHORT-CIRCUIT (Step 47.6B)
+  // 🔥 LITERAL MODE SHORT-CIRCUIT
   // ============================================================
   if (intent === "literal") {
-    const cleaned = userMessage
+    return userMessage
       .replace(/^repeat exactly:/i, "")
       .replace(/^repeat this exactly:/i, "")
       .replace(/^do not change:/i, "")
       .replace(/^say this verbatim:/i, "")
       .trim();
-
-    return cleaned;
   }
 
-  // -----------------------------
-  // 🔥 Identity Extraction
-  // -----------------------------
+  // ============================================================
+  // 🔥 IDENTITY CONTEXT
+  // ============================================================
   const role = identityContext?.role || "user";
   const namespace = identityContext?.namespace || "general";
   const tone = identityContext?.tone || "neutral";
@@ -58,21 +55,21 @@ export async function synthesizeFinalAnswer({
     "business_document",
     "analysis",
     "question",
-    "general"
+    "general",
   ];
 
   const requiresGrounding =
     !generativeIntents.includes(intent);
 
   // ============================================================
-  // 🔥 EARLY EXIT — NO CONTEXT FOR GROUNDED TASKS
+  // 🔥 EARLY EXIT — NO CONTEXT
   // ============================================================
   if (!hasContext && requiresGrounding) {
     return "No matching documents found in the system.";
   }
 
   // ============================================================
-  // 🔥 EARLY EXIT — GENERATIVE TASKS NEED SOURCE TEXT
+  // 🔥 EARLY EXIT — GENERATIVE TASKS
   // ============================================================
   if (
     !hasContext &&
@@ -88,29 +85,30 @@ export async function synthesizeFinalAnswer({
   }
 
   // ============================================================
-  // 🔥 ENTITY DETECTION (FINAL — INJECTED + FALLBACK)
+  // 🔥 ENTITY DETECTION
+  //
+  // IMPORTANT:
+  // Only trust explicit source-of-truth injection.
+  // Do NOT force unsafe fallback guessing.
   // ============================================================
   let primaryEntity = null;
 
   if (hasContext) {
 
-    // 1️⃣ Preferred: injected entity
     const injected = contextWindow.match(
       /PRIMARY ENTITY \(SOURCE OF TRUTH\):\s*(.+)/i
     );
 
-    if (injected) {
-      primaryEntity = injected[1].trim();
-    }
+    if (injected?.[1]) {
+      const cleaned = injected[1].trim();
 
-    // 2️⃣ Fallback: extract first valid full name from context
-    if (!primaryEntity) {
-      const fallback = contextWindow.match(
-        /\b[A-Z][a-z]+ [A-Z][a-z]+\b/
-      );
-
-      if (fallback) {
-        primaryEntity = fallback[0];
+      // basic sanity protection
+      if (
+        cleaned.length > 2 &&
+        cleaned.length < 120 &&
+        !cleaned.toLowerCase().includes("not enough evidence")
+      ) {
+        primaryEntity = cleaned;
       }
     }
   }
@@ -138,64 +136,80 @@ IDENTITY CONTEXT:
 - Namespace: ${namespace}
 - Tone Mode: ${tone}
 
-Respond with clarity, precision, and alignment to the intent: ${intent}.
+Respond with clarity, precision, and operational usefulness.
 
-Behavior Rules:
-- Maintain authority and structure
+GLOBAL BEHAVIOR RULES:
+- Maintain grounded reasoning
+- Do NOT fabricate missing evidence
 - Do NOT expose internal reasoning
-- Do NOT fabricate missing data
-- Only state conclusions directly supported by supplied evidence
+- Preserve generalized intelligence
+- Avoid hardcoded assumptions
+- Prioritize signal over verbosity
 
-EVIDENCE DISCIPLINE RULES:
-- Treat retrieved evidence as separate informational sources
-- Do NOT merge unrelated evidence into unified conclusions
-- Prioritize the most directly relevant evidence
-- Supporting context may inform interpretation but must not override primary evidence
-- Do NOT infer relationships between documents unless explicitly supported
-- Do NOT convert guidance, criteria, recommendations, or reference material into factual statements
-- Do NOT assume ownership, leadership, implementation authority, or strategic influence unless directly supported by evidence
-- If evidence is fragmented, weak, or incomplete, remain conservative
-- Avoid executive extrapolation
-- Preserve generalized reasoning without hardcoding domain assumptions
+EVIDENCE DISCIPLINE:
+- Treat evidence sources independently unless relationships are clearly supported
+- Use corroborating evidence carefully
+- Preserve source integrity
+- Prioritize high-confidence evidence
+- Avoid unsupported extrapolation
+- Avoid narrative inflation
+- Avoid repetitive phrasing
+- Compress overlapping evidence into unified insights
+
+STRUCTURE RULES:
+- Each section must contribute unique informational value
+- Do NOT restate summaries inside strengths/recommendations
+- Avoid filler bullets
+- Prefer fewer high-value insights over exhaustive enumeration
+- Avoid resume narrator tone unless explicitly requested
+- Maintain concise executive-level synthesis
 
 ENTITY RULES:
-- If a PRIMARY ENTITY exists, it is the ONLY valid entity reference
-- You MUST use it exactly
-- You MUST NOT omit it
-- You MUST NOT rename it
+${
+  primaryEntity
+    ? `
+- The primary entity is "${primaryEntity}"
+- Use exact spelling
+- Include naturally if relevant
+`
+    : `
+- Do NOT invent or guess entity names
+- If no verified entity exists, omit identity-specific labeling
+`
+}
 
 CONTEXT RULES:
-- CONTEXT is the source of truth
-- You MUST use it
-- Do NOT say context is missing
+- CONTEXT is authoritative
+- Use only supported evidence
+- Do NOT claim context is missing if evidence exists
 
 ${
   lowEvidence
     ? `
 LOW EVIDENCE MODE:
-- Evidence confidence is limited
-- Be conservative in conclusions
-- Avoid extrapolation
-- Prefer precision over completeness
-- Do not fill informational gaps with assumptions
+- Be conservative
+- Acknowledge uncertainty carefully
+- Avoid overstating capability or risk
 `
-    : ``
+    : ""
 }
 `.trim();
 
-  // -----------------------------
-  // Build evidence + reasoning text
-  // -----------------------------
+  // ============================================================
+  // 🔥 EVIDENCE + REASONING TEXT
+  // ============================================================
   const evidenceText = fusedEvidence
     .map((e) => `- ${e.content || ""}`)
     .join("\n");
 
-  const reasoningNotes = Array.isArray(inferencePaths.reasoningNotes)
+  const reasoningNotes = Array.isArray(
+    inferencePaths.reasoningNotes
+  )
     ? inferencePaths.reasoningNotes.join("\n- ")
     : "None";
 
   // ============================================================
-  // 🔥 TASK-LEVEL ENFORCEMENT
+  // 🔥 USER PROMPT
   // ============================================================
   const userPrompt = `
 CONTEXT WINDOW:
@@ -211,55 +225,62 @@ REASONING NOTES:
 - ${reasoningNotes}
 
 TASK:
-Return a direct, structured, and evidence-grounded answer.
+Return a structured, concise, evidence-grounded response.
 
 Prioritize:
-1. Direct evidence
-2. Relevance
+1. Evidence quality
+2. Operational relevance
 3. Precision
 4. Clarity
+5. Signal density
 
-Do NOT:
-- merge unrelated evidence
-- invent missing experience
-- infer unsupported responsibility
-- convert recommendations into facts
-- blend reference material into subject analysis
+Avoid:
+- repeating conclusions
+- duplicating sections
+- overstating weak evidence
+- narrating obvious details
+- template filler
+- unsupported assumptions
 
-${
-  primaryEntity
-    ? `
-MANDATORY OUTPUT REQUIREMENT:
-- The response MUST include "${primaryEntity}"
-- Use exact spelling
-- Include it naturally in the first paragraph
-`
-    : ``
-}
+If evidence is strong:
+- synthesize confidently
+
+If evidence is weak:
+- remain appropriately conservative
 
 Do NOT reference system structure.
 `.trim();
 
-  // -----------------------------
-  // OpenAI Response
-  // -----------------------------
-  const completion = await model.chat.completions.create({
-    model: "gpt-5.1",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-    temperature: 0.2,
-  });
+  // ============================================================
+  // 🔥 OPENAI RESPONSE
+  // ============================================================
+  const completion =
+    await model.chat.completions.create({
+      model: "gpt-5.1",
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        {
+          role: "user",
+          content: userPrompt,
+        },
+      ],
+      temperature: 0.2,
+    });
 
   let output =
     completion.choices?.[0]?.message?.content ||
     "I need more information.";
 
   // ============================================================
-  // 🔥 FINAL SAFETY — ENTITY GUARANTEE
+  // 🔥 FINAL ENTITY SAFETY
   // ============================================================
-  if (primaryEntity && !output.includes(primaryEntity)) {
+  if (
+    primaryEntity &&
+    !output.includes(primaryEntity)
+  ) {
     output = `${primaryEntity} — ${output}`;
   }
 
