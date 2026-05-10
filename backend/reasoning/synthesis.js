@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.7.9 — EXECUTIVE DENSITY OPTIMIZATION
+//  v1.8.0-pre — EXECUTIVE SYNTHESIS NATURALIZATION
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -137,7 +137,7 @@ export async function synthesizeFinalAnswer({
     if (!content) continue;
 
     const fingerprint =
-      content.toLowerCase().slice(0, 220);
+      content.toLowerCase().slice(0, 200);
 
     if (seenEvidence.has(fingerprint)) {
       continue;
@@ -162,7 +162,7 @@ export async function synthesizeFinalAnswer({
   // 🔥 EVIDENCE BUDGET
   // ============================================================
   const compressedEvidence =
-    uniqueEvidence.slice(0, 8);
+    uniqueEvidence.slice(0, 7);
 
   // ============================================================
   // 🔥 REASONING NOTE COMPRESSION
@@ -175,7 +175,7 @@ export async function synthesizeFinalAnswer({
           .map(r => r.trim())
           .filter(Boolean)
       )]
-        .slice(0, 4)
+        .slice(0, 3)
         .join("\n- ")
     : "None";
 
@@ -190,39 +190,36 @@ IDENTITY CONTEXT:
 - Namespace: ${namespace}
 - Tone Mode: ${tone}
 
-Respond with clarity, precision, operational usefulness, and executive density.
+Respond with precision, operational clarity, strategic compression, and executive-level synthesis.
 
 GLOBAL BEHAVIOR RULES:
 - Maintain grounded reasoning
-- Do NOT fabricate missing evidence
-- Do NOT expose internal reasoning
+- Do NOT fabricate unsupported conclusions
 - Preserve generalized intelligence
 - Avoid hardcoded assumptions
-- Prioritize signal over verbosity
-- Prefer strategic compression over exhaustive explanation
-- Favor implication-rich synthesis over descriptive narration
+- Prioritize leverage, dependencies, governance, bottlenecks, and sustainability
+- Prefer implication-rich synthesis over descriptive narration
+- Favor strategic abstraction over local-detail expansion
 
 EVIDENCE DISCIPLINE:
 - Treat evidence sources independently unless relationships are clearly supported
 - Preserve source integrity
 - Prioritize high-confidence evidence
 - Avoid unsupported extrapolation
-- Avoid narrative inflation
-- Compress overlapping evidence into unified insights
-- Prefer systemic implications over isolated observations
+- Compress overlapping evidence into unified strategic insights
+- Avoid repetitive implication chains
+- Avoid evidence echoing
 
 STRUCTURE RULES:
-- Maintain concise executive-level synthesis
 - Prefer fewer, denser sections
-- Minimize heading fragmentation
+- Minimize bullet inflation
 - Avoid analytical decomposition unless operationally necessary
-- Avoid repeating adjacent implications
-- Merge materially similar observations
-- Prefer strategic conclusions over stepwise explanation
+- Avoid repetitive “what exists / what does not exist” rhythm
+- Prefer integrated executive synthesis over checklist narration
 - Compress limitations into concise confidence statements
-- Avoid filler bullets and explanatory padding
-- Prioritize leverage, bottlenecks, dependencies, governance, and sustainability
-- Favor systems-level interpretation over local observation expansion
+- Favor strategic implications over descriptive walkthroughs
+- Reduce explanatory cadence where implications are already clear
+- Use natural executive rhythm rather than mechanically balanced sections
 
 ENTITY RULES:
 ${
@@ -230,18 +227,18 @@ ${
     ? `
 - The primary entity is "${primaryEntity}"
 - Use exact spelling
-- Include naturally if relevant
+- Include naturally if operationally relevant
 `
     : `
-- Do NOT invent or guess entity names
-- If no verified entity exists, omit identity-specific labeling
+- Do NOT invent or infer entity names
+- If no verified entity exists, avoid identity-specific labeling
 `
 }
 
 CONTEXT RULES:
 - CONTEXT is authoritative
 - Use only supported evidence
-- Do NOT claim context is missing if evidence exists
+- Do NOT claim evidence is missing if relevant evidence exists
 
 ${
   lowEvidence
@@ -249,8 +246,8 @@ ${
 LOW EVIDENCE MODE:
 - Remain conservative
 - Compress uncertainty into concise executive language
-- Avoid speculative conclusions
-- Avoid excessive explanation of missing evidence
+- Avoid speculative expansion
+- Avoid excessive explanation of limitations
 `
     : ""
 }
@@ -283,30 +280,30 @@ TASK:
 Return a concise, evidence-grounded executive response.
 
 Prioritize:
-1. Evidence quality
-2. Operational relevance
-3. Strategic implications
+1. Strategic implications
+2. Operational leverage
+3. Governance significance
 4. Signal density
 5. Executive compression
 
 Avoid:
-- excessive decomposition
 - analytical narration
+- repetitive decomposition
 - verbose explanation
-- repetitive implications
-- fragmented sections
+- checklist-style repetition
 - filler observations
 - recursive recommendations
-- descriptive expansion without strategic value
+- fragmented structural rhythm
+- over-expansion of adjacent implications
 
 If evidence is strong:
 - synthesize confidently
-- prioritize implications over explanation
-- compress operational insights into strategic conclusions
+- compress operational observations into strategic conclusions
+- prioritize systems-level interpretation
 
 If evidence is weak:
-- remain appropriately conservative
-- compress limitations into concise confidence language
+- remain conservative
+- compress uncertainty into concise confidence posture
 
 Do NOT reference system structure.
 `.trim();
@@ -327,7 +324,7 @@ Do NOT reference system structure.
           content: userPrompt,
         },
       ],
-      temperature: 0.1,
+      temperature: 0.08,
     });
 
   const output =
