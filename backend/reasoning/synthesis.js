@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.7.8 — EXECUTIVE COMPRESSION REFINEMENT
+//  v1.7.9 — EXECUTIVE DENSITY OPTIMIZATION
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -122,7 +122,7 @@ export async function synthesizeFinalAnswer({
     totalEvidenceLength < 1200;
 
   // ============================================================
-  // 🔥 EVIDENCE COMPRESSION
+  // 🔥 EVIDENCE NORMALIZATION + DEDUPLICATION
   // ============================================================
   const uniqueEvidence = [];
   const seenEvidence = new Set();
@@ -137,7 +137,7 @@ export async function synthesizeFinalAnswer({
     if (!content) continue;
 
     const fingerprint =
-      content.toLowerCase().slice(0, 240);
+      content.toLowerCase().slice(0, 220);
 
     if (seenEvidence.has(fingerprint)) {
       continue;
@@ -162,7 +162,22 @@ export async function synthesizeFinalAnswer({
   // 🔥 EVIDENCE BUDGET
   // ============================================================
   const compressedEvidence =
-    uniqueEvidence.slice(0, 10);
+    uniqueEvidence.slice(0, 8);
+
+  // ============================================================
+  // 🔥 REASONING NOTE COMPRESSION
+  // ============================================================
+  const reasoningNotes = Array.isArray(
+    inferencePaths.reasoningNotes
+  )
+    ? [...new Set(
+        inferencePaths.reasoningNotes
+          .map(r => r.trim())
+          .filter(Boolean)
+      )]
+        .slice(0, 4)
+        .join("\n- ")
+    : "None";
 
   // ============================================================
   // 🔥 SYSTEM PROMPT
@@ -175,7 +190,7 @@ IDENTITY CONTEXT:
 - Namespace: ${namespace}
 - Tone Mode: ${tone}
 
-Respond with clarity, precision, and operational usefulness.
+Respond with clarity, precision, operational usefulness, and executive density.
 
 GLOBAL BEHAVIOR RULES:
 - Maintain grounded reasoning
@@ -185,35 +200,29 @@ GLOBAL BEHAVIOR RULES:
 - Avoid hardcoded assumptions
 - Prioritize signal over verbosity
 - Prefer strategic compression over exhaustive explanation
+- Favor implication-rich synthesis over descriptive narration
 
 EVIDENCE DISCIPLINE:
 - Treat evidence sources independently unless relationships are clearly supported
-- Use corroborating evidence carefully
 - Preserve source integrity
 - Prioritize high-confidence evidence
 - Avoid unsupported extrapolation
 - Avoid narrative inflation
-- Avoid repetitive phrasing
 - Compress overlapping evidence into unified insights
+- Prefer systemic implications over isolated observations
 
 STRUCTURE RULES:
-- Each section must contribute unique informational value
-- Do NOT restate summaries inside strengths/recommendations
-- Avoid filler bullets
-- Prefer fewer high-value insights over exhaustive enumeration
-- Avoid resume narrator tone unless explicitly requested
 - Maintain concise executive-level synthesis
-- Compress overlapping observations into unified insights
-- Avoid recursive recommendations
-- Avoid section expansion from minor evidence variations
-- Prefer strategic density over exhaustive coverage
-- If two insights are materially similar, merge them
-- Prefer dense executive synthesis over explanatory decomposition
-- Compress uncertainty into concise confidence statements
-- Avoid enumerating multiple variations of the same limitation
-- Minimize section fragmentation
-- Favor implication-rich summaries over analytical narration
-- Use fewer sections when possible
+- Prefer fewer, denser sections
+- Minimize heading fragmentation
+- Avoid analytical decomposition unless operationally necessary
+- Avoid repeating adjacent implications
+- Merge materially similar observations
+- Prefer strategic conclusions over stepwise explanation
+- Compress limitations into concise confidence statements
+- Avoid filler bullets and explanatory padding
+- Prioritize leverage, bottlenecks, dependencies, governance, and sustainability
+- Favor systems-level interpretation over local observation expansion
 
 ENTITY RULES:
 ${
@@ -238,10 +247,9 @@ ${
   lowEvidence
     ? `
 LOW EVIDENCE MODE:
-- Be conservative
+- Remain conservative
 - Compress uncertainty into concise executive language
-- Avoid overstating capability or risk
-- Avoid speculative recommendations
+- Avoid speculative conclusions
 - Avoid excessive explanation of missing evidence
 `
     : ""
@@ -254,21 +262,6 @@ LOW EVIDENCE MODE:
   const evidenceText = compressedEvidence
     .map((e) => `- ${e.content || ""}`)
     .join("\n");
-
-  // ============================================================
-  // 🔥 REASONING NOTE COMPRESSION
-  // ============================================================
-  const reasoningNotes = Array.isArray(
-    inferencePaths.reasoningNotes
-  )
-    ? [...new Set(
-        inferencePaths.reasoningNotes
-          .map(r => r.trim())
-          .filter(Boolean)
-      )]
-        .slice(0, 6)
-        .join("\n- ")
-    : "None";
 
   // ============================================================
   // 🔥 USER PROMPT
@@ -287,39 +280,33 @@ REASONING NOTES:
 - ${reasoningNotes}
 
 TASK:
-Return a structured, concise, evidence-grounded response.
+Return a concise, evidence-grounded executive response.
 
 Prioritize:
 1. Evidence quality
 2. Operational relevance
-3. Precision
-4. Clarity
-5. Signal density
-6. Executive compression
+3. Strategic implications
+4. Signal density
+5. Executive compression
 
 Avoid:
-- repeating conclusions
-- duplicating sections
-- overstating weak evidence
-- narrating obvious details
-- template filler
-- unsupported assumptions
-- recursive recommendations
-- section bloat
-- repeating equivalent observations
 - excessive decomposition
 - analytical narration
-- fragmented sectioning
-- verbose uncertainty explanation
+- verbose explanation
+- repetitive implications
+- fragmented sections
+- filler observations
+- recursive recommendations
+- descriptive expansion without strategic value
 
 If evidence is strong:
 - synthesize confidently
-- compress insights strategically
 - prioritize implications over explanation
+- compress operational insights into strategic conclusions
 
 If evidence is weak:
 - remain appropriately conservative
-- compress limitations into concise confidence statements
+- compress limitations into concise confidence language
 
 Do NOT reference system structure.
 `.trim();
@@ -340,7 +327,7 @@ Do NOT reference system structure.
           content: userPrompt,
         },
       ],
-      temperature: 0.15,
+      temperature: 0.1,
     });
 
   const output =
