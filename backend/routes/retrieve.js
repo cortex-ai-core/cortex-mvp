@@ -1,6 +1,6 @@
 // ============================================================
-//  CORTÉX — RAG RETRIEVE ROUTE (48A.5 + SECURED + NAMESPACE SAFE)
-//  v1.7 — RETRIEVAL INTELLIGENCE REFINEMENT (NO DRIFT)
+//  CORTÉX — RAG RETRIEVE ROUTE
+//  v1.7.10 — RETRIEVAL DIVERSITY + SIGNAL OPTIMIZATION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -61,15 +61,16 @@ function hasPermission(identity, action) {
 }
 
 // ============================================================
-// 🔥 v1.7 RETRIEVAL CONTROL
+// 🔥 v1.7.10 RETRIEVAL CONTROL
 // ============================================================
 
-const SIMILARITY_THRESHOLD = 0.20;
-const TOP_K = 5;
-const MAX_CONTEXT_CHARS = 12000;
+const SIMILARITY_THRESHOLD = 0.22;
+const TOP_K = 6;
+const MAX_CONTEXT_CHARS = 10000;
+const MAX_RESULTS_PER_FILE = 2;
 
 // ============================================================
-// 🔧 LIGHTWEIGHT QUERY NORMALIZATION
+// 🔧 QUERY NORMALIZATION
 // ============================================================
 
 const TYPO_MAP = {
@@ -96,7 +97,7 @@ function normalizeRetrievalQuery(text = "") {
 }
 
 // ============================================================
-// 🔧 LIGHT STOPWORDS
+// 🔧 STOPWORDS
 // ============================================================
 
 const STOPWORDS = new Set([
@@ -114,8 +115,37 @@ const STOPWORDS = new Set([
   "file",
   "files",
   "summarize",
-  "analyze"
+  "analyze",
+  "provide",
+  "identify",
+  "determine",
+  "available",
+  "materials"
 ]);
+
+// ============================================================
+// 🔧 SEMANTIC DIVERSITY HELPERS
+// ============================================================
+
+function contentFingerprint(text = "") {
+  return text
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .slice(0, 180);
+}
+
+function countTermMatches(content = "", terms = []) {
+
+  const lower = content.toLowerCase();
+
+  let count = 0;
+
+  for (const term of terms) {
+    if (lower.includes(term)) count++;
+  }
+
+  return count;
+}
 
 // ============================================================
 // ROUTE
@@ -170,10 +200,17 @@ export default fp(async function retrieveRoute(fastify, opts) {
         );
 
         // -----------------------------------------------------
-        // 🔧 NORMALIZED RETRIEVAL QUERY
+        // 🔧 NORMALIZED QUERY
         // -----------------------------------------------------
 
         const normalizedQuery = normalizeRetrievalQuery(query);
+
+        const queryTerms = normalizedQuery
+          .split(" ")
+          .filter(term =>
+            term.length > 3 &&
+            !STOPWORDS.has(term)
+          );
 
         // -----------------------------------------------------
         // 1️⃣ EMBEDDING
@@ -198,8 +235,8 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
         const { data, error } = await supabase.rpc("match_documents", {
           query_embedding: embedding,
-          match_threshold: 0.1,
-          match_count: 8,
+          match_threshold: 0.10,
+          match_count: 12,
           query_namespace: namespace,
         });
 
@@ -218,37 +255,39 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
         let formatted = (data || []).map((row) => ({
 
-          content: (row.chunk_text || "").trim(),
+          content: (row.chunk_text || "")
+            .replace(/\s+/g, " ")
+            .trim(),
 
           similarity: row.similarity,
 
           filename:
             row.filename ||
-            (row.chunk_text.match(/SOURCE FILE:\s*(.+)/i)?.[1] || "")
+            (row.chunk_text.match(/SOURCE FILE:\s*(.+)/i)?.[1] || "unknown")
         }));
 
         // -----------------------------------------------------
         // 🔥 CLEANING PIPELINE
         // -----------------------------------------------------
 
-        // 1. Remove empty
+        // Remove empties
         formatted = formatted.filter(r => r.content);
 
-        // 2. Similarity threshold
+        // Similarity threshold
         formatted = formatted.filter(
           r => r.similarity >= SIMILARITY_THRESHOLD
         );
 
-        // 3. Deduplicate by content prefix
+        // Deduplicate near-identical chunks
         const seen = new Set();
 
         formatted = formatted.filter(r => {
 
-          const key = r.content
-            .slice(0, 250)
-            .toLowerCase();
+          const key = contentFingerprint(r.content);
 
-          if (seen.has(key)) return false;
+          if (seen.has(key)) {
+            return false;
+          }
 
           seen.add(key);
 
@@ -256,15 +295,8 @@ export default fp(async function retrieveRoute(fastify, opts) {
         });
 
         // -----------------------------------------------------
-        // 🔥 METADATA-FIRST RERANKING
+        // 🔥 SIGNAL SCORING
         // -----------------------------------------------------
-
-        const queryTerms = normalizedQuery
-          .split(" ")
-          .filter(term =>
-            term.length > 3 &&
-            !STOPWORDS.has(term)
-          );
 
         formatted = formatted.map(r => {
 
@@ -272,50 +304,92 @@ export default fp(async function retrieveRoute(fastify, opts) {
           const content = r.content.toLowerCase();
 
           let keywordBoost = 0;
+          let coverageBoost = 0;
 
           for (const term of queryTerms) {
 
-            // Higher signal: filename/entity match
             if (filename.includes(term)) {
-              keywordBoost += 0.15;
+              keywordBoost += 0.18;
             }
 
-            // Lower signal: body content
             if (content.includes(term)) {
-              keywordBoost += 0.03;
+              keywordBoost += 0.04;
             }
           }
 
+          const matchedTerms =
+            countTermMatches(content, queryTerms);
+
+          coverageBoost =
+            Math.min(matchedTerms * 0.015, 0.08);
+
           return {
             ...r,
-            boostedScore: r.similarity + keywordBoost
+            boostedScore:
+              r.similarity +
+              keywordBoost +
+              coverageBoost
           };
         });
 
-        // Sort by boosted relevance
-        formatted.sort((a, b) => b.boostedScore - a.boostedScore);
+        // -----------------------------------------------------
+        // 🔥 SORT
+        // -----------------------------------------------------
 
-        // 4. Top-K limit
+        formatted.sort(
+          (a, b) => b.boostedScore - a.boostedScore
+        );
+
+        // -----------------------------------------------------
+        // 🔥 FILE DIVERSITY CONTROL
+        // -----------------------------------------------------
+
+        const fileCounts = {};
+
+        formatted = formatted.filter(r => {
+
+          const key = r.filename;
+
+          fileCounts[key] = (fileCounts[key] || 0) + 1;
+
+          return fileCounts[key] <= MAX_RESULTS_PER_FILE;
+        });
+
+        // -----------------------------------------------------
+        // 🔥 TOP-K
+        // -----------------------------------------------------
+
         formatted = formatted.slice(0, TOP_K);
 
-        // 5. Context protection
+        // -----------------------------------------------------
+        // 🔥 CONTEXT PROTECTION
+        // -----------------------------------------------------
+
         let totalChars = 0;
 
         formatted = formatted.filter(r => {
 
+          if (
+            totalChars + r.content.length >
+            MAX_CONTEXT_CHARS
+          ) {
+            return false;
+          }
+
           totalChars += r.content.length;
 
-          return totalChars <= MAX_CONTEXT_CHARS;
+          return true;
         });
 
         // -----------------------------------------------------
-        // 📊 LIGHT LOGGING
+        // 📊 LOGGING
         // -----------------------------------------------------
 
         fastify.log.info({
           route: "/api/retrieve",
           namespace,
           normalizedQuery,
+          queryTerms,
           matchCount: formatted.length,
           ragUsed: formatted.length > 0,
           totalChars
