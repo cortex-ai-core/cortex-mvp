@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.7.6 — STRUCTURAL INTELLIGENCE STABILIZATION
+//  v1.7.8 — EXECUTIVE COMPRESSION REFINEMENT
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -86,10 +86,6 @@ export async function synthesizeFinalAnswer({
 
   // ============================================================
   // 🔥 ENTITY DETECTION
-  //
-  // IMPORTANT:
-  // Only trust explicit source-of-truth injection.
-  // Do NOT force unsafe fallback guessing.
   // ============================================================
   let primaryEntity = null;
 
@@ -100,9 +96,9 @@ export async function synthesizeFinalAnswer({
     );
 
     if (injected?.[1]) {
+
       const cleaned = injected[1].trim();
 
-      // basic sanity protection
       if (
         cleaned.length > 2 &&
         cleaned.length < 120 &&
@@ -126,6 +122,49 @@ export async function synthesizeFinalAnswer({
     totalEvidenceLength < 1200;
 
   // ============================================================
+  // 🔥 EVIDENCE COMPRESSION
+  // ============================================================
+  const uniqueEvidence = [];
+  const seenEvidence = new Set();
+
+  for (const e of fusedEvidence) {
+
+    const content =
+      (e.content || "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!content) continue;
+
+    const fingerprint =
+      content.toLowerCase().slice(0, 240);
+
+    if (seenEvidence.has(fingerprint)) {
+      continue;
+    }
+
+    seenEvidence.add(fingerprint);
+
+    uniqueEvidence.push({
+      ...e,
+      content,
+    });
+  }
+
+  // ============================================================
+  // 🔥 EVIDENCE PRIORITIZATION
+  // ============================================================
+  uniqueEvidence.sort((a, b) => {
+    return (b.score || 0) - (a.score || 0);
+  });
+
+  // ============================================================
+  // 🔥 EVIDENCE BUDGET
+  // ============================================================
+  const compressedEvidence =
+    uniqueEvidence.slice(0, 10);
+
+  // ============================================================
   // 🔥 SYSTEM PROMPT
   // ============================================================
   const systemPrompt = `
@@ -145,6 +184,7 @@ GLOBAL BEHAVIOR RULES:
 - Preserve generalized intelligence
 - Avoid hardcoded assumptions
 - Prioritize signal over verbosity
+- Prefer strategic compression over exhaustive explanation
 
 EVIDENCE DISCIPLINE:
 - Treat evidence sources independently unless relationships are clearly supported
@@ -163,6 +203,17 @@ STRUCTURE RULES:
 - Prefer fewer high-value insights over exhaustive enumeration
 - Avoid resume narrator tone unless explicitly requested
 - Maintain concise executive-level synthesis
+- Compress overlapping observations into unified insights
+- Avoid recursive recommendations
+- Avoid section expansion from minor evidence variations
+- Prefer strategic density over exhaustive coverage
+- If two insights are materially similar, merge them
+- Prefer dense executive synthesis over explanatory decomposition
+- Compress uncertainty into concise confidence statements
+- Avoid enumerating multiple variations of the same limitation
+- Minimize section fragmentation
+- Favor implication-rich summaries over analytical narration
+- Use fewer sections when possible
 
 ENTITY RULES:
 ${
@@ -188,24 +239,35 @@ ${
     ? `
 LOW EVIDENCE MODE:
 - Be conservative
-- Acknowledge uncertainty carefully
+- Compress uncertainty into concise executive language
 - Avoid overstating capability or risk
+- Avoid speculative recommendations
+- Avoid excessive explanation of missing evidence
 `
     : ""
 }
 `.trim();
 
   // ============================================================
-  // 🔥 EVIDENCE + REASONING TEXT
+  // 🔥 EVIDENCE TEXT
   // ============================================================
-  const evidenceText = fusedEvidence
+  const evidenceText = compressedEvidence
     .map((e) => `- ${e.content || ""}`)
     .join("\n");
 
+  // ============================================================
+  // 🔥 REASONING NOTE COMPRESSION
+  // ============================================================
   const reasoningNotes = Array.isArray(
     inferencePaths.reasoningNotes
   )
-    ? inferencePaths.reasoningNotes.join("\n- ")
+    ? [...new Set(
+        inferencePaths.reasoningNotes
+          .map(r => r.trim())
+          .filter(Boolean)
+      )]
+        .slice(0, 6)
+        .join("\n- ")
     : "None";
 
   // ============================================================
@@ -233,6 +295,7 @@ Prioritize:
 3. Precision
 4. Clarity
 5. Signal density
+6. Executive compression
 
 Avoid:
 - repeating conclusions
@@ -241,12 +304,22 @@ Avoid:
 - narrating obvious details
 - template filler
 - unsupported assumptions
+- recursive recommendations
+- section bloat
+- repeating equivalent observations
+- excessive decomposition
+- analytical narration
+- fragmented sectioning
+- verbose uncertainty explanation
 
 If evidence is strong:
 - synthesize confidently
+- compress insights strategically
+- prioritize implications over explanation
 
 If evidence is weak:
 - remain appropriately conservative
+- compress limitations into concise confidence statements
 
 Do NOT reference system structure.
 `.trim();
@@ -267,22 +340,12 @@ Do NOT reference system structure.
           content: userPrompt,
         },
       ],
-      temperature: 0.2,
+      temperature: 0.15,
     });
 
-  let output =
-    completion.choices?.[0]?.message?.content ||
+  const output =
+    completion.choices?.[0]?.message?.content?.trim() ||
     "I need more information.";
-
-  // ============================================================
-  // 🔥 FINAL ENTITY SAFETY
-  // ============================================================
-  if (
-    primaryEntity &&
-    !output.includes(primaryEntity)
-  ) {
-    output = `${primaryEntity} — ${output}`;
-  }
 
   return output;
 }
