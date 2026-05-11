@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.7.10 — RETRIEVAL DIVERSITY + SIGNAL OPTIMIZATION
+//  v1.8 PHASE 1 — ADAPTIVE RETRIEVAL INTELLIGENCE
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -61,12 +61,12 @@ function hasPermission(identity, action) {
 }
 
 // ============================================================
-// 🔥 v1.7.10 RETRIEVAL CONTROL
+// 🔥 BASE RETRIEVAL CONTROL
 // ============================================================
 
-const SIMILARITY_THRESHOLD = 0.22;
-const TOP_K = 6;
-const MAX_CONTEXT_CHARS = 10000;
+const BASE_SIMILARITY_THRESHOLD = 0.22;
+const BASE_TOP_K = 6;
+const BASE_CONTEXT_CHARS = 10000;
 const MAX_RESULTS_PER_FILE = 2;
 
 // ============================================================
@@ -124,7 +124,67 @@ const STOPWORDS = new Set([
 ]);
 
 // ============================================================
-// 🔧 SEMANTIC DIVERSITY HELPERS
+// 🔧 QUERY INTELLIGENCE
+// ============================================================
+
+function determineQueryProfile(query = "") {
+
+  const lower = query.toLowerCase();
+
+  const abstractSignals = [
+    "strategy",
+    "governance",
+    "leadership",
+    "system",
+    "systems",
+    "risk",
+    "architecture",
+    "executive",
+    "organizational",
+    "operational",
+    "analysis",
+    "synthesis"
+  ];
+
+  let abstractMatches = 0;
+
+  for (const signal of abstractSignals) {
+    if (lower.includes(signal)) {
+      abstractMatches++;
+    }
+  }
+
+  if (abstractMatches >= 4) {
+    return {
+      type: "abstract",
+      topK: 10,
+      matchCount: 20,
+      similarityThreshold: 0.18,
+      contextBudget: 16000
+    };
+  }
+
+  if (abstractMatches >= 2) {
+    return {
+      type: "analytical",
+      topK: 8,
+      matchCount: 16,
+      similarityThreshold: 0.20,
+      contextBudget: 14000
+    };
+  }
+
+  return {
+    type: "direct",
+    topK: BASE_TOP_K,
+    matchCount: 12,
+    similarityThreshold: BASE_SIMILARITY_THRESHOLD,
+    contextBudget: BASE_CONTEXT_CHARS
+  };
+}
+
+// ============================================================
+// 🔧 SEMANTIC HELPERS
 // ============================================================
 
 function contentFingerprint(text = "") {
@@ -145,6 +205,20 @@ function countTermMatches(content = "", terms = []) {
   }
 
   return count;
+}
+
+function calculateSemanticDensity(content = "") {
+
+  const words = content
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  const uniqueWords = new Set(words);
+
+  if (!words.length) return 0;
+
+  return uniqueWords.size / words.length;
 }
 
 // ============================================================
@@ -194,6 +268,9 @@ export default fp(async function retrieveRoute(fastify, opts) {
           });
         }
 
+        const retrievalProfile =
+          determineQueryProfile(query);
+
         const supabase = createClient(
           process.env.SUPABASE_URL,
           process.env.SUPABASE_SERVICE_KEY
@@ -203,25 +280,29 @@ export default fp(async function retrieveRoute(fastify, opts) {
         // 🔧 NORMALIZED QUERY
         // -----------------------------------------------------
 
-        const normalizedQuery = normalizeRetrievalQuery(query);
+        const normalizedQuery =
+          normalizeRetrievalQuery(query);
 
         const queryTerms = normalizedQuery
           .split(" ")
-          .filter(term =>
-            term.length > 3 &&
-            !STOPWORDS.has(term)
+          .filter(
+            term =>
+              term.length > 3 &&
+              !STOPWORDS.has(term)
           );
 
         // -----------------------------------------------------
         // 1️⃣ EMBEDDING
         // -----------------------------------------------------
 
-        const embedRes = await fastify.openai.embeddings.create({
-          model: "text-embedding-3-small",
-          input: normalizedQuery,
-        });
+        const embedRes =
+          await fastify.openai.embeddings.create({
+            model: "text-embedding-3-small",
+            input: normalizedQuery,
+          });
 
-        const embedding = embedRes.data?.[0]?.embedding;
+        const embedding =
+          embedRes.data?.[0]?.embedding;
 
         if (!embedding) {
           return reply.code(500).send({
@@ -233,16 +314,20 @@ export default fp(async function retrieveRoute(fastify, opts) {
         // 2️⃣ VECTOR SEARCH
         // -----------------------------------------------------
 
-        const { data, error } = await supabase.rpc("match_documents", {
-          query_embedding: embedding,
-          match_threshold: 0.10,
-          match_count: 12,
-          query_namespace: namespace,
-        });
+        const { data, error } =
+          await supabase.rpc("match_documents", {
+            query_embedding: embedding,
+            match_threshold: 0.10,
+            match_count: retrievalProfile.matchCount,
+            query_namespace: namespace,
+          });
 
         if (error) {
 
-          console.error("❌ retrieve error:", error);
+          console.error(
+            "❌ retrieve error:",
+            error
+          );
 
           return reply.code(500).send({
             error: error.message
@@ -263,27 +348,33 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
           filename:
             row.filename ||
-            (row.chunk_text.match(/SOURCE FILE:\s*(.+)/i)?.[1] || "unknown")
+            (
+              row.chunk_text.match(
+                /SOURCE FILE:\s*(.+)/i
+              )?.[1] || "unknown"
+            )
         }));
 
         // -----------------------------------------------------
         // 🔥 CLEANING PIPELINE
         // -----------------------------------------------------
 
-        // Remove empties
-        formatted = formatted.filter(r => r.content);
+        formatted =
+          formatted.filter(r => r.content);
 
-        // Similarity threshold
-        formatted = formatted.filter(
-          r => r.similarity >= SIMILARITY_THRESHOLD
-        );
+        formatted =
+          formatted.filter(
+            r =>
+              r.similarity >=
+              retrievalProfile.similarityThreshold
+          );
 
-        // Deduplicate near-identical chunks
         const seen = new Set();
 
         formatted = formatted.filter(r => {
 
-          const key = contentFingerprint(r.content);
+          const key =
+            contentFingerprint(r.content);
 
           if (seen.has(key)) {
             return false;
@@ -300,8 +391,11 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
         formatted = formatted.map(r => {
 
-          const filename = r.filename.toLowerCase();
-          const content = r.content.toLowerCase();
+          const filename =
+            r.filename.toLowerCase();
+
+          const content =
+            r.content.toLowerCase();
 
           let keywordBoost = 0;
           let coverageBoost = 0;
@@ -309,26 +403,45 @@ export default fp(async function retrieveRoute(fastify, opts) {
           for (const term of queryTerms) {
 
             if (filename.includes(term)) {
-              keywordBoost += 0.18;
+              keywordBoost += 0.15;
             }
 
             if (content.includes(term)) {
-              keywordBoost += 0.04;
+              keywordBoost += 0.03;
             }
           }
 
           const matchedTerms =
-            countTermMatches(content, queryTerms);
+            countTermMatches(
+              content,
+              queryTerms
+            );
 
           coverageBoost =
-            Math.min(matchedTerms * 0.015, 0.08);
+            Math.min(
+              matchedTerms * 0.015,
+              0.08
+            );
+
+          const semanticDensity =
+            calculateSemanticDensity(content);
+
+          const densityBoost =
+            semanticDensity * 0.08;
+
+          const confidenceScore =
+            (
+              r.similarity +
+              keywordBoost +
+              coverageBoost +
+              densityBoost
+            );
 
           return {
             ...r,
-            boostedScore:
-              r.similarity +
-              keywordBoost +
-              coverageBoost
+            semanticDensity,
+            confidenceScore,
+            boostedScore: confidenceScore
           };
         });
 
@@ -337,7 +450,8 @@ export default fp(async function retrieveRoute(fastify, opts) {
         // -----------------------------------------------------
 
         formatted.sort(
-          (a, b) => b.boostedScore - a.boostedScore
+          (a, b) =>
+            b.boostedScore - a.boostedScore
         );
 
         // -----------------------------------------------------
@@ -350,16 +464,24 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
           const key = r.filename;
 
-          fileCounts[key] = (fileCounts[key] || 0) + 1;
+          fileCounts[key] =
+            (fileCounts[key] || 0) + 1;
 
-          return fileCounts[key] <= MAX_RESULTS_PER_FILE;
+          return (
+            fileCounts[key] <=
+            MAX_RESULTS_PER_FILE
+          );
         });
 
         // -----------------------------------------------------
         // 🔥 TOP-K
         // -----------------------------------------------------
 
-        formatted = formatted.slice(0, TOP_K);
+        formatted =
+          formatted.slice(
+            0,
+            retrievalProfile.topK
+          );
 
         // -----------------------------------------------------
         // 🔥 CONTEXT PROTECTION
@@ -371,7 +493,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
           if (
             totalChars + r.content.length >
-            MAX_CONTEXT_CHARS
+            retrievalProfile.contextBudget
           ) {
             return false;
           }
@@ -390,6 +512,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
           namespace,
           normalizedQuery,
           queryTerms,
+          queryType: retrievalProfile.type,
           matchCount: formatted.length,
           ragUsed: formatted.length > 0,
           totalChars
@@ -401,7 +524,10 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
       } catch (err) {
 
-        console.error("❌ /api/retrieve FAILURE:", err);
+        console.error(
+          "❌ /api/retrieve FAILURE:",
+          err
+        );
 
         return reply.code(500).send({
           error: "RAG retrieve failure",
