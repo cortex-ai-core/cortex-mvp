@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.8.2-pre — ABSTRACTION CONFIDENCE MODERATION
+//  v1.8.3 — CONTINUITY-AWARE COMPRESSION MODERATION
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -159,10 +159,63 @@ export async function synthesizeFinalAnswer({
   });
 
   // ============================================================
-  // 🔥 EVIDENCE BUDGET
+  // 🔥 CONTINUITY-AWARE COMPRESSION
   // ============================================================
-  const compressedEvidence =
-    uniqueEvidence.slice(0, 7);
+  const MAX_EVIDENCE = 7;
+  const MAX_PER_SOURCE = 2;
+
+  const compressedEvidence = [];
+  const sourceCounts = new Map();
+
+  for (const evidence of uniqueEvidence) {
+
+    if (compressedEvidence.length >= MAX_EVIDENCE) {
+      break;
+    }
+
+    const sourceKey =
+      evidence.documentId ||
+      evidence.source ||
+      evidence.metadata?.documentId ||
+      evidence.metadata?.source ||
+      "unknown";
+
+    const currentCount =
+      sourceCounts.get(sourceKey) || 0;
+
+    // ============================================================
+    // SOFT SOURCE DIVERSITY MODERATION
+    // ============================================================
+    if (currentCount >= MAX_PER_SOURCE) {
+      continue;
+    }
+
+    compressedEvidence.push(evidence);
+
+    sourceCounts.set(
+      sourceKey,
+      currentCount + 1
+    );
+  }
+
+  // ============================================================
+  // 🔥 FALLBACK SAFETY
+  // ============================================================
+  if (compressedEvidence.length < 4) {
+
+    for (const evidence of uniqueEvidence) {
+
+      if (compressedEvidence.length >= MAX_EVIDENCE) {
+        break;
+      }
+
+      if (compressedEvidence.includes(evidence)) {
+        continue;
+      }
+
+      compressedEvidence.push(evidence);
+    }
+  }
 
   // ============================================================
   // 🔥 REASONING NOTE COMPRESSION
@@ -399,6 +452,8 @@ GLOBAL BEHAVIOR RULES:
 EVIDENCE DISCIPLINE:
 - Treat evidence sources independently unless relationships are clearly supported
 - Preserve source integrity
+- Preserve continuity across independently supported entities
+- Avoid allowing a single evidence cluster to dominate synthesis bandwidth
 - Prioritize high-confidence evidence
 - Avoid unsupported extrapolation
 - Compress overlapping evidence into unified strategic insights
@@ -485,6 +540,7 @@ Prioritize:
 6. Conceptual continuity
 7. Ecosystem-level reasoning
 8. Hierarchical abstraction coherence
+9. Continuity preservation across independently supported entities
 
 Avoid:
 - analytical narration
