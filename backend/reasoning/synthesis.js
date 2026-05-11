@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.8.1-pre — CONCEPTUAL ECOSYSTEM CONTINUITY
+//  v1.8.2-pre — ABSTRACTION CONFIDENCE MODERATION
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -190,22 +190,27 @@ export async function synthesizeFinalAnswer({
     contextual: [],
   };
 
+  const abstractionScores = {
+    strategic: 0,
+    governance: 0,
+    operational: 0,
+    ecosystem: 0,
+  };
+
   const signalGroups = {
+
     strategic: [
       "strategy",
       "roadmap",
       "initiative",
-      "transformation",
       "objective",
-      "scalability",
-      "alignment",
       "vision",
       "priority",
       "future-state",
-      "long-term",
-      "expansion",
       "optimization",
+      "expansion",
       "modernization",
+      "scalability",
     ],
 
     governance: [
@@ -213,59 +218,52 @@ export async function synthesizeFinalAnswer({
       "compliance",
       "policy",
       "leadership",
-      "ownership",
       "accountability",
       "audit",
       "risk",
       "standards",
-      "escalation",
       "oversight",
-      "controls",
       "regulatory",
+      "controls",
     ],
 
     operational: [
       "workflow",
       "incident",
-      "support",
       "deployment",
       "integration",
       "implementation",
       "operations",
-      "system",
       "ticket",
-      "process",
       "infrastructure",
       "monitoring",
-      "response",
       "stability",
+      "support",
     ],
 
     ecosystem: [
-      "cross-functional",
       "dependency",
       "ecosystem",
       "organizational",
       "continuity",
-      "enablement",
       "coordination",
-      "multi-team",
       "interconnected",
       "topology",
-      "collaboration",
       "stakeholder",
-      "alignment",
-      "shared",
+      "cross-functional",
+      "multi-team",
     ],
   };
 
   for (const e of compressedEvidence) {
 
-    const content = (e.content || "").trim();
+    const content =
+      (e.content || "").trim();
 
     if (!content) continue;
 
-    const lower = content.toLowerCase();
+    const lower =
+      content.toLowerCase();
 
     const matches = {
       strategic: false,
@@ -276,11 +274,16 @@ export async function synthesizeFinalAnswer({
 
     for (const [bucket, signals] of Object.entries(signalGroups)) {
 
-      matches[bucket] =
+      const matched =
         signals.some(signal => lower.includes(signal));
 
-      if (matches[bucket]) {
+      matches[bucket] = matched;
+
+      if (matched) {
+
         abstractionBuckets[bucket].push(content);
+
+        abstractionScores[bucket]++;
       }
     }
 
@@ -295,7 +298,11 @@ export async function synthesizeFinalAnswer({
   // ============================================================
   // 🔥 HIERARCHICAL EVIDENCE ASSEMBLY
   // ============================================================
-  const buildSection = (title, items, limit = 4) => {
+  const buildSection = (
+    title,
+    items,
+    limit = 4
+  ) => {
 
     const unique =
       [...new Set(items)].slice(0, limit);
@@ -308,43 +315,64 @@ ${unique.map(i => `- ${i}`).join("\n")}
 `.trim();
   };
 
-  const evidenceSections = [
+  const weightedSections = [];
 
-    buildSection(
-      "STRATEGIC SIGNALS",
-      abstractionBuckets.strategic,
-      4
-    ),
+  if (abstractionScores.strategic >= 2) {
 
-    buildSection(
-      "GOVERNANCE SIGNALS",
-      abstractionBuckets.governance,
-      4
-    ),
+    weightedSections.push(
+      buildSection(
+        "STRATEGIC SIGNALS",
+        abstractionBuckets.strategic,
+        4
+      )
+    );
+  }
 
-    buildSection(
-      "OPERATIONAL SIGNALS",
-      abstractionBuckets.operational,
-      5
-    ),
+  if (abstractionScores.governance >= 2) {
 
-    buildSection(
-      "ECOSYSTEM SIGNALS",
-      abstractionBuckets.ecosystem,
-      4
-    ),
+    weightedSections.push(
+      buildSection(
+        "GOVERNANCE SIGNALS",
+        abstractionBuckets.governance,
+        4
+      )
+    );
+  }
 
+  if (abstractionScores.operational >= 2) {
+
+    weightedSections.push(
+      buildSection(
+        "OPERATIONAL SIGNALS",
+        abstractionBuckets.operational,
+        5
+      )
+    );
+  }
+
+  if (abstractionScores.ecosystem >= 2) {
+
+    weightedSections.push(
+      buildSection(
+        "ECOSYSTEM SIGNALS",
+        abstractionBuckets.ecosystem,
+        4
+      )
+    );
+  }
+
+  weightedSections.push(
     buildSection(
       "SUPPORTING CONTEXT",
       abstractionBuckets.contextual,
       4
-    ),
+    )
+  );
 
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const evidenceText = evidenceSections;
+  const evidenceText =
+    weightedSections
+      .filter(Boolean)
+      .join("\n\n");
 
   // ============================================================
   // 🔥 SYSTEM PROMPT
@@ -392,6 +420,10 @@ STRUCTURE RULES:
 - Favor ecosystem-level interpretation when relationships are supported
 - Preserve causality continuity between governance, operations, and strategy
 - Avoid flattening distinct conceptual layers into disconnected observations
+- Match abstraction depth to evidence density
+- Preserve domain fidelity
+- Avoid projecting enterprise governance, infrastructure, or resilience models onto loosely related business material
+- Do not escalate local business terminology into enterprise operational topology unless evidence materially supports those abstractions
 
 ENTITY RULES:
 ${
@@ -465,6 +497,7 @@ Avoid:
 - over-expansion of adjacent implications
 - disconnected conceptual observations
 - flattening strategic and operational signals into isolated summaries
+- projecting unsupported enterprise abstractions
 
 If evidence is strong:
 - synthesize confidently
@@ -475,6 +508,8 @@ If evidence is strong:
 If evidence is weak:
 - remain conservative
 - compress uncertainty into concise confidence posture
+- preserve domain fidelity
+- avoid abstraction escalation
 
 Do NOT reference system structure.
 `.trim();
