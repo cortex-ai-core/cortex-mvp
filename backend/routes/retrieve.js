@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.8 PHASE 1 — ADAPTIVE RETRIEVAL INTELLIGENCE
+//  v1.8 PHASE 2 — RELATIONSHIP-AWARE RETRIEVAL ORCHESTRATION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -219,6 +219,123 @@ function calculateSemanticDensity(content = "") {
   if (!words.length) return 0;
 
   return uniqueWords.size / words.length;
+}
+
+// ============================================================
+// 🔥 RELATIONSHIP-AWARE SEMANTIC LAYER
+// ============================================================
+
+function calculateSemanticOverlap(a = "", b = "") {
+
+  const aWords = new Set(
+    a.toLowerCase().split(/\s+/).filter(Boolean)
+  );
+
+  const bWords = new Set(
+    b.toLowerCase().split(/\s+/).filter(Boolean)
+  );
+
+  let overlap = 0;
+
+  for (const word of aWords) {
+    if (
+      bWords.has(word) &&
+      word.length > 4 &&
+      !STOPWORDS.has(word)
+    ) {
+      overlap++;
+    }
+  }
+
+  const denominator =
+    Math.max(aWords.size, bWords.size) || 1;
+
+  return overlap / denominator;
+}
+
+function buildSemanticNeighborhoods(results = []) {
+
+  return results.map((result, idx) => {
+
+    let neighborhoodStrength = 0;
+    let relationshipCount = 0;
+
+    for (let i = 0; i < results.length; i++) {
+
+      if (i === idx) continue;
+
+      const other = results[i];
+
+      const overlap =
+        calculateSemanticOverlap(
+          result.content,
+          other.content
+        );
+
+      if (overlap >= 0.12) {
+
+        neighborhoodStrength += overlap;
+        relationshipCount++;
+      }
+    }
+
+    return {
+      ...result,
+      neighborhoodStrength,
+      relationshipCount
+    };
+  });
+}
+
+function applyRelationshipAwareScoring(results = []) {
+
+  if (!results.length) return results;
+
+  const strongestNeighborhood =
+    Math.max(
+      ...results.map(
+        r => r.neighborhoodStrength || 0
+      ),
+      0.01
+    );
+
+  return results.map(result => {
+
+    const neighborhoodRatio =
+      (result.neighborhoodStrength || 0) /
+      strongestNeighborhood;
+
+    const relationshipBoost =
+      neighborhoodRatio * 0.12;
+
+    const continuityBoost =
+      Math.min(
+        (result.relationshipCount || 0) * 0.01,
+        0.05
+      );
+
+    const confidenceGapPenalty =
+      (
+        neighborhoodRatio < 0.25 &&
+        result.boostedScore < 0.45
+      )
+        ? 0.06
+        : 0;
+
+    const finalScore =
+      result.boostedScore +
+      relationshipBoost +
+      continuityBoost -
+      confidenceGapPenalty;
+
+    return {
+      ...result,
+      relationshipBoost,
+      continuityBoost,
+      confidenceGapPenalty,
+      finalScore
+    };
+  });
 }
 
 // ============================================================
@@ -446,12 +563,22 @@ export default fp(async function retrieveRoute(fastify, opts) {
         });
 
         // -----------------------------------------------------
+        // 🔥 RELATIONSHIP-AWARE SEMANTIC ORCHESTRATION
+        // -----------------------------------------------------
+
+        formatted =
+          buildSemanticNeighborhoods(formatted);
+
+        formatted =
+          applyRelationshipAwareScoring(formatted);
+
+        // -----------------------------------------------------
         // 🔥 SORT
         // -----------------------------------------------------
 
         formatted.sort(
           (a, b) =>
-            b.boostedScore - a.boostedScore
+            b.finalScore - a.finalScore
         );
 
         // -----------------------------------------------------
