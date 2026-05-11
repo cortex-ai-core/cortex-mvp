@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — EVIDENCE FUSION ENGINE
-//  v1.7.5 — SIGNAL PRIORITIZATION STABILIZATION
+//  v1.8 PHASE 2B — RELATIONSHIP PRESERVATION STABILIZATION
 // ============================================================
 //
 // GOAL:
@@ -9,6 +9,7 @@
 // - confidence preservation
 // - signal hierarchy
 // - contamination resistance
+// - relationship continuity preservation
 //
 // DO NOT:
 // - hardcode domains
@@ -42,27 +43,19 @@ function normalize(text = "") {
 
 // ------------------------------------------------------------
 // 🔥 SIGNAL: Specificity
-//
-// Rewards:
-// - metrics
-// - years
-// - implementations
-// - tooling
-// - certifications
-// - concrete operational language
 // ------------------------------------------------------------
 function calculateSpecificityScore(content = "") {
+
   let score = 0;
 
   const text = content.toLowerCase();
 
-  // numbers / metrics
   if (/\b\d+\b/.test(text)) score += 0.10;
 
-  // years experience
-  if (/\b\d+\+?\s*(year|yr)s?\b/.test(text)) score += 0.15;
+  if (/\b\d+\+?\s*(year|yr)s?\b/.test(text)) {
+    score += 0.15;
+  }
 
-  // implementation / ownership verbs
   if (
     /\b(implemented|led|designed|managed|deployed|architected|owned|administered|built)\b/.test(
       text
@@ -71,7 +64,6 @@ function calculateSpecificityScore(content = "") {
     score += 0.20;
   }
 
-  // certifications / credentials
   if (
     /\b(certified|certification|cissp|security\+|aws|azure|epic|ccna|pmp)\b/.test(
       text
@@ -80,7 +72,6 @@ function calculateSpecificityScore(content = "") {
     score += 0.10;
   }
 
-  // denser content usually carries stronger informational value
   if (content.length > 250) score += 0.10;
 
   return clamp(score, 0, 0.40);
@@ -88,11 +79,9 @@ function calculateSpecificityScore(content = "") {
 
 // ------------------------------------------------------------
 // 🔥 SIGNAL: Density
-//
-// Rewards evidence containing multiple meaningful indicators
-// rather than isolated vague statements.
 // ------------------------------------------------------------
 function calculateDensityScore(content = "") {
+
   const text = content.toLowerCase();
 
   const indicators = [
@@ -124,13 +113,9 @@ function calculateDensityScore(content = "") {
 
 // ------------------------------------------------------------
 // 🔥 SIGNAL: Directness
-//
-// Rewards chunks with stronger lexical alignment
-// to the actual user message / intent.
-//
-// Generalized — NOT domain specific.
 // ------------------------------------------------------------
 function calculateDirectnessScore(content = "", intent = "") {
+
   const text = content.toLowerCase();
 
   let score = 0;
@@ -139,7 +124,6 @@ function calculateDirectnessScore(content = "", intent = "") {
     score += 0.10;
   }
 
-  // shorter, focused statements are often more direct
   if (content.length > 0 && content.length < 400) {
     score += 0.05;
   }
@@ -149,11 +133,9 @@ function calculateDirectnessScore(content = "", intent = "") {
 
 // ------------------------------------------------------------
 // 🔥 SIGNAL: Redundancy Dampening
-//
-// Prevent repeated weak chunks from overpowering
-// strong isolated evidence.
 // ------------------------------------------------------------
 function applyRedundancyPenalty(content = "", seen = new Set()) {
+
   const normalized = normalize(content);
 
   if (seen.has(normalized)) {
@@ -165,24 +147,73 @@ function applyRedundancyPenalty(content = "", seen = new Set()) {
   return 0;
 }
 
+// ------------------------------------------------------------
+// 🔥 SIGNAL: Relationship Preservation
+//
+// Preserves upstream retrieval topology intelligence
+// without introducing orchestration coupling.
+// ------------------------------------------------------------
+function calculateRelationshipScore(evidence = {}) {
+
+  const neighborhoodStrength =
+    typeof evidence.neighborhoodStrength === "number"
+      ? evidence.neighborhoodStrength
+      : 0;
+
+  const relationshipBoost =
+    typeof evidence.relationshipBoost === "number"
+      ? evidence.relationshipBoost
+      : 0;
+
+  const continuityBoost =
+    typeof evidence.continuityBoost === "number"
+      ? evidence.continuityBoost
+      : 0;
+
+  const relationshipCount =
+    typeof evidence.relationshipCount === "number"
+      ? evidence.relationshipCount
+      : 0;
+
+  const topologyScore =
+    (neighborhoodStrength * 0.04) +
+    (relationshipBoost * 0.60) +
+    continuityBoost +
+    Math.min(relationshipCount * 0.01, 0.04);
+
+  return clamp(topologyScore, 0, 0.15);
+}
+
 // ============================================================
 // 🔥 MAIN FUSION ENGINE
 // ============================================================
+
 export function fuseEvidence(evidence = [], intent = "general") {
+
   if (!Array.isArray(evidence)) return [];
 
   const seenContent = new Set();
 
   const fused = evidence.map((e) => {
+
     const content = e.content || "";
 
-    // Preserve upstream retrieval confidence if present
+    // --------------------------------------------------------
+    // 🔥 Preserve upstream retrieval weighting
+    // --------------------------------------------------------
+
     const baseWeight =
-      typeof e.weight === "number"
+      typeof e.finalScore === "number"
+        ? e.finalScore
+        : typeof e.weight === "number"
         ? e.weight
         : typeof e.similarity === "number"
         ? e.similarity
         : 0.5;
+
+    // --------------------------------------------------------
+    // 🔥 Fusion Signals
+    // --------------------------------------------------------
 
     const specificityScore =
       calculateSpecificityScore(content);
@@ -193,17 +224,22 @@ export function fuseEvidence(evidence = [], intent = "general") {
     const directnessScore =
       calculateDirectnessScore(content, intent);
 
+    const relationshipScore =
+      calculateRelationshipScore(e);
+
     const redundancyPenalty =
       applyRedundancyPenalty(content, seenContent);
 
     // --------------------------------------------------------
     // 🔥 Final Weighted Score
     // --------------------------------------------------------
+
     const finalWeight =
       baseWeight +
       specificityScore +
       densityScore +
-      directnessScore -
+      directnessScore +
+      relationshipScore -
       redundancyPenalty;
 
     return {
@@ -217,6 +253,7 @@ export function fuseEvidence(evidence = [], intent = "general") {
   // ----------------------------------------------------------
   // 🔥 Prioritize strongest evidence first
   // ----------------------------------------------------------
+
   fused.sort((a, b) => b.weight - a.weight);
 
   return fused;
