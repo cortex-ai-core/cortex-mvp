@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.8.0-pre — EXECUTIVE SYNTHESIS NATURALIZATION
+//  v1.8.1-pre — CONCEPTUAL ECOSYSTEM CONTINUITY
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -180,6 +180,173 @@ export async function synthesizeFinalAnswer({
     : "None";
 
   // ============================================================
+  // 🔥 SOFT ABSTRACTION STRATIFICATION
+  // ============================================================
+  const abstractionBuckets = {
+    strategic: [],
+    governance: [],
+    operational: [],
+    ecosystem: [],
+    contextual: [],
+  };
+
+  const signalGroups = {
+    strategic: [
+      "strategy",
+      "roadmap",
+      "initiative",
+      "transformation",
+      "objective",
+      "scalability",
+      "alignment",
+      "vision",
+      "priority",
+      "future-state",
+      "long-term",
+      "expansion",
+      "optimization",
+      "modernization",
+    ],
+
+    governance: [
+      "governance",
+      "compliance",
+      "policy",
+      "leadership",
+      "ownership",
+      "accountability",
+      "audit",
+      "risk",
+      "standards",
+      "escalation",
+      "oversight",
+      "controls",
+      "regulatory",
+    ],
+
+    operational: [
+      "workflow",
+      "incident",
+      "support",
+      "deployment",
+      "integration",
+      "implementation",
+      "operations",
+      "system",
+      "ticket",
+      "process",
+      "infrastructure",
+      "monitoring",
+      "response",
+      "stability",
+    ],
+
+    ecosystem: [
+      "cross-functional",
+      "dependency",
+      "ecosystem",
+      "organizational",
+      "continuity",
+      "enablement",
+      "coordination",
+      "multi-team",
+      "interconnected",
+      "topology",
+      "collaboration",
+      "stakeholder",
+      "alignment",
+      "shared",
+    ],
+  };
+
+  for (const e of compressedEvidence) {
+
+    const content = (e.content || "").trim();
+
+    if (!content) continue;
+
+    const lower = content.toLowerCase();
+
+    const matches = {
+      strategic: false,
+      governance: false,
+      operational: false,
+      ecosystem: false,
+    };
+
+    for (const [bucket, signals] of Object.entries(signalGroups)) {
+
+      matches[bucket] =
+        signals.some(signal => lower.includes(signal));
+
+      if (matches[bucket]) {
+        abstractionBuckets[bucket].push(content);
+      }
+    }
+
+    const matchedAny =
+      Object.values(matches).some(Boolean);
+
+    if (!matchedAny) {
+      abstractionBuckets.contextual.push(content);
+    }
+  }
+
+  // ============================================================
+  // 🔥 HIERARCHICAL EVIDENCE ASSEMBLY
+  // ============================================================
+  const buildSection = (title, items, limit = 4) => {
+
+    const unique =
+      [...new Set(items)].slice(0, limit);
+
+    if (!unique.length) return "";
+
+    return `
+${title}:
+${unique.map(i => `- ${i}`).join("\n")}
+`.trim();
+  };
+
+  const evidenceSections = [
+
+    buildSection(
+      "STRATEGIC SIGNALS",
+      abstractionBuckets.strategic,
+      4
+    ),
+
+    buildSection(
+      "GOVERNANCE SIGNALS",
+      abstractionBuckets.governance,
+      4
+    ),
+
+    buildSection(
+      "OPERATIONAL SIGNALS",
+      abstractionBuckets.operational,
+      5
+    ),
+
+    buildSection(
+      "ECOSYSTEM SIGNALS",
+      abstractionBuckets.ecosystem,
+      4
+    ),
+
+    buildSection(
+      "SUPPORTING CONTEXT",
+      abstractionBuckets.contextual,
+      4
+    ),
+
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  const evidenceText = evidenceSections;
+
+  // ============================================================
   // 🔥 SYSTEM PROMPT
   // ============================================================
   const systemPrompt = `
@@ -220,6 +387,11 @@ STRUCTURE RULES:
 - Favor strategic implications over descriptive walkthroughs
 - Reduce explanatory cadence where implications are already clear
 - Use natural executive rhythm rather than mechanically balanced sections
+- Preserve abstraction hierarchy across evidence layers
+- Preserve thematic continuity across operational and strategic signals
+- Favor ecosystem-level interpretation when relationships are supported
+- Preserve causality continuity between governance, operations, and strategy
+- Avoid flattening distinct conceptual layers into disconnected observations
 
 ENTITY RULES:
 ${
@@ -254,13 +426,6 @@ LOW EVIDENCE MODE:
 `.trim();
 
   // ============================================================
-  // 🔥 EVIDENCE TEXT
-  // ============================================================
-  const evidenceText = compressedEvidence
-    .map((e) => `- ${e.content || ""}`)
-    .join("\n");
-
-  // ============================================================
   // 🔥 USER PROMPT
   // ============================================================
   const userPrompt = `
@@ -285,6 +450,9 @@ Prioritize:
 3. Governance significance
 4. Signal density
 5. Executive compression
+6. Conceptual continuity
+7. Ecosystem-level reasoning
+8. Hierarchical abstraction coherence
 
 Avoid:
 - analytical narration
@@ -295,11 +463,14 @@ Avoid:
 - recursive recommendations
 - fragmented structural rhythm
 - over-expansion of adjacent implications
+- disconnected conceptual observations
+- flattening strategic and operational signals into isolated summaries
 
 If evidence is strong:
 - synthesize confidently
 - compress operational observations into strategic conclusions
 - prioritize systems-level interpretation
+- preserve thematic continuity across abstraction layers
 
 If evidence is weak:
 - remain conservative
