@@ -1,6 +1,6 @@
 // ============================================================
-//  CORTÉX — CHAT ENGINE (RAG + EPHEMERAL ENABLED + DLP + PRIVATE MODE)
-//  v1.7.10 PRIVATE MODE CONTEXT STABILIZATION
+//  CORTÉX — CHAT ENGINE
+//  v1.8.5 RETRIEVAL ARBITRATION ENABLEMENT
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -46,7 +46,10 @@ function checkRateLimit(userId) {
 
   if (!userBuckets.has(userId)) userBuckets.set(userId, []);
 
-  const timestamps = userBuckets.get(userId).filter(ts => now - ts < windowMs);
+  const timestamps = userBuckets.get(userId).filter(
+    ts => now - ts < windowMs
+  );
+
   const allowed = timestamps.length < RATE_LIMIT;
 
   if (allowed) timestamps.push(now);
@@ -79,18 +82,25 @@ function logEvent(fastify, data) {
 
 // ----------------------------------------------------
 function handleSimpleCases(input = "") {
+
   const text = input.toLowerCase().trim();
 
   if (text === "who are you" || text === "who are you?") {
-    return { finalAnswer: "Cortéx. KING’s Intelligence Engine." };
+    return {
+      finalAnswer: "Cortéx. KING’s Intelligence Engine."
+    };
   }
 
   if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(input)) {
-    return { finalAnswer: "Email detected. No context." };
+    return {
+      finalAnswer: "Email detected. No context."
+    };
   }
 
   if (text.length <= 10) {
-    return { finalAnswer: "No subject." };
+    return {
+      finalAnswer: "No subject."
+    };
   }
 
   return null;
@@ -98,7 +108,9 @@ function handleSimpleCases(input = "") {
 
 // ----------------------------------------------------
 function resolveUserMessageEntity(input = "") {
-  const match = String(input || "").match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+
+  const match = String(input || "")
+    .match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
 
   if (match && match[0]) {
     return match[0].trim();
@@ -109,6 +121,7 @@ function resolveUserMessageEntity(input = "") {
 
 // ----------------------------------------------------
 function resolveRequestedResumeToken(input = "") {
+
   const match = String(input || "").match(
     /\b([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
   );
@@ -119,29 +132,125 @@ function resolveRequestedResumeToken(input = "") {
 
   if (!raw) return null;
 
-  return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
+  return raw.charAt(0).toUpperCase() +
+    raw.slice(1).toLowerCase();
 }
 
 // ----------------------------------------------------
-function resolveFullNameFromContextByToken(context = "", token = "") {
+function resolveFullNameFromContextByToken(
+  context = "",
+  token = ""
+) {
 
   if (!context || !token) return null;
 
-  const escapedToken = token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const escapedToken =
+    token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-  const pattern = new RegExp(`\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`, "i");
+  const pattern =
+    new RegExp(`\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`, "i");
 
   const match = String(context || "").match(pattern);
 
   if (match && match[1]) {
+
     return match[1]
       .split(" ")
-      .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .map(part =>
+        part.charAt(0).toUpperCase() +
+        part.slice(1).toLowerCase()
+      )
       .join(" ")
       .trim();
   }
 
   return null;
+}
+
+// ----------------------------------------------------
+// 🔥 v1.8.5 RETRIEVAL ARBITRATION
+// ----------------------------------------------------
+function determineRetrievalPriority({
+  intent = "",
+  normalized = "",
+  message = "",
+  hasEphemeralContext = false
+}) {
+
+  const retrievalIndicators = [
+    "resume",
+    "candidate",
+    "document",
+    "uploaded",
+    "file",
+    "compare resumes",
+    "analyze this resume",
+    "summarize this document"
+  ];
+
+  const synthesisIndicators = [
+    "brainstorm",
+    "rewrite",
+    "refine",
+    "polish",
+    "draft",
+    "improve",
+    "generate",
+    "ideas",
+    "proposal",
+    "communication"
+  ];
+
+  const hasRetrievalIndicators =
+    retrievalIndicators.some(term =>
+      normalized.includes(term)
+    );
+
+  const hasSynthesisIndicators =
+    synthesisIndicators.some(term =>
+      normalized.includes(term)
+    );
+
+  const inlineContextRich =
+    message.length >= 150;
+
+  // ------------------------------------------------
+  // Ephemeral/private context already sufficient
+  // ------------------------------------------------
+  if (hasEphemeralContext) {
+    return "NONE";
+  }
+
+  // ------------------------------------------------
+  // Retrieval-heavy analytical workflows
+  // ------------------------------------------------
+  if (
+    hasRetrievalIndicators &&
+    !inlineContextRich
+  ) {
+    return "HIGH";
+  }
+
+  // ------------------------------------------------
+  // Inline operational synthesis
+  // ------------------------------------------------
+  if (
+    hasSynthesisIndicators &&
+    inlineContextRich
+  ) {
+    return "LOW";
+  }
+
+  // ------------------------------------------------
+  // General analytical requests
+  // ------------------------------------------------
+  if (
+    ["analysis", "lookup", "question"].includes(intent)
+  ) {
+    return "MEDIUM";
+  }
+
+  return "LOW";
 }
 
 // ============================================================
@@ -157,13 +266,18 @@ export default fp(async function chatRoute(fastify) {
   fastify.post(
     "/api/chat",
     { preHandler: requireAuth() },
+
     async (req, reply) => {
 
       const start = Date.now();
 
       const identity = req.user;
-      const userId = identity?.userId || "unknown";
-      const namespace = identity?.namespace || "unknown";
+
+      const userId =
+        identity?.userId || "unknown";
+
+      const namespace =
+        identity?.namespace || "unknown";
 
       try {
 
@@ -193,89 +307,114 @@ export default fp(async function chatRoute(fastify) {
           });
         }
 
-        const sanitizedMessage = dlp.sanitized;
+        const sanitizedMessage =
+          dlp.sanitized;
 
-        const simple = handleSimpleCases(sanitizedMessage);
+        const simple =
+          handleSimpleCases(sanitizedMessage);
 
-        if (simple) return reply.send(simple);
+        if (simple) {
+          return reply.send(simple);
+        }
 
-        const intent = decodeIntent(sanitizedMessage);
+        const intent =
+          decodeIntent(sanitizedMessage);
 
-        const normalized = sanitizedMessage.toLowerCase();
+        const normalized =
+          sanitizedMessage.toLowerCase();
 
-        const requiresKnowledge =
-          ["analysis", "question", "lookup", "summarize", "summary"].includes(intent) ||
-          normalized.includes("summar") ||
-          normalized.includes("resume") ||
-          normalized.includes("sow") ||
-          normalized.includes("document");
+        const tone =
+          resolveToneForNamespace(namespace);
 
-        const tone = resolveToneForNamespace(namespace);
-
-        const identityContext = applyIdentityLayer({
-          userId,
-          role: identity.role,
-          namespace,
-          tone
-        });
+        const identityContext =
+          applyIdentityLayer({
+            userId,
+            role: identity.role,
+            namespace,
+            tone
+          });
 
         let ragContext = "";
-        let normalizedMessage = sanitizedMessage;
+
+        let normalizedMessage =
+          sanitizedMessage;
 
         const requestedResumeToken =
-          resolveRequestedResumeToken(sanitizedMessage);
+          resolveRequestedResumeToken(
+            sanitizedMessage
+          );
 
         let resolvedName =
-          resolveUserMessageEntity(sanitizedMessage);
+          resolveUserMessageEntity(
+            sanitizedMessage
+          );
 
-        // ----------------------------------------------------
-        // 🔒 PRIVATE MODE CONTEXT BOUNDING
-        // ----------------------------------------------------
+        // ------------------------------------------------
+        // 🔒 PRIVATE / EPHEMERAL CONTEXT
+        // ------------------------------------------------
 
         const boundedEphemeralContext =
-          trimEphemeralContext(ephemeralContext);
+          trimEphemeralContext(
+            ephemeralContext
+          );
+
+        const hasEphemeralContext =
+          Boolean(
+            boundedEphemeralContext.trim()
+          );
+
+        // ------------------------------------------------
+        // 🔥 v1.8.5 RETRIEVAL ARBITRATION
+        // ------------------------------------------------
+
+        const retrievalPriority =
+          determineRetrievalPriority({
+            intent,
+            normalized,
+            message: sanitizedMessage,
+            hasEphemeralContext
+          });
+
+        // ------------------------------------------------
+        // PRIVATE MODE
+        // ------------------------------------------------
 
         if (privateMode) {
 
-          ragContext = boundedEphemeralContext;
+          ragContext =
+            boundedEphemeralContext;
 
-          if (!resolvedName && requestedResumeToken) {
-            resolvedName =
-              resolveFullNameFromContextByToken(
-                ragContext,
-                requestedResumeToken
-              );
-          }
+        } else if (hasEphemeralContext) {
 
-        } else if (boundedEphemeralContext.trim()) {
+          ragContext =
+            boundedEphemeralContext;
 
-          ragContext = boundedEphemeralContext;
+        } else if (
+          retrievalPriority === "HIGH" ||
+          retrievalPriority === "MEDIUM"
+        ) {
 
-          if (!resolvedName && requestedResumeToken) {
-            resolvedName =
-              resolveFullNameFromContextByToken(
-                ragContext,
-                requestedResumeToken
-              );
-          }
+          const retrievalQuery =
+            sanitizedMessage;
 
-        } else if (requiresKnowledge) {
+          const res =
+            await fastify.inject({
+              method: "POST",
+              url: "/api/retrieve",
 
-          const retrievalQuery = sanitizedMessage;
+              payload: {
+                query: retrievalQuery,
+                namespace
+              },
 
-          const res = await fastify.inject({
-            method: "POST",
-            url: "/api/retrieve",
-            payload: {
-              query: retrievalQuery,
-              namespace
-            },
-            headers: {
-              authorization: req.headers.authorization
-            }
-          });
+              headers: {
+                authorization:
+                  req.headers.authorization
+              }
+            });
 
-          const parsed = JSON.parse(res.body || "{}");
+          const parsed =
+            JSON.parse(res.body || "{}");
 
           const results =
             Array.isArray(parsed.results)
@@ -283,55 +422,83 @@ export default fp(async function chatRoute(fastify) {
               : [];
 
           ragContext =
-            results.map(r => r.content).join("\n\n");
+            results
+              .map(r => r.content)
+              .join("\n\n");
+        }
 
-          if (!resolvedName && requestedResumeToken) {
+        // ------------------------------------------------
+        // ENTITY RESOLUTION
+        // ------------------------------------------------
 
-            resolvedName =
-              resolveFullNameFromContextByToken(
-                ragContext,
-                requestedResumeToken
-              );
-          }
+        if (
+          !resolvedName &&
+          requestedResumeToken
+        ) {
+
+          resolvedName =
+            resolveFullNameFromContextByToken(
+              ragContext,
+              requestedResumeToken
+            );
         }
 
         if (resolvedName) {
+
           ragContext =
             `PRIMARY ENTITY: ${resolvedName}\n\n${ragContext}`;
         }
 
-        const rawAnswer = await withTimeout(
+        // ------------------------------------------------
+        // SYNTHESIS
+        // ------------------------------------------------
 
-          synthesizeFinalAnswer({
+        const rawAnswer =
+          await withTimeout(
+
+            synthesizeFinalAnswer({
+              intent,
+              userMessage: normalizedMessage,
+              contextWindow: ragContext,
+              model: openai,
+              identityContext
+            }),
+
+            TIMEOUT_MS
+          );
+
+        // ------------------------------------------------
+        // FORMATTER
+        // ------------------------------------------------
+
+        const formatterUserMessage =
+          resolvedName
+            ? `${normalizedMessage}\nPrimary Entity: ${resolvedName}`
+            : normalizedMessage;
+
+        const formattedAnswer =
+          formatOutput(rawAnswer, {
             intent,
-            userMessage: normalizedMessage,
-            contextWindow: ragContext,
-            model: openai,
-            identityContext
-          }),
-
-          TIMEOUT_MS
-        );
-
-        const formatterUserMessage = resolvedName
-          ? `${normalizedMessage}\nPrimary Entity: ${resolvedName}`
-          : normalizedMessage;
-
-        const formattedAnswer = formatOutput(rawAnswer, {
-          intent,
-          userMessage: formatterUserMessage,
-          hasContext: Boolean(ragContext && ragContext.trim()),
-          privateMode,
-          namespace,
-          tone
-        });
+            userMessage:
+              formatterUserMessage,
+            hasContext: Boolean(
+              ragContext &&
+              ragContext.trim()
+            ),
+            privateMode,
+            namespace,
+            tone
+          });
 
         const cleaned =
-          stripSensitiveFields(formattedAnswer);
+          stripSensitiveFields(
+            formattedAnswer
+          );
 
         logEvent(fastify, {
           userId,
           namespace,
+          retrievalPriority,
           inputLength: message.length,
           contextLength: ragContext.length,
           outputLength: cleaned.length,
@@ -345,7 +512,8 @@ export default fp(async function chatRoute(fastify) {
       } catch (err) {
 
         return reply.code(500).send({
-          error: "Temporary issue — please retry"
+          error:
+            "Temporary issue — please retry"
         });
       }
     }

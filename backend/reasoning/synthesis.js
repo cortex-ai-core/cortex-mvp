@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.8.4 — DELIVERABLE CONTINUITY STABILIZATION
+//  v1.8.5 — ADAPTIVE SYNTHESIS ELIGIBILITY
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -40,48 +40,63 @@ export async function synthesizeFinalAnswer({
     contextWindow.trim().length > 0;
 
   // ============================================================
-  // 🔥 INLINE SOURCE DETECTION
+  // 🔥 INLINE CONTEXT SUFFICIENCY DETECTION
   // ============================================================
   const hasInlineSourceText =
     userMessage.includes(":") &&
     userMessage.split(":")[1]?.trim().length > 10;
 
+  const inlineContextRich =
+    typeof userMessage === "string" &&
+    userMessage.trim().length >= 120;
+
   // ============================================================
-  // 🔥 INTENT-AWARE GROUNDING POLICY
+  // 🔥 RETRIEVAL-DEPENDENT SIGNALS
   // ============================================================
-  const generativeIntents = [
-    "rewrite",
-    "communication",
-    "business_document",
-    "analysis",
-    "question",
-    "general",
+  const retrievalDependentSignals = [
+    "resume",
+    "candidate",
+    "uploaded file",
+    "uploaded document",
+    "analyze this document",
+    "summarize this resume",
+    "compare candidates",
+    "compare resumes",
   ];
 
-  const requiresGrounding =
-    !generativeIntents.includes(intent);
+  const requiresExternalEvidence =
+    retrievalDependentSignals.some(signal =>
+      userMessage.toLowerCase().includes(signal)
+    );
 
   // ============================================================
-  // 🔥 EARLY EXIT — NO CONTEXT
+  // 🔥 SYNTHESIS ELIGIBILITY ARBITRATION
   // ============================================================
-  if (!hasContext && requiresGrounding) {
+  const synthesisEligible =
+    hasContext ||
+    (
+      inlineContextRich &&
+      !requiresExternalEvidence
+    );
+
+  // ============================================================
+  // 🔥 EARLY EXIT — TRUE MISSING EVIDENCE
+  // ============================================================
+  if (!synthesisEligible) {
+
     return "No matching documents found in the system.";
   }
 
   // ============================================================
-  // 🔥 EARLY EXIT — GENERATIVE TASKS
+  // 🔥 INLINE REWRITE SAFETY
   // ============================================================
   if (
     !hasContext &&
-    !requiresGrounding &&
-    (
-      intent === "rewrite" ||
-      intent === "communication" ||
-      intent === "business_document"
-    ) &&
+    requiresExternalEvidence &&
     !hasInlineSourceText
   ) {
-    return "Please provide the source text or upload the document you'd like Cortéx to rewrite or enhance.";
+
+    return "Please provide the source text or upload the document you'd like Cortéx to analyze or enhance.";
   }
 
   // ============================================================
