@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.8 PHASE 2 — RELATIONSHIP-AWARE RETRIEVAL ORCHESTRATION
+//  v1.8 PHASE 5 — RETRIEVAL DISTRIBUTION STABILIZATION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -287,6 +287,10 @@ function buildSemanticNeighborhoods(results = []) {
   });
 }
 
+// ============================================================
+// 🔥 PHASE 5 — DISTRIBUTION STABILIZATION
+// ============================================================
+
 function applyRelationshipAwareScoring(results = []) {
 
   if (!results.length) return results;
@@ -305,34 +309,95 @@ function applyRelationshipAwareScoring(results = []) {
       (result.neighborhoodStrength || 0) /
       strongestNeighborhood;
 
+    // -------------------------------------------------------
+    // 🔥 SATURATION-AWARE RELATIONSHIP CURVE
+    // -------------------------------------------------------
+    // PURPOSE:
+    // Prevent runaway semantic monopolization.
+    //
+    // BEFORE:
+    // linear reinforcement amplified dominant clusters.
+    //
+    // AFTER:
+    // diminishing-return reinforcement preserves:
+    // - strongest evidence
+    // - abstraction hierarchy
+    // - probabilistic ranking
+    //
+    // while allowing secondary evidence ecosystems
+    // to naturally emerge into the context window.
+    // -------------------------------------------------------
+
+    const saturationCurve =
+      Math.sqrt(neighborhoodRatio);
+
     const relationshipBoost =
-      neighborhoodRatio * 0.12;
+      saturationCurve * 0.08;
+
+    // -------------------------------------------------------
+    // 🔥 CONTINUITY PRESERVATION
+    // -------------------------------------------------------
 
     const continuityBoost =
       Math.min(
-        (result.relationshipCount || 0) * 0.01,
-        0.05
+        Math.log1p(
+          result.relationshipCount || 0
+        ) * 0.018,
+        0.045
       );
+
+    // -------------------------------------------------------
+    // 🔥 ISOLATION PENALTY
+    // -------------------------------------------------------
 
     const confidenceGapPenalty =
       (
-        neighborhoodRatio < 0.25 &&
-        result.boostedScore < 0.45
+        neighborhoodRatio < 0.18 &&
+        result.boostedScore < 0.46
       )
-        ? 0.06
+        ? 0.05
         : 0;
+
+    // -------------------------------------------------------
+    // 🔥 SOFT DIVERSITY PRESSURE
+    // -------------------------------------------------------
+    // IMPORTANT:
+    // This is NOT deterministic balancing.
+    //
+    // PURPOSE:
+    // Slightly reduce repeated dominance from
+    // heavily represented files WITHOUT:
+    // - quotas
+    // - forced equality
+    // - flattening semantic hierarchy
+    // -------------------------------------------------------
+
+    const filePressurePenalty =
+      Math.min(
+        (
+          (result.fileOccurrenceCount || 1) - 1
+        ) * 0.012,
+        0.05
+      );
+
+    // -------------------------------------------------------
+    // 🔥 FINAL SCORE
+    // -------------------------------------------------------
 
     const finalScore =
       result.boostedScore +
       relationshipBoost +
       continuityBoost -
-      confidenceGapPenalty;
+      confidenceGapPenalty -
+      filePressurePenalty;
 
     return {
       ...result,
+      saturationCurve,
       relationshipBoost,
       continuityBoost,
       confidenceGapPenalty,
+      filePressurePenalty,
       finalScore
     };
   });
@@ -561,6 +626,31 @@ export default fp(async function retrieveRoute(fastify, opts) {
             boostedScore: confidenceScore
           };
         });
+
+        // -----------------------------------------------------
+        // 🔥 FILE OCCURRENCE MODEL
+        // -----------------------------------------------------
+        // PURPOSE:
+        // Track semantic concentration pressure
+        // across retrieved evidence.
+        //
+        // NOT deterministic balancing.
+        // ONLY soft diversity awareness.
+        // -----------------------------------------------------
+
+        const fileOccurrenceMap = {};
+
+        for (const item of formatted) {
+
+          fileOccurrenceMap[item.filename] =
+            (fileOccurrenceMap[item.filename] || 0) + 1;
+        }
+
+        formatted = formatted.map(item => ({
+          ...item,
+          fileOccurrenceCount:
+            fileOccurrenceMap[item.filename] || 1
+        }));
 
         // -----------------------------------------------------
         // 🔥 RELATIONSHIP-AWARE SEMANTIC ORCHESTRATION
