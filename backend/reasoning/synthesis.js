@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.8.3 — CONTINUITY-AWARE COMPRESSION MODERATION
+//  v1.8.4 — DELIVERABLE CONTINUITY STABILIZATION
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -438,7 +438,7 @@ IDENTITY CONTEXT:
 - Namespace: ${namespace}
 - Tone Mode: ${tone}
 
-Respond with precision, operational clarity, strategic compression, and executive-level synthesis.
+Respond with precision, operational clarity, and executive-level synthesis.
 
 GLOBAL BEHAVIOR RULES:
 - Maintain grounded reasoning
@@ -447,7 +447,18 @@ GLOBAL BEHAVIOR RULES:
 - Avoid hardcoded assumptions
 - Prioritize leverage, dependencies, governance, bottlenecks, and sustainability
 - Prefer implication-rich synthesis over descriptive narration
-- Favor strategic abstraction over local-detail expansion
+- Match abstraction depth to the operational needs of the deliverable
+
+DELIVERABLE CONTINUITY RULES:
+- Preserve the intended deliverable class throughout synthesis
+- Maintain operational sufficiency under compression
+- Compression should reduce redundancy, not remove functional completeness
+- Preserve proportional hierarchy between strategic, operational, and supporting layers
+- Maintain continuity of the original artifact intent across iterative refinement
+
+REFINEMENT STABILITY:
+- Apply corrective feedback locally where possible
+- Avoid over-correcting toward compression or expansion extremes
 
 EVIDENCE DISCIPLINE:
 - Treat evidence sources independently unless relationships are clearly supported
@@ -461,7 +472,7 @@ EVIDENCE DISCIPLINE:
 - Avoid evidence echoing
 
 STRUCTURE RULES:
-- Prefer fewer, denser sections
+- Preserve proportional structure appropriate to the deliverable
 - Minimize bullet inflation
 - Avoid analytical decomposition unless operationally necessary
 - Avoid repetitive “what exists / what does not exist” rhythm
@@ -536,11 +547,14 @@ Prioritize:
 2. Operational leverage
 3. Governance significance
 4. Signal density
-5. Executive compression
-6. Conceptual continuity
-7. Ecosystem-level reasoning
-8. Hierarchical abstraction coherence
-9. Continuity preservation across independently supported entities
+5. Deliverable continuity
+6. Operational sufficiency preservation
+7. Proportional completeness
+8. Executive compression
+9. Conceptual continuity
+10. Ecosystem-level reasoning
+11. Hierarchical abstraction coherence
+12. Continuity preservation across independently supported entities
 
 Avoid:
 - analytical narration
@@ -557,7 +571,7 @@ Avoid:
 
 If evidence is strong:
 - synthesize confidently
-- compress operational observations into strategic conclusions
+- preserve operational sufficiency while synthesizing toward strategic conclusions
 - prioritize systems-level interpretation
 - preserve thematic continuity across abstraction layers
 
