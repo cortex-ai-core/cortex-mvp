@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — INTENT DECODER
-//  Step 46A + 47.6A LITERAL MODE
-//  v1.5 — TASK-ORIENTED INTENT ROUTING
+//  v1.8.4 — OPERATIONAL MATURITY PATCH
+//  Generalized Completion-Aware Intent Inference
 // ============================================================
 
 export function decodeIntent(message = "") {
@@ -11,11 +11,14 @@ export function decodeIntent(message = "") {
   //  EMPTY MESSAGE
   // ============================================================
   if (!msg) {
-    return "general";
+    return {
+      type: "general",
+      maturity: "general",
+    };
   }
 
   // ============================================================
-  //  LITERAL MODE DETECTION (Step 47.6A)
+  //  LITERAL MODE DETECTION
   // ============================================================
   const literalTriggers = [
     /^repeat exactly:/i,
@@ -26,13 +29,77 @@ export function decodeIntent(message = "") {
 
   for (const trigger of literalTriggers) {
     if (msg.match(trigger)) {
-      return "literal";
+      return {
+        type: "literal",
+        maturity: "locked",
+      };
     }
   }
 
   // ============================================================
-  //  REWRITE / ENHANCEMENT
+  //  MATURITY INFERENCE
   // ============================================================
+
+  let maturity = "general";
+
+  // ------------------------------------------------------------
+  //  EXPLORATORY / IDEATION
+  // ------------------------------------------------------------
+  if (
+    msg.includes("brainstorm") ||
+    msg.includes("ideas") ||
+    msg.includes("outline") ||
+    msg.includes("framework") ||
+    msg.includes("example") ||
+    msg.includes("concept")
+  ) {
+    maturity = "exploratory";
+  }
+
+  // ------------------------------------------------------------
+  //  REFINEMENT / REVISION
+  // ------------------------------------------------------------
+  else if (
+    msg.includes("rewrite") ||
+    msg.includes("revise") ||
+    msg.includes("enhance") ||
+    msg.includes("improve") ||
+    msg.includes("optimize") ||
+    msg.includes("clean this up") ||
+    msg.includes("polish") ||
+    msg.includes("refine")
+  ) {
+    maturity = "refinement";
+  }
+
+  // ------------------------------------------------------------
+  //  FINALIZATION / DEPLOYMENT
+  // ------------------------------------------------------------
+  else if (
+    msg.includes("finalize") ||
+    msg.includes("final version") ||
+    msg.includes("ready to send") ||
+    msg.includes("cut and paste") ||
+    msg.includes("production ready") ||
+    msg.includes("deployable") ||
+    msg.includes("employee ready") ||
+    msg.includes("customer ready") ||
+    msg.includes("send this") ||
+    msg.includes("operationalize") ||
+    msg.includes("complete this")
+  ) {
+    maturity = "deployable";
+  }
+
+  // ============================================================
+  //  TYPE DETECTION
+  // ============================================================
+
+  let type = "general";
+
+  // ------------------------------------------------------------
+  //  REWRITE / ENHANCEMENT
+  // ------------------------------------------------------------
   if (
     msg.includes("rewrite") ||
     msg.includes("restructure") ||
@@ -47,40 +114,43 @@ export function decodeIntent(message = "") {
     msg.includes("rework") ||
     msg.includes("polish")
   ) {
-    return "rewrite";
+    type = "rewrite";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  EMAIL / COMMUNICATION
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.includes("email") ||
     msg.includes("draft a response") ||
     msg.includes("respond to") ||
     msg.includes("write a response") ||
     msg.includes("compose")
   ) {
-    return "communication";
+    type = "communication";
   }
 
-  // ============================================================
-  //  BUSINESS DOCUMENTS / SOW
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  //  BUSINESS DOCUMENTS
+  // ------------------------------------------------------------
+  else if (
     msg.includes("sow") ||
     msg.includes("statement of work") ||
     msg.includes("scope of work") ||
     msg.includes("proposal") ||
     msg.includes("msa") ||
-    msg.includes("sla")
+    msg.includes("sla") ||
+    msg.includes("agreement") ||
+    msg.includes("contract") ||
+    msg.includes("ltip")
   ) {
-    return "business_document";
+    type = "business_document";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  INCIDENT / OPERATIONS
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.includes("incident") ||
     msg.includes("outage") ||
     msg.includes("root cause") ||
@@ -90,13 +160,13 @@ export function decodeIntent(message = "") {
     msg.includes("operational issue") ||
     msg.includes("downtime")
   ) {
-    return "incident";
+    type = "incident";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  CANDIDATE / RESUME
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.includes("resume") ||
     msg.includes("candidate") ||
     msg.includes("alignment score") ||
@@ -106,37 +176,37 @@ export function decodeIntent(message = "") {
     msg.includes("job fit") ||
     msg.includes("role fit")
   ) {
-    return "candidate";
+    type = "candidate";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  SUMMARY
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.startsWith("summarize") ||
     msg.includes("summary") ||
     msg.includes("tl;dr")
   ) {
-    return "summary";
+    type = "summary";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  ANALYSIS
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.includes("analysis") ||
     msg.startsWith("analyze") ||
     msg.includes("assess") ||
     msg.includes("evaluate") ||
     msg.includes("compare")
   ) {
-    return "analysis";
+    type = "analysis";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  QUESTIONS
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.startsWith("what") ||
     msg.startsWith("why") ||
     msg.startsWith("when") ||
@@ -144,21 +214,25 @@ export function decodeIntent(message = "") {
     msg.includes("?") ||
     msg.includes("explain")
   ) {
-    return "question";
+    type = "question";
   }
 
-  // ============================================================
+  // ------------------------------------------------------------
   //  INSTRUCTIONAL
-  // ============================================================
-  if (
+  // ------------------------------------------------------------
+  else if (
     msg.startsWith("how") ||
     msg.includes("help me")
   ) {
-    return "instruction";
+    type = "instruction";
   }
 
   // ============================================================
-  //  DEFAULT
+  //  RETURN
   // ============================================================
-  return "general";
+
+  return {
+    type,
+    maturity,
+  };
 }
