@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CONTEXT ASSEMBLER
-//  v1.8.1 — ABSTRACTION-AWARE ENTITY CONTINUITY
+//  v1.8.2 — LINEAGE CONTINUITY STABILIZATION
 // ============================================================
 //
 // Compatible with chat.js:
@@ -35,9 +35,28 @@ function resolveSourceLabel(e = {}) {
 // ------------------------------------------------------------
 // 🔥 Normalize Content
 // ------------------------------------------------------------
+//
+// IMPORTANT:
+//
+// We intentionally avoid aggressive flattening.
+//
+// Prior implementation removed too much
+// semantic texture and locality structure.
+//
+// We now preserve:
+// - paragraph cadence
+// - semantic density
+// - abstraction gradients
+//
+// WITHOUT:
+// - preserving unsafe formatting noise
+// ------------------------------------------------------------
 function normalizeContent(text = "") {
+
   return String(text)
-    .replace(/\s+/g, " ")
+    .replace(/\r/g, "")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
@@ -79,15 +98,6 @@ function resolvePrimaryEntity(e = {}) {
 
   // ----------------------------------------------------------
   // Soft source-derived fallback
-  // ----------------------------------------------------------
-  //
-  // Converts:
-  // Brad_Shimo_Resume.pdf
-  // -> Brad Shimo Resume
-  //
-  // Avoids:
-  // hardcoded candidate logic
-  // deterministic enforcement
   // ----------------------------------------------------------
   return normalizeContent(
     source
@@ -150,9 +160,90 @@ function groupEvidenceBySource(evidence = []) {
 // 🔥 Sort Evidence By Weight
 // ------------------------------------------------------------
 function sortEvidence(entries = []) {
+
   return [...entries].sort(
     (a, b) => b.weight - a.weight
   );
+}
+
+// ------------------------------------------------------------
+// 🔥 Soft Semantic Tiering
+// ------------------------------------------------------------
+//
+// PURPOSE:
+//
+// Preserve abstraction hierarchy
+// WITHOUT deterministic orchestration.
+//
+// This is NOT hard grouping.
+// This is NOT ATS balancing.
+//
+// Goal:
+// preserve semantic density gradients.
+//
+// Higher-weight evidence receives:
+// - stronger locality preservation
+// - earlier survivability
+// - richer semantic continuity
+// ------------------------------------------------------------
+function buildSemanticTiers(entries = []) {
+
+  if (entries.length <= 2) {
+    return {
+      core: entries,
+      supporting: [],
+      peripheral: [],
+    };
+  }
+
+  const sorted =
+    sortEvidence(entries);
+
+  const coreCutoff =
+    Math.max(1, Math.ceil(sorted.length * 0.25));
+
+  const supportingCutoff =
+    Math.max(
+      coreCutoff + 1,
+      Math.ceil(sorted.length * 0.7)
+    );
+
+  return {
+    core:
+      sorted.slice(0, coreCutoff),
+
+    supporting:
+      sorted.slice(
+        coreCutoff,
+        supportingCutoff
+      ),
+
+    peripheral:
+      sorted.slice(supportingCutoff),
+  };
+}
+
+// ------------------------------------------------------------
+// 🔥 Render Semantic Cluster
+// ------------------------------------------------------------
+function renderCluster(
+  title,
+  entries,
+  entity
+) {
+
+  if (!entries.length) {
+    return [];
+  }
+
+  return [
+    `${title}:`,
+
+    ...entries.map(
+      (e) =>
+        `- (${entity}) ${e.content}`
+    ),
+  ];
 }
 
 // ------------------------------------------------------------
@@ -165,6 +256,8 @@ function sortEvidence(entries = []) {
 // - entity continuity
 // - abstraction-safe lineage
 // - semantic provenance
+// - locality gradients
+// - abstraction hierarchy
 //
 // WITHOUT:
 // - rigid templates
@@ -183,37 +276,35 @@ function buildEvidenceSection(
     totalWeight,
   } = sourceData;
 
-  const sortedEntries =
-    sortEvidence(entries);
-
-  // ----------------------------------------------------------
-  // Soft continuity reinforcement
-  // ----------------------------------------------------------
-  //
-  // IMPORTANT:
-  // We intentionally repeat the entity
-  // lightly within the semantic block.
-  //
-  // This increases:
-  // - semantic survival
-  // - abstraction provenance
-  // - identity continuity
-  //
-  // WITHOUT:
-  // - hardcoding
-  // - forcing output structure
-  // - deterministic behavior
-  // ----------------------------------------------------------
+  const tiers =
+    buildSemanticTiers(entries);
 
   return [
+
     `PRIMARY ENTITY: ${entity}`,
+
     `SOURCE: ${source}`,
+
     `SOURCE CONTINUITY WEIGHT: ${totalWeight.toFixed(2)}`,
+
     `ENTITY CONTEXT:`,
 
-    ...sortedEntries.map(
-      (e) =>
-        `- (${entity}) ${e.content}`
+    ...renderCluster(
+      "CORE SIGNALS",
+      tiers.core,
+      entity
+    ),
+
+    ...renderCluster(
+      "SUPPORTING CONTEXT",
+      tiers.supporting,
+      entity
+    ),
+
+    ...renderCluster(
+      "PERIPHERAL CONTEXT",
+      tiers.peripheral,
+      entity
     ),
 
   ].join("\n");
@@ -242,11 +333,27 @@ export function assembleContext(
     groupEvidenceBySource(evidence);
 
   // ----------------------------------------------------------
+  // Preserve probabilistic ordering
+  // ----------------------------------------------------------
+  //
+  // IMPORTANT:
+  // We intentionally sort by aggregate
+  // survivability strength WITHOUT
+  // deterministic partitioning.
+  // ----------------------------------------------------------
+  const orderedGroups =
+    [...groupedEvidence.values()]
+      .sort(
+        (a, b) =>
+          b.totalWeight - a.totalWeight
+      );
+
+  // ----------------------------------------------------------
   // Build structured context
   // ----------------------------------------------------------
   const evidenceSections = [];
 
-  for (const sourceData of groupedEvidence.values()) {
+  for (const sourceData of orderedGroups) {
 
     const section =
       buildEvidenceSection(sourceData);
@@ -257,9 +364,15 @@ export function assembleContext(
   // ----------------------------------------------------------
   // Final assembled evidence text
   // ----------------------------------------------------------
+  //
+  // IMPORTANT:
+  // We preserve stronger locality separation
+  // between ecosystems to reduce semantic
+  // flattening during synthesis.
+  // ----------------------------------------------------------
   const evidenceText =
     evidenceSections.length > 0
-      ? evidenceSections.join("\n\n")
+      ? evidenceSections.join("\n\n---\n\n")
       : "No evidence available.";
 
   // ==========================================================
