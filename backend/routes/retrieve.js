@@ -1,6 +1,7 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.8 PHASE 5 — RETRIEVAL DISTRIBUTION STABILIZATION
+//  v1.8 PHASE 5.1
+//  ADAPTIVE RETRIEVAL EXPANSION STABILIZATION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -188,10 +189,25 @@ function determineQueryProfile(query = "") {
 // ============================================================
 
 function contentFingerprint(text = "") {
-  return text
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .slice(0, 180);
+
+  const cleaned =
+    text
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+
+  const start =
+    cleaned.slice(0, 120);
+
+  const middle =
+    cleaned.slice(
+      Math.floor(cleaned.length / 2),
+      Math.floor(cleaned.length / 2) + 120
+    );
+
+  const end =
+    cleaned.slice(-120);
+
+  return `${start}|${middle}|${end}`;
 }
 
 function countTermMatches(content = "", terms = []) {
@@ -219,6 +235,131 @@ function calculateSemanticDensity(content = "") {
   if (!words.length) return 0;
 
   return uniqueWords.size / words.length;
+}
+
+// ============================================================
+// 🔥 RETRIEVAL PRESSURE MODEL
+// ============================================================
+
+function calculateRetrievalPressure(results = []) {
+
+  if (!results.length) {
+    return {
+      pressure: 0,
+      highPressure: false
+    };
+  }
+
+  const uniqueFiles =
+    new Set(results.map(r => r.filename)).size;
+
+  const averageSimilarity =
+    results.reduce(
+      (sum, r) => sum + (r.similarity || 0),
+      0
+    ) / results.length;
+
+  const pressure =
+    (
+      (results.length * 0.45) +
+      (uniqueFiles * 0.35) +
+      (averageSimilarity * 10)
+    );
+
+  return {
+    pressure,
+    highPressure: pressure >= 12
+  };
+}
+
+function calculateAdaptiveFileCap(
+  retrievalPressure,
+  baseCap = MAX_RESULTS_PER_FILE
+) {
+
+  if (!retrievalPressure.highPressure) {
+    return baseCap;
+  }
+
+  return Math.min(
+    baseCap + 2,
+    4
+  );
+}
+
+function applyEcosystemContextAllocation(
+  results = [],
+  contextBudget = 10000
+) {
+
+  if (!results.length) return results;
+
+  const ecosystems = {};
+
+  for (const result of results) {
+
+    if (!ecosystems[result.filename]) {
+      ecosystems[result.filename] = [];
+    }
+
+    ecosystems[result.filename].push(result);
+  }
+
+  const sortedEcosystems =
+    Object.values(ecosystems)
+      .sort((a, b) => {
+
+        const aScore =
+          a.reduce(
+            (sum, r) => sum + r.finalScore,
+            0
+          );
+
+        const bScore =
+          b.reduce(
+            (sum, r) => sum + r.finalScore,
+            0
+          );
+
+        return bScore - aScore;
+      });
+
+  const surviving = [];
+  let totalChars = 0;
+  let round = 0;
+
+  while (true) {
+
+    let addedThisRound = false;
+
+    for (const ecosystem of sortedEcosystems) {
+
+      if (!ecosystem[round]) continue;
+
+      const candidate =
+        ecosystem[round];
+
+      if (
+        totalChars + candidate.content.length >
+        contextBudget
+      ) {
+        continue;
+      }
+
+      surviving.push(candidate);
+
+      totalChars +=
+        candidate.content.length;
+
+      addedThisRound = true;
+    }
+
+    if (!addedThisRound) break;
+
+    round++;
+  }
+
+  return surviving;
 }
 
 // ============================================================
@@ -309,34 +450,11 @@ function applyRelationshipAwareScoring(results = []) {
       (result.neighborhoodStrength || 0) /
       strongestNeighborhood;
 
-    // -------------------------------------------------------
-    // 🔥 SATURATION-AWARE RELATIONSHIP CURVE
-    // -------------------------------------------------------
-    // PURPOSE:
-    // Prevent runaway semantic monopolization.
-    //
-    // BEFORE:
-    // linear reinforcement amplified dominant clusters.
-    //
-    // AFTER:
-    // diminishing-return reinforcement preserves:
-    // - strongest evidence
-    // - abstraction hierarchy
-    // - probabilistic ranking
-    //
-    // while allowing secondary evidence ecosystems
-    // to naturally emerge into the context window.
-    // -------------------------------------------------------
-
     const saturationCurve =
       Math.sqrt(neighborhoodRatio);
 
     const relationshipBoost =
       saturationCurve * 0.08;
-
-    // -------------------------------------------------------
-    // 🔥 CONTINUITY PRESERVATION
-    // -------------------------------------------------------
 
     const continuityBoost =
       Math.min(
@@ -346,10 +464,6 @@ function applyRelationshipAwareScoring(results = []) {
         0.045
       );
 
-    // -------------------------------------------------------
-    // 🔥 ISOLATION PENALTY
-    // -------------------------------------------------------
-
     const confidenceGapPenalty =
       (
         neighborhoodRatio < 0.18 &&
@@ -358,20 +472,6 @@ function applyRelationshipAwareScoring(results = []) {
         ? 0.05
         : 0;
 
-    // -------------------------------------------------------
-    // 🔥 SOFT DIVERSITY PRESSURE
-    // -------------------------------------------------------
-    // IMPORTANT:
-    // This is NOT deterministic balancing.
-    //
-    // PURPOSE:
-    // Slightly reduce repeated dominance from
-    // heavily represented files WITHOUT:
-    // - quotas
-    // - forced equality
-    // - flattening semantic hierarchy
-    // -------------------------------------------------------
-
     const filePressurePenalty =
       Math.min(
         (
@@ -379,10 +479,6 @@ function applyRelationshipAwareScoring(results = []) {
         ) * 0.012,
         0.05
       );
-
-    // -------------------------------------------------------
-    // 🔥 FINAL SCORE
-    // -------------------------------------------------------
 
     const finalScore =
       result.boostedScore +
@@ -630,13 +726,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
         // -----------------------------------------------------
         // 🔥 FILE OCCURRENCE MODEL
         // -----------------------------------------------------
-        // PURPOSE:
-        // Track semantic concentration pressure
-        // across retrieved evidence.
-        //
-        // NOT deterministic balancing.
-        // ONLY soft diversity awareness.
-        // -----------------------------------------------------
 
         const fileOccurrenceMap = {};
 
@@ -663,6 +752,13 @@ export default fp(async function retrieveRoute(fastify, opts) {
           applyRelationshipAwareScoring(formatted);
 
         // -----------------------------------------------------
+        // 🔥 RETRIEVAL PRESSURE DETECTION
+        // -----------------------------------------------------
+
+        const retrievalPressure =
+          calculateRetrievalPressure(formatted);
+
+        // -----------------------------------------------------
         // 🔥 SORT
         // -----------------------------------------------------
 
@@ -672,8 +768,13 @@ export default fp(async function retrieveRoute(fastify, opts) {
         );
 
         // -----------------------------------------------------
-        // 🔥 FILE DIVERSITY CONTROL
+        // 🔥 ADAPTIVE FILE SURVIVABILITY
         // -----------------------------------------------------
+
+        const adaptiveFileCap =
+          calculateAdaptiveFileCap(
+            retrievalPressure
+          );
 
         const fileCounts = {};
 
@@ -686,39 +787,39 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
           return (
             fileCounts[key] <=
-            MAX_RESULTS_PER_FILE
+            adaptiveFileCap
           );
         });
 
         // -----------------------------------------------------
-        // 🔥 TOP-K
+        // 🔥 ADAPTIVE TOP-K EXPANSION
         // -----------------------------------------------------
+
+        const adaptiveTopK =
+          retrievalPressure.highPressure
+            ? retrievalProfile.topK + 4
+            : retrievalProfile.topK;
 
         formatted =
           formatted.slice(
             0,
-            retrievalProfile.topK
+            adaptiveTopK
           );
 
         // -----------------------------------------------------
-        // 🔥 CONTEXT PROTECTION
+        // 🔥 ECOSYSTEM CONTEXT SURVIVABILITY
         // -----------------------------------------------------
 
-        let totalChars = 0;
+        const adaptiveContextBudget =
+          retrievalPressure.highPressure
+            ? retrievalProfile.contextBudget + 4000
+            : retrievalProfile.contextBudget;
 
-        formatted = formatted.filter(r => {
-
-          if (
-            totalChars + r.content.length >
-            retrievalProfile.contextBudget
-          ) {
-            return false;
-          }
-
-          totalChars += r.content.length;
-
-          return true;
-        });
+        formatted =
+          applyEcosystemContextAllocation(
+            formatted,
+            adaptiveContextBudget
+          );
 
         // -----------------------------------------------------
         // 📊 LOGGING
@@ -730,9 +831,14 @@ export default fp(async function retrieveRoute(fastify, opts) {
           normalizedQuery,
           queryTerms,
           queryType: retrievalProfile.type,
+          retrievalPressure:
+            retrievalPressure.pressure,
+          highPressure:
+            retrievalPressure.highPressure,
+          adaptiveTopK,
+          adaptiveFileCap,
           matchCount: formatted.length,
-          ragUsed: formatted.length > 0,
-          totalChars
+          ragUsed: formatted.length > 0
         });
 
         return reply.send({
