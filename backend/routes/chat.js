@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE
-//  v1.8.5 RETRIEVAL ARBITRATION ENABLEMENT
+//  v1.8.6 GENERALIZED RETRIEVAL ARBITRATION HARDENING
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -41,36 +41,60 @@ function trimEphemeralContext(context = "") {
 
 // ----------------------------------------------------
 function checkRateLimit(userId) {
+
   const now = Date.now();
   const windowMs = 60000;
 
-  if (!userBuckets.has(userId)) userBuckets.set(userId, []);
+  if (!userBuckets.has(userId)) {
+    userBuckets.set(userId, []);
+  }
 
-  const timestamps = userBuckets.get(userId).filter(
-    ts => now - ts < windowMs
-  );
+  const timestamps =
+    userBuckets.get(userId).filter(
+      ts => now - ts < windowMs
+    );
 
-  const allowed = timestamps.length < RATE_LIMIT;
+  const allowed =
+    timestamps.length < RATE_LIMIT;
 
-  if (allowed) timestamps.push(now);
+  if (allowed) {
+    timestamps.push(now);
+  }
 
   userBuckets.set(userId, timestamps);
 
   return {
     allowed,
-    remaining: Math.max(0, RATE_LIMIT - timestamps.length),
-    retryAfter: timestamps.length > 0
-      ? Math.ceil((windowMs - (now - timestamps[0])) / 1000)
-      : 0
+    remaining:
+      Math.max(
+        0,
+        RATE_LIMIT - timestamps.length
+      ),
+
+    retryAfter:
+      timestamps.length > 0
+        ? Math.ceil(
+            (
+              windowMs -
+              (now - timestamps[0])
+            ) / 1000
+          )
+        : 0
   };
 }
 
 // ----------------------------------------------------
 function withTimeout(promise, ms) {
+
   return Promise.race([
+
     promise,
+
     new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), ms)
+      setTimeout(
+        () => reject(new Error("timeout")),
+        ms
+      )
     )
   ]);
 }
@@ -83,21 +107,33 @@ function logEvent(fastify, data) {
 // ----------------------------------------------------
 function handleSimpleCases(input = "") {
 
-  const text = input.toLowerCase().trim();
+  const text =
+    input.toLowerCase().trim();
 
-  if (text === "who are you" || text === "who are you?") {
+  if (
+    text === "who are you" ||
+    text === "who are you?"
+  ) {
+
     return {
-      finalAnswer: "Cortéx. KING’s Intelligence Engine."
+      finalAnswer:
+        "Cortéx. KING’s Intelligence Engine."
     };
   }
 
-  if (/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i.test(input)) {
+  if (
+    /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i
+      .test(input)
+  ) {
+
     return {
-      finalAnswer: "Email detected. No context."
+      finalAnswer:
+        "Email detected. No context."
     };
   }
 
   if (text.length <= 10) {
+
     return {
       finalAnswer: "No subject."
     };
@@ -109,8 +145,9 @@ function handleSimpleCases(input = "") {
 // ----------------------------------------------------
 function resolveUserMessageEntity(input = "") {
 
-  const match = String(input || "")
-    .match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+  const match =
+    String(input || "")
+      .match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
 
   if (match && match[0]) {
     return match[0].trim();
@@ -122,18 +159,25 @@ function resolveUserMessageEntity(input = "") {
 // ----------------------------------------------------
 function resolveRequestedResumeToken(input = "") {
 
-  const match = String(input || "").match(
-    /\b([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
-  );
+  const match =
+    String(input || "").match(
+      /\b([A-Za-z]+?)(?:['’]s|s)?\s+resume\b/i
+    );
 
-  if (!match || !match[1]) return null;
+  if (!match || !match[1]) {
+    return null;
+  }
 
   const raw = match[1].trim();
 
-  if (!raw) return null;
+  if (!raw) {
+    return null;
+  }
 
-  return raw.charAt(0).toUpperCase() +
-    raw.slice(1).toLowerCase();
+  return (
+    raw.charAt(0).toUpperCase() +
+    raw.slice(1).toLowerCase()
+  );
 }
 
 // ----------------------------------------------------
@@ -142,15 +186,24 @@ function resolveFullNameFromContextByToken(
   token = ""
 ) {
 
-  if (!context || !token) return null;
+  if (!context || !token) {
+    return null;
+  }
 
   const escapedToken =
-    token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    token.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
 
   const pattern =
-    new RegExp(`\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`, "i");
+    new RegExp(
+      `\\b(${escapedToken}\\s+[A-Z][a-z]+)\\b`,
+      "i"
+    );
 
-  const match = String(context || "").match(pattern);
+  const match =
+    String(context || "").match(pattern);
 
   if (match && match[1]) {
 
@@ -168,7 +221,7 @@ function resolveFullNameFromContextByToken(
 }
 
 // ----------------------------------------------------
-// 🔥 v1.8.5 RETRIEVAL ARBITRATION
+// 🔥 v1.8.6 GENERALIZED RETRIEVAL ARBITRATION
 // ----------------------------------------------------
 function determineRetrievalPriority({
   intent = "",
@@ -177,16 +230,31 @@ function determineRetrievalPriority({
   hasEphemeralContext = false
 }) {
 
-  const retrievalIndicators = [
-    "resume",
-    "candidate",
-    "document",
+  // ------------------------------------------------
+  // Evidence dependency indicators
+  // ------------------------------------------------
+
+  const evidenceIndicators = [
+    "compare",
+    "across",
     "uploaded",
-    "file",
-    "compare resumes",
-    "analyze this resume",
-    "summarize this document"
+    "documents",
+    "materials",
+    "artifacts",
+    "summarize",
+    "analyze",
+    "assessment",
+    "rank",
+    "evaluate",
+    "identify",
+    "review",
+    "synthesize",
+    "analysis"
   ];
+
+  // ------------------------------------------------
+  // Inline synthesis indicators
+  // ------------------------------------------------
 
   const synthesisIndicators = [
     "brainstorm",
@@ -201,12 +269,12 @@ function determineRetrievalPriority({
     "communication"
   ];
 
-  const hasRetrievalIndicators =
-    retrievalIndicators.some(term =>
+  const evidenceDependency =
+    evidenceIndicators.some(term =>
       normalized.includes(term)
     );
 
-  const hasSynthesisIndicators =
+  const synthesisHeavy =
     synthesisIndicators.some(term =>
       normalized.includes(term)
     );
@@ -217,37 +285,44 @@ function determineRetrievalPriority({
   // ------------------------------------------------
   // Ephemeral/private context already sufficient
   // ------------------------------------------------
+
   if (hasEphemeralContext) {
     return "NONE";
   }
 
   // ------------------------------------------------
-  // Retrieval-heavy analytical workflows
+  // Evidence-backed analytical reasoning
   // ------------------------------------------------
+
   if (
-    hasRetrievalIndicators &&
-    !inlineContextRich
+    evidenceDependency &&
+    !synthesisHeavy
   ) {
     return "HIGH";
   }
 
   // ------------------------------------------------
-  // Inline operational synthesis
+  // General analytical workflows
   // ------------------------------------------------
+
   if (
-    hasSynthesisIndicators &&
-    inlineContextRich
+    ["analysis", "lookup", "question"]
+      .includes(intent)
   ) {
-    return "LOW";
+
+    return "MEDIUM";
   }
 
   // ------------------------------------------------
-  // General analytical requests
+  // Rich inline drafting/synthesis workflows
   // ------------------------------------------------
+
   if (
-    ["analysis", "lookup", "question"].includes(intent)
+    synthesisHeavy &&
+    inlineContextRich
   ) {
-    return "MEDIUM";
+
+    return "LOW";
   }
 
   return "LOW";
@@ -264,7 +339,9 @@ export default fp(async function chatRoute(fastify) {
   });
 
   fastify.post(
+
     "/api/chat",
+
     { preHandler: requireAuth() },
 
     async (req, reply) => {
@@ -288,22 +365,27 @@ export default fp(async function chatRoute(fastify) {
         } = req.body || {};
 
         if (!message.trim()) {
+
           return reply.code(400).send({
             error: "Message required"
           });
         }
 
         if (message.length > MAX_INPUT) {
+
           return reply.code(400).send({
             error: "Input too large"
           });
         }
 
-        const dlp = runDLPScan(message);
+        const dlp =
+          runDLPScan(message);
 
         if (dlp.block) {
+
           return reply.send({
-            error: "Sensitive data blocked"
+            error:
+              "Sensitive data blocked"
           });
         }
 
@@ -311,20 +393,26 @@ export default fp(async function chatRoute(fastify) {
           dlp.sanitized;
 
         const simple =
-          handleSimpleCases(sanitizedMessage);
+          handleSimpleCases(
+            sanitizedMessage
+          );
 
         if (simple) {
           return reply.send(simple);
         }
 
         const intent =
-          decodeIntent(sanitizedMessage);
+          decodeIntent(
+            sanitizedMessage
+          );
 
         const normalized =
           sanitizedMessage.toLowerCase();
 
         const tone =
-          resolveToneForNamespace(namespace);
+          resolveToneForNamespace(
+            namespace
+          );
 
         const identityContext =
           applyIdentityLayer({
@@ -364,7 +452,7 @@ export default fp(async function chatRoute(fastify) {
           );
 
         // ------------------------------------------------
-        // 🔥 v1.8.5 RETRIEVAL ARBITRATION
+        // 🔥 GENERALIZED RETRIEVAL ARBITRATION
         // ------------------------------------------------
 
         const retrievalPriority =
@@ -384,7 +472,9 @@ export default fp(async function chatRoute(fastify) {
           ragContext =
             boundedEphemeralContext;
 
-        } else if (hasEphemeralContext) {
+        } else if (
+          hasEphemeralContext
+        ) {
 
           ragContext =
             boundedEphemeralContext;
@@ -399,7 +489,9 @@ export default fp(async function chatRoute(fastify) {
 
           const res =
             await fastify.inject({
+
               method: "POST",
+
               url: "/api/retrieve",
 
               payload: {
@@ -414,7 +506,9 @@ export default fp(async function chatRoute(fastify) {
             });
 
           const parsed =
-            JSON.parse(res.body || "{}");
+            JSON.parse(
+              res.body || "{}"
+            );
 
           const results =
             Array.isArray(parsed.results)
@@ -457,11 +551,19 @@ export default fp(async function chatRoute(fastify) {
           await withTimeout(
 
             synthesizeFinalAnswer({
+
               intent,
-              userMessage: normalizedMessage,
-              contextWindow: ragContext,
+
+              userMessage:
+                normalizedMessage,
+
+              contextWindow:
+                ragContext,
+
               model: openai,
+
               identityContext
+
             }),
 
             TIMEOUT_MS
@@ -477,18 +579,27 @@ export default fp(async function chatRoute(fastify) {
             : normalizedMessage;
 
         const formattedAnswer =
-          formatOutput(rawAnswer, {
-            intent,
-            userMessage:
-              formatterUserMessage,
-            hasContext: Boolean(
-              ragContext &&
-              ragContext.trim()
-            ),
-            privateMode,
-            namespace,
-            tone
-          });
+          formatOutput(
+            rawAnswer,
+            {
+              intent,
+
+              userMessage:
+                formatterUserMessage,
+
+              hasContext:
+                Boolean(
+                  ragContext &&
+                  ragContext.trim()
+                ),
+
+              privateMode,
+
+              namespace,
+
+              tone
+            }
+          );
 
         const cleaned =
           stripSensitiveFields(
@@ -499,10 +610,14 @@ export default fp(async function chatRoute(fastify) {
           userId,
           namespace,
           retrievalPriority,
-          inputLength: message.length,
-          contextLength: ragContext.length,
-          outputLength: cleaned.length,
-          latency: Date.now() - start
+          inputLength:
+            message.length,
+          contextLength:
+            ragContext.length,
+          outputLength:
+            cleaned.length,
+          latency:
+            Date.now() - start
         });
 
         return reply.send({

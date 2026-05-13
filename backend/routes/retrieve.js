@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.8.8
-//  ECOSYSTEM FILENAME CONTINUITY STABILIZATION
+//  v1.8.9
+//  SCALABILITY + SURVIVABILITY HARDENING
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -69,6 +69,37 @@ const BASE_SIMILARITY_THRESHOLD = 0.22;
 const BASE_TOP_K = 6;
 const BASE_CONTEXT_CHARS = 10000;
 const MAX_RESULTS_PER_FILE = 2;
+
+// ============================================================
+// 🔥 SCALABILITY GUARDS
+// ============================================================
+
+const MAX_RELATIONSHIP_RESULTS = 15;
+const MAX_CONTEXT_BUDGET = 16000;
+
+// ============================================================
+// 🔥 EMBEDDING CACHE
+// ============================================================
+
+const EMBEDDING_CACHE = new Map();
+const MAX_EMBEDDING_CACHE_SIZE = 250;
+
+function getCachedEmbedding(query) {
+  return EMBEDDING_CACHE.get(query);
+}
+
+function setCachedEmbedding(query, embedding) {
+
+  if (EMBEDDING_CACHE.size >= MAX_EMBEDDING_CACHE_SIZE) {
+
+    const firstKey =
+      EMBEDDING_CACHE.keys().next().value;
+
+    EMBEDDING_CACHE.delete(firstKey);
+  }
+
+  EMBEDDING_CACHE.set(query, embedding);
+}
 
 // ============================================================
 // 🔧 QUERY NORMALIZATION
@@ -178,7 +209,7 @@ function determineQueryProfile(query = "") {
   return {
     type: "direct",
     topK: BASE_TOP_K,
-    matchCount: 12,
+    matchCount: 8,
     similarityThreshold: BASE_SIMILARITY_THRESHOLD,
     contextBudget: BASE_CONTEXT_CHARS
   };
@@ -287,21 +318,6 @@ function calculateRetrievalPressure(results = []) {
     pressure,
     highPressure: pressure >= 12
   };
-}
-
-function calculateAdaptiveFileCap(
-  retrievalPressure,
-  baseCap = MAX_RESULTS_PER_FILE
-) {
-
-  if (!retrievalPressure.highPressure) {
-    return baseCap;
-  }
-
-  return Math.min(
-    baseCap + 1,
-    3
-  );
 }
 
 // ============================================================
@@ -465,16 +481,19 @@ function calculateSemanticOverlap(a = "", b = "") {
 
 function buildSemanticNeighborhoods(results = []) {
 
+  const limitedResults =
+    results.slice(0, MAX_RELATIONSHIP_RESULTS);
+
   return results.map((result, idx) => {
 
     let neighborhoodStrength = 0;
     let relationshipCount = 0;
 
-    for (let i = 0; i < results.length; i++) {
+    for (let i = 0; i < limitedResults.length; i++) {
 
       if (i === idx) continue;
 
-      const other = results[i];
+      const other = limitedResults[i];
 
       const overlap =
         calculateSemanticOverlap(
@@ -626,19 +645,34 @@ export default fp(async function retrieveRoute(fastify, opts) {
               !STOPWORDS.has(term)
           );
 
-        const embedRes =
-          await fastify.openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: normalizedQuery,
-          });
+        // ======================================================
+        // 🔥 EMBEDDING CACHE
+        // ======================================================
 
-        const embedding =
-          embedRes.data?.[0]?.embedding;
+        let embedding =
+          getCachedEmbedding(normalizedQuery);
 
         if (!embedding) {
-          return reply.code(500).send({
-            error: "Failed to generate embedding."
-          });
+
+          const embedRes =
+            await fastify.openai.embeddings.create({
+              model: "text-embedding-3-small",
+              input: normalizedQuery,
+            });
+
+          embedding =
+            embedRes.data?.[0]?.embedding;
+
+          if (!embedding) {
+            return reply.code(500).send({
+              error: "Failed to generate embedding."
+            });
+          }
+
+          setCachedEmbedding(
+            normalizedQuery,
+            embedding
+          );
         }
 
         const { data, error } =
@@ -672,10 +706,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
               .replace(/\s+/g, " ")
               .trim();
 
-          // ==================================================
-          // 🔥 FULL FILENAME CONTINUITY FIX
-          // ==================================================
-
           const extractedFilename =
             row.filename ||
             row.chunk_text.match(
@@ -703,6 +733,16 @@ export default fp(async function retrieveRoute(fastify, opts) {
               r.similarity >=
               retrievalProfile.similarityThreshold
           );
+
+        // ======================================================
+        // 🔥 EARLY EMPTY EXIT
+        // ======================================================
+
+        if (!formatted.length) {
+          return reply.send({
+            results: []
+          });
+        }
 
         const seen = new Set();
 
@@ -797,10 +837,9 @@ export default fp(async function retrieveRoute(fastify, opts) {
             b.finalScore - a.finalScore
         );
 
-        const adaptiveFileCap =
-          calculateAdaptiveFileCap(
-            retrievalPressure
-          );
+        // ======================================================
+        // 🔥 STATIC FILE CAP
+        // ======================================================
 
         const fileCounts = {};
 
@@ -813,13 +852,20 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
           return (
             fileCounts[key] <=
-            adaptiveFileCap
+            MAX_RESULTS_PER_FILE
           );
         });
 
+        // ======================================================
+        // 🔥 HARD CONTEXT CEILING
+        // ======================================================
+
         const adaptiveContextBudget =
           retrievalPressure.highPressure
-            ? retrievalProfile.contextBudget + 4000
+            ? Math.min(
+                retrievalProfile.contextBudget + 2000,
+                MAX_CONTEXT_BUDGET
+              )
             : retrievalProfile.contextBudget;
 
         formatted =
@@ -850,7 +896,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
           highPressure:
             retrievalPressure.highPressure,
           adaptiveTopK,
-          adaptiveFileCap,
           matchCount: formatted.length,
           ragUsed: formatted.length > 0
         });

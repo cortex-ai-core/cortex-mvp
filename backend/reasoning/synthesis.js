@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — FINAL ANSWER SYNTHESIS ENGINE
-//  v1.8.6 — EXECUTIVE CONTINUITY HARDENING
+//  v1.8.7 — EXECUTIVE CADENCE HARDENING
 // ============================================================
 
 export async function synthesizeFinalAnswer({
@@ -439,6 +439,9 @@ Respond with:
 - operational sufficiency
 - grounded reasoning
 
+Executive audiences prefer concise, direct, and confident communication.
+Favor implication density over exhaustive coverage.
+
 Preserve:
 - generalized intelligence
 - evidence discipline
@@ -470,6 +473,8 @@ STRUCTURE RULES:
 - preserve strategic and operational hierarchy
 - favor implication-rich synthesis
 - preserve deliverable continuity
+- prefer decisive executive conclusions over methodological explanation
+- avoid fully expanding every supported dimension unless operationally necessary
 `;
 
   const entityRules = primaryEntity
