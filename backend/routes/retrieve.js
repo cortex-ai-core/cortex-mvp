@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.8 PHASE 5.1
-//  ADAPTIVE RETRIEVAL EXPANSION STABILIZATION
+//  v1.8.8
+//  ECOSYSTEM FILENAME CONTINUITY STABILIZATION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -210,6 +210,23 @@ function contentFingerprint(text = "") {
   return `${start}|${middle}|${end}`;
 }
 
+function generateSyntheticEcosystemId(text = "") {
+
+  const fingerprint =
+    contentFingerprint(text);
+
+  const hash =
+    fingerprint
+      .split("")
+      .reduce(
+        (acc, char) =>
+          acc + char.charCodeAt(0),
+        0
+      );
+
+  return `ecosystem_${Math.abs(hash)}`;
+}
+
 function countTermMatches(content = "", terms = []) {
 
   const lower = content.toLowerCase();
@@ -282,10 +299,14 @@ function calculateAdaptiveFileCap(
   }
 
   return Math.min(
-    baseCap + 2,
-    4
+    baseCap + 1,
+    3
   );
 }
+
+// ============================================================
+// 🔥 ECOSYSTEM SURVIVABILITY
+// ============================================================
 
 function applyEcosystemContextAllocation(
   results = [],
@@ -325,10 +346,50 @@ function applyEcosystemContextAllocation(
       });
 
   const surviving = [];
-  let totalChars = 0;
-  let round = 0;
+  const includedFingerprints = new Set();
 
-  while (true) {
+  let totalChars = 0;
+
+  // ==========================================================
+  // 🔥 PASS 1 — DIVERSITY FLOOR
+  // ==========================================================
+
+  for (const ecosystem of sortedEcosystems) {
+
+    const candidate = ecosystem[0];
+
+    if (!candidate) continue;
+
+    const fingerprint =
+      contentFingerprint(candidate.content);
+
+    if (includedFingerprints.has(fingerprint)) {
+      continue;
+    }
+
+    if (
+      totalChars + candidate.content.length >
+      contextBudget
+    ) {
+      continue;
+    }
+
+    surviving.push(candidate);
+
+    includedFingerprints.add(fingerprint);
+
+    totalChars += candidate.content.length;
+  }
+
+  // ==========================================================
+  // 🔥 PASS 2 — CONTROLLED SATURATION EXPANSION
+  // ==========================================================
+
+  const MAX_ROUNDS = 2;
+
+  let round = 1;
+
+  while (round <= MAX_ROUNDS) {
 
     let addedThisRound = false;
 
@@ -339,6 +400,13 @@ function applyEcosystemContextAllocation(
       const candidate =
         ecosystem[round];
 
+      const fingerprint =
+        contentFingerprint(candidate.content);
+
+      if (includedFingerprints.has(fingerprint)) {
+        continue;
+      }
+
       if (
         totalChars + candidate.content.length >
         contextBudget
@@ -348,8 +416,9 @@ function applyEcosystemContextAllocation(
 
       surviving.push(candidate);
 
-      totalChars +=
-        candidate.content.length;
+      includedFingerprints.add(fingerprint);
+
+      totalChars += candidate.content.length;
 
       addedThisRound = true;
     }
@@ -454,14 +523,14 @@ function applyRelationshipAwareScoring(results = []) {
       Math.sqrt(neighborhoodRatio);
 
     const relationshipBoost =
-      saturationCurve * 0.08;
+      saturationCurve * 0.04;
 
     const continuityBoost =
       Math.min(
         Math.log1p(
           result.relationshipCount || 0
-        ) * 0.018,
-        0.045
+        ) * 0.012,
+        0.03
       );
 
     const confidenceGapPenalty =
@@ -520,19 +589,11 @@ export default fp(async function retrieveRoute(fastify, opts) {
           namespace: req.user?.namespace
         };
 
-        // -----------------------------------------------------
-        // 🔐 PERMISSION CHECK
-        // -----------------------------------------------------
-
         if (!hasPermission(identity, "chat")) {
           return reply.code(403).send({
             error: "Forbidden: No permission to retrieve data"
           });
         }
-
-        // -----------------------------------------------------
-        // 🔐 NAMESPACE ENFORCEMENT
-        // -----------------------------------------------------
 
         if (namespace !== identity.namespace) {
           return reply.code(403).send({
@@ -554,10 +615,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
           process.env.SUPABASE_SERVICE_KEY
         );
 
-        // -----------------------------------------------------
-        // 🔧 NORMALIZED QUERY
-        // -----------------------------------------------------
-
         const normalizedQuery =
           normalizeRetrievalQuery(query);
 
@@ -568,10 +625,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
               term.length > 3 &&
               !STOPWORDS.has(term)
           );
-
-        // -----------------------------------------------------
-        // 1️⃣ EMBEDDING
-        // -----------------------------------------------------
 
         const embedRes =
           await fastify.openai.embeddings.create({
@@ -587,10 +640,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
             error: "Failed to generate embedding."
           });
         }
-
-        // -----------------------------------------------------
-        // 2️⃣ VECTOR SEARCH
-        // -----------------------------------------------------
 
         const { data, error } =
           await supabase.rpc("match_documents", {
@@ -612,30 +661,38 @@ export default fp(async function retrieveRoute(fastify, opts) {
           });
         }
 
-        // -----------------------------------------------------
-        // 🧠 FORMAT
-        // -----------------------------------------------------
+        // ======================================================
+        // 🧠 FORMAT + ECOSYSTEM IDENTITY STABILIZATION
+        // ======================================================
 
-        let formatted = (data || []).map((row) => ({
+        let formatted = (data || []).map((row) => {
 
-          content: (row.chunk_text || "")
-            .replace(/\s+/g, " ")
-            .trim(),
+          const content =
+            (row.chunk_text || "")
+              .replace(/\s+/g, " ")
+              .trim();
 
-          similarity: row.similarity,
+          // ==================================================
+          // 🔥 FULL FILENAME CONTINUITY FIX
+          // ==================================================
 
-          filename:
+          const extractedFilename =
             row.filename ||
-            (
-              row.chunk_text.match(
-                /SOURCE FILE:\s*(.+)/i
-              )?.[1] || "unknown"
-            )
-        }));
+            row.chunk_text.match(
+              /SOURCE FILE:\s*([^\n\r]+)/i
+            )?.[1]?.trim();
 
-        // -----------------------------------------------------
-        // 🔥 CLEANING PIPELINE
-        // -----------------------------------------------------
+          return {
+
+            content,
+
+            similarity: row.similarity,
+
+            filename:
+              extractedFilename ||
+              generateSyntheticEcosystemId(content)
+          };
+        });
 
         formatted =
           formatted.filter(r => r.content);
@@ -663,14 +720,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
           return true;
         });
 
-        // -----------------------------------------------------
-        // 🔥 SIGNAL SCORING
-        // -----------------------------------------------------
-
         formatted = formatted.map(r => {
-
-          const filename =
-            r.filename.toLowerCase();
 
           const content =
             r.content.toLowerCase();
@@ -679,10 +729,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
           let coverageBoost = 0;
 
           for (const term of queryTerms) {
-
-            if (filename.includes(term)) {
-              keywordBoost += 0.15;
-            }
 
             if (content.includes(term)) {
               keywordBoost += 0.03;
@@ -705,7 +751,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
             calculateSemanticDensity(content);
 
           const densityBoost =
-            semanticDensity * 0.08;
+            semanticDensity * 0.03;
 
           const confidenceScore =
             (
@@ -723,10 +769,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
           };
         });
 
-        // -----------------------------------------------------
-        // 🔥 FILE OCCURRENCE MODEL
-        // -----------------------------------------------------
-
         const fileOccurrenceMap = {};
 
         for (const item of formatted) {
@@ -741,35 +783,19 @@ export default fp(async function retrieveRoute(fastify, opts) {
             fileOccurrenceMap[item.filename] || 1
         }));
 
-        // -----------------------------------------------------
-        // 🔥 RELATIONSHIP-AWARE SEMANTIC ORCHESTRATION
-        // -----------------------------------------------------
-
         formatted =
           buildSemanticNeighborhoods(formatted);
 
         formatted =
           applyRelationshipAwareScoring(formatted);
 
-        // -----------------------------------------------------
-        // 🔥 RETRIEVAL PRESSURE DETECTION
-        // -----------------------------------------------------
-
         const retrievalPressure =
           calculateRetrievalPressure(formatted);
-
-        // -----------------------------------------------------
-        // 🔥 SORT
-        // -----------------------------------------------------
 
         formatted.sort(
           (a, b) =>
             b.finalScore - a.finalScore
         );
-
-        // -----------------------------------------------------
-        // 🔥 ADAPTIVE FILE SURVIVABILITY
-        // -----------------------------------------------------
 
         const adaptiveFileCap =
           calculateAdaptiveFileCap(
@@ -791,25 +817,6 @@ export default fp(async function retrieveRoute(fastify, opts) {
           );
         });
 
-        // -----------------------------------------------------
-        // 🔥 ADAPTIVE TOP-K EXPANSION
-        // -----------------------------------------------------
-
-        const adaptiveTopK =
-          retrievalPressure.highPressure
-            ? retrievalProfile.topK + 4
-            : retrievalProfile.topK;
-
-        formatted =
-          formatted.slice(
-            0,
-            adaptiveTopK
-          );
-
-        // -----------------------------------------------------
-        // 🔥 ECOSYSTEM CONTEXT SURVIVABILITY
-        // -----------------------------------------------------
-
         const adaptiveContextBudget =
           retrievalPressure.highPressure
             ? retrievalProfile.contextBudget + 4000
@@ -821,9 +828,16 @@ export default fp(async function retrieveRoute(fastify, opts) {
             adaptiveContextBudget
           );
 
-        // -----------------------------------------------------
-        // 📊 LOGGING
-        // -----------------------------------------------------
+        const adaptiveTopK =
+          retrievalPressure.highPressure
+            ? retrievalProfile.topK + 4
+            : retrievalProfile.topK;
+
+        formatted =
+          formatted.slice(
+            0,
+            adaptiveTopK
+          );
 
         fastify.log.info({
           route: "/api/retrieve",
