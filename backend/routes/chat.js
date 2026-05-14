@@ -1,6 +1,6 @@
 // ============================================================
 //  CORTÉX — CHAT ENGINE
-//  v1.8.6 GENERALIZED RETRIEVAL ARBITRATION HARDENING
+//  v1.8.7 SURVIVABILITY ORCHESTRATION HARDENING
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -22,7 +22,8 @@ import { resolveToneForNamespace } from "../identity/toneRouter.js";
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
 const MAX_EPHEMERAL_CONTEXT = 18000;
-const TIMEOUT_MS = 30000;
+const MAX_RAG_CONTEXT = 22000;
+const TIMEOUT_MS = 45000;
 const RATE_LIMIT = 20;
 
 const userBuckets = new Map();
@@ -37,6 +38,18 @@ function trimEphemeralContext(context = "") {
   }
 
   return context.slice(0, MAX_EPHEMERAL_CONTEXT);
+}
+
+// ----------------------------------------------------
+function trimRagContext(context = "") {
+
+  if (!context) return "";
+
+  if (context.length <= MAX_RAG_CONTEXT) {
+    return context;
+  }
+
+  return context.slice(0, MAX_RAG_CONTEXT);
 }
 
 // ----------------------------------------------------
@@ -147,7 +160,9 @@ function resolveUserMessageEntity(input = "") {
 
   const match =
     String(input || "")
-      .match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/);
+      .match(
+        /\b[A-Z][a-zA-Z'’-]+ [A-Z][a-zA-Z'’-]+\b/
+      );
 
   if (match && match[0]) {
     return match[0].trim();
@@ -221,7 +236,7 @@ function resolveFullNameFromContextByToken(
 }
 
 // ----------------------------------------------------
-// 🔥 v1.8.6 GENERALIZED RETRIEVAL ARBITRATION
+// 🔥 v1.8.7 GENERALIZED RETRIEVAL ARBITRATION
 // ----------------------------------------------------
 function determineRetrievalPriority({
   intent = "",
@@ -287,7 +302,10 @@ function determineRetrievalPriority({
   // ------------------------------------------------
 
   if (hasEphemeralContext) {
-    return "NONE";
+
+    return evidenceDependency
+      ? "LOW"
+      : "NONE";
   }
 
   // ------------------------------------------------
@@ -473,7 +491,8 @@ export default fp(async function chatRoute(fastify) {
             boundedEphemeralContext;
 
         } else if (
-          hasEphemeralContext
+          hasEphemeralContext &&
+          retrievalPriority === "NONE"
         ) {
 
           ragContext =
@@ -481,7 +500,8 @@ export default fp(async function chatRoute(fastify) {
 
         } else if (
           retrievalPriority === "HIGH" ||
-          retrievalPriority === "MEDIUM"
+          retrievalPriority === "MEDIUM" ||
+          retrievalPriority === "LOW"
         ) {
 
           const retrievalQuery =
@@ -515,11 +535,52 @@ export default fp(async function chatRoute(fastify) {
               ? parsed.results
               : [];
 
-          ragContext =
-            results
+          const safeResults =
+            results.filter(
+              r =>
+                r &&
+                r.content &&
+                r.content.trim()
+            );
+
+          if (
+            safeResults.length === 1 &&
+            retrievalPriority === "HIGH"
+          ) {
+
+            fastify.log.warn({
+              route: "/api/chat",
+              warning:
+                "single ecosystem survivability",
+              namespace,
+              retrievalPriority
+            });
+          }
+
+          const retrievalContext =
+            safeResults
               .map(r => r.content)
               .join("\n\n");
+
+          if (
+            hasEphemeralContext &&
+            boundedEphemeralContext
+          ) {
+
+            ragContext =
+              `${boundedEphemeralContext}\n\n${retrievalContext}`;
+
+          } else {
+
+            ragContext =
+              retrievalContext;
+          }
         }
+
+        ragContext =
+          trimRagContext(
+            ragContext
+          );
 
         // ------------------------------------------------
         // ENTITY RESOLUTION
@@ -610,6 +671,12 @@ export default fp(async function chatRoute(fastify) {
           userId,
           namespace,
           retrievalPriority,
+          retrievedChunks:
+            ragContext
+              ? ragContext
+                  .split("\n\n")
+                  .length
+              : 0,
           inputLength:
             message.length,
           contextLength:

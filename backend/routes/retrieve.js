@@ -1,7 +1,7 @@
 // ============================================================
 //  CORTÉX — RAG RETRIEVE ROUTE
-//  v1.8.9
-//  SCALABILITY + SURVIVABILITY HARDENING
+//  v1.8.10
+//  CONTROLLED SURVIVABILITY EXPANSION
 // ============================================================
 
 import fp from "fastify-plugin";
@@ -68,7 +68,7 @@ function hasPermission(identity, action) {
 const BASE_SIMILARITY_THRESHOLD = 0.22;
 const BASE_TOP_K = 6;
 const BASE_CONTEXT_CHARS = 10000;
-const MAX_RESULTS_PER_FILE = 2;
+const MAX_RESULTS_PER_FILE = 3;
 
 // ============================================================
 // 🔥 SCALABILITY GUARDS
@@ -401,7 +401,7 @@ function applyEcosystemContextAllocation(
   // 🔥 PASS 2 — CONTROLLED SATURATION EXPANSION
   // ==========================================================
 
-  const MAX_ROUNDS = 2;
+  const MAX_ROUNDS = 3;
 
   let round = 1;
 
@@ -557,7 +557,7 @@ function applyRelationshipAwareScoring(results = []) {
         neighborhoodRatio < 0.18 &&
         result.boostedScore < 0.46
       )
-        ? 0.05
+        ? 0.025
         : 0;
 
     const filePressurePenalty =
