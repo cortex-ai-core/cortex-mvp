@@ -13,8 +13,7 @@ async function authHandler(req, reply) {
   try {
     const header = req.headers["authorization"];
 
-    if (!header) {
-      console.log("❌ NO AUTH HEADER");
+    if (!header?.startsWith("Bearer ")) {
       return reply.code(401).send({ error: "Missing authorization header." });
     }
 
@@ -28,13 +27,7 @@ async function authHandler(req, reply) {
       return reply.code(500).send({ error: "Server misconfigured." });
     }
 
-    // 🔍 DEBUG LOGS
-    console.log("TOKEN RECEIVED:", token);
-    console.log("JWT SECRET USED:", jwtSecret);
-
     const decoded = jwt.verify(token, jwtSecret);
-
-    console.log("✅ TOKEN VERIFIED:", decoded);
 
     // 🔥 CRITICAL — ATTACH USER TO REQUEST
     req.user = decoded;

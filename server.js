@@ -5,11 +5,9 @@
 import dotenv from "dotenv";
 dotenv.config({ path: "./.env" });
 
-console.log("ENV JWT_SECRET:", process.env.JWT_SECRET);
-
 // 🔥 NEW — ENV DEBUG (NO DRIFT)
 console.log("ENV CHECK:", {
-  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_SECRET: process.env.JWT_SECRET ? "SET" : "MISSING",
   SUPABASE_URL: process.env.SUPABASE_URL,
   HAS_SUPABASE: !!process.env.SUPABASE_URL,
   OPENAI_KEY: process.env.OPENAI_API_KEY ? "SET" : "MISSING"
@@ -21,6 +19,7 @@ import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 
 import authPlugin from "./backend/lib/authMiddleware.js";
 
@@ -97,7 +96,7 @@ for (const file of fs.readdirSync(routesDir)) {
   console.log(`📡 Loading route: ${file}`);
 
   const routePath = path.join(routesDir, file);
-  const module = await import(routePath);
+  const module = await import(pathToFileURL(routePath).href);
 
   if (typeof module.default === "function") {
     await fastify.register(module.default);
