@@ -13,8 +13,7 @@ async function authHandler(req, reply) {
   try {
     const header = req.headers["authorization"];
 
-    if (!header) {
-      console.log("❌ NO AUTH HEADER");
+    if (!header?.startsWith("Bearer ")) {
       return reply.code(401).send({ error: "Missing authorization header." });
     }
 

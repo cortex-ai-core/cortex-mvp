@@ -1,151 +1,99 @@
-// =============================================================
-//  CORTÉX — AUTH ROUTES (SOVEREIGN LOGIN)
-// =============================================================
-
 import jwt from "jsonwebtoken";
+import { createClient } from "@supabase/supabase-js";
 
-const JWT_SECRET = process.env.JWT_SECRET;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+const requiredEnv = (name) => {
+  const value = process.env[name]?.trim();
+  if (!value) throw new Error(`${name} is not defined.`);
+  return value;
+};
 
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not defined.");
-}
+const slug = (value) => typeof value === "string" ? value.trim().toLowerCase() : "";
 
-if (!ADMIN_PASSWORD) {
-  throw new Error("ADMIN_PASSWORD is not defined.");
-}
-
-// -------------------------------------------------------------
-// 🔐 LOGIN ROUTE
-// -------------------------------------------------------------
 export default async function authRoutes(fastify) {
+  const anonKey = process.env.SUPABASE_ANON_KEY?.trim() ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!anonKey) throw new Error("SUPABASE_ANON_KEY is not defined.");
 
-  fastify.post("/api/auth/login", async (req, reply) => {
-    try {
-      const { username, password } = req.body;
-
-      // 🔥 ONE PASSWORD FOR ALL (SECURE)
-      if (password !== ADMIN_PASSWORD) {
-        return reply.code(401).send({
-          error: "Invalid credentials"
-        });
-      }
-
-      // ======================================================
-      // 👑 CORE (YOU — SUPER ADMIN)
-      // ======================================================
-      if (username === "chan") {
-        return {
-          token: jwt.sign(
-            {
-              userId: "chan",
-              role: "super_admin",
-              namespace: "core"
-            },
-            JWT_SECRET,
-            { expiresIn: "7d" }
-          )
-        };
-      }
-
-      // ======================================================
-      // 🌴 HAWAII (CLIENT PILOT)
-      // ======================================================
-      if (username === "hawaii") {
-        return {
-          token: jwt.sign(
-            {
-              userId: "hawaii_user",
-              role: "super_admin",
-              namespace: "hawaii"
-            },
-            JWT_SECRET,
-            { expiresIn: "7d" }
-          )
-        };
-      }
-
-      // ======================================================
-      // 🧠 ADVISORY (INTERNAL)
-      // ======================================================
-      if (username === "advisory") {
-        return {
-          token: jwt.sign(
-            {
-              userId: "advisory_user",
-              role: "super_admin",
-              namespace: "advisory"
-            },
-            JWT_SECRET,
-            { expiresIn: "7d" }
-          )
-        };
-      }
-
-      // ======================================================
-      // 🎯 RECRUITING (INTERNAL)
-      // ======================================================
-      if (username === "recruiting") {
-        return {
-          token: jwt.sign(
-            {
-              userId: "recruiting_user",
-              role: "super_admin",
-              namespace: "recruiting"
-            },
-            JWT_SECRET,
-            { expiresIn: "7d" }
-          )
-        };
-      }
-
-      // ======================================================
-      // 🔐 CYBERSECURITY (INTERNAL)
-      // ======================================================
-      if (username === "cyber") {
-        return {
-          token: jwt.sign(
-            {
-              userId: "cyber_user",
-              role: "super_admin",
-              namespace: "cybersecurity"
-            },
-            JWT_SECRET,
-            { expiresIn: "7d" }
-          )
-        };
-      }
-
-      // ======================================================
-      // 📊 DATA MANAGEMENT (INTERNAL)
-      // ======================================================
-      if (username === "data") {
-        return {
-          token: jwt.sign(
-            {
-              userId: "data_user",
-              role: "super_admin",
-              namespace: "datamanagement"
-            },
-            JWT_SECRET,
-            { expiresIn: "7d" }
-          )
-        };
-      }
-
-      // ======================================================
-      // ❌ INVALID USERNAME
-      // ======================================================
-      return reply.code(401).send({
-        error: "Invalid credentials"
-      });
-
-    } catch (err) {
-      fastify.log.error(err);
-      return reply.code(500).send({
-        error: "Login failed"
-      });
-    }
+  const auth = createClient(requiredEnv("SUPABASE_URL"), anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 
+  // POST /api/auth/login
+  // Authenticates an email/password with Supabase Auth, loads the matching
+  // application role, organization, and namespace memberships, then issues
+  // the Cortéx JWT consumed by the frontend and protected API routes.
+  fastify.post("/api/auth/login", async (req, reply) => {
+    const body = req.body || {};
+    const email = slug(body.email || body.username);
+    const password = typeof body.password === "string" ? body.password : "";
+    if (!email || !password) {
+      return reply.code(400).send({ error: "Email and password are required." });
+    }
+
+    try {
+      const { data, error } = await auth.auth.signInWithPassword({ email, password });
+      if (error || !data.user) {
+        return reply.code(401).send({ error: "Invalid credentials." });
+      }
+
+      const { data: profile, error: profileError } = await fastify.supabase
+        .from("user")
+        .select(`
+          id, auth_user_id, email, active,
+          role:role_id(id,name),
+          organization:organization_id(id,name)
+        `)
+        .eq("auth_user_id", data.user.id)
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile?.active || !profile.role || !profile.organization) {
+        return reply.code(403).send({ error: "Account is not authorized for Cortéx." });
+      }
+
+      const { data: memberships, error: membershipError } = await fastify.supabase
+        .from("namespace_users")
+        .select("namespace:namespace_id(id,name,organization_id)")
+        .eq("user_id", profile.id)
+        .order("created_at", { ascending: true });
+      if (membershipError) throw membershipError;
+
+      const namespaceRecords = (memberships || [])
+        .map((membership) => membership.namespace)
+        .filter((item) => item?.organization_id === profile.organization.id);
+      const namespaceNames = namespaceRecords.map((item) => slug(item.name));
+      const namespaceIds = namespaceRecords.map((item) => item.id);
+      if (!namespaceNames.length) {
+        return reply.code(403).send({ error: "Account has no authorized namespace." });
+      }
+
+      const selectedNamespace = slug(body.namespace) || namespaceNames[0];
+      if (!namespaceNames.includes(selectedNamespace)) {
+        return reply.code(403).send({ error: "Namespace access denied." });
+      }
+
+      const organizations = [{
+        id: profile.organization.id,
+        name: profile.organization.name,
+        namespaces: namespaceRecords.map(({ id, name }) => ({ id, name })),
+      }];
+      const claims = {
+        userId: profile.id,
+        email: profile.email,
+        role: profile.role.name,
+        organization: profile.organization.name,
+        organizationId: profile.organization.id,
+        namespace: selectedNamespace,
+        namespaces: namespaceIds,
+        organizations,
+      };
+
+      return {
+        token: jwt.sign(claims, requiredEnv("JWT_SECRET"), { expiresIn: "7d" }),
+        user: { ...claims, namespaceNames },
+      };
+    } catch (err) {
+      req.log.error({ err }, "Login failed");
+      return reply.code(500).send({ error: "Login failed." });
+    }
+  });
 }

@@ -5,11 +5,9 @@
 // Must be the first import: loads .env (or .env.production) before any other module reads process.env
 import "./backend/lib/env.js";
 
-console.log("ENV JWT_SECRET:", process.env.JWT_SECRET);
-
 // 🔥 NEW — ENV DEBUG (NO DRIFT)
 console.log("ENV CHECK:", {
-  JWT_SECRET: process.env.JWT_SECRET,
+  JWT_SECRET: process.env.JWT_SECRET ? "SET" : "MISSING",
   SUPABASE_URL: process.env.SUPABASE_URL,
   HAS_SUPABASE: !!process.env.SUPABASE_URL,
   OPENAI_KEY: process.env.OPENAI_API_KEY ? "SET" : "MISSING"
@@ -107,7 +105,8 @@ const allowedRoutes = new Set([
   "document.js",
   "documentTypes.js",
   "ingest.js",
-  "retrieve.js" 
+  "retrieve.js",
+  "settings.js"
 ]);
 
 for (const file of fs.readdirSync(routesDir)) {
