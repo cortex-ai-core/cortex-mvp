@@ -107,14 +107,16 @@ function cleanStructuralNoise(text = "") {
 // ------------------------------------------------------------
 // 🔥 Light Compression
 //
-// Only removes obvious duplicate adjacent lines.
-// Does NOT reinterpret reasoning.
+// Only removes obvious duplicate ADJACENT lines (a model stutter).
+// A line that legitimately repeats later in the answer, such as
+// "Any approved course (3)" under two different requirements,
+// is kept. Does NOT reinterpret reasoning.
 // ------------------------------------------------------------
 function removeDuplicateLines(text = "") {
   const lines = text.split("\n");
 
   const cleaned = [];
-  const seen = new Set();
+  let previous = null;
 
   for (const line of lines) {
     const normalized =
@@ -123,15 +125,15 @@ function removeDuplicateLines(text = "") {
     // preserve empty spacing
     if (!normalized) {
       cleaned.push(line);
+      previous = null;
       continue;
     }
 
-    // skip obvious duplicates
-    if (seen.has(normalized)) {
+    if (normalized === previous) {
       continue;
     }
 
-    seen.add(normalized);
+    previous = normalized;
     cleaned.push(line);
   }
 
@@ -139,28 +141,13 @@ function removeDuplicateLines(text = "") {
 }
 
 // ------------------------------------------------------------
-// 🔥 Minimal Operational Compression
+// (removed) lightlyCompress
 //
-// Used ONLY when synthesis returns large
-// unstructured blobs.
-//
-// DOES NOT rebuild structure.
+// Previously cut any answer lacking a recognised section header
+// to its first ten "sentences". Numbered lists split at every
+// "9." so long, well-structured answers were truncated mid-list.
+// The model's length is governed by the prompt, not by this file.
 // ------------------------------------------------------------
-function lightlyCompress(text = "") {
-  const sentences = text
-    .split(/(?<=[.!?])\s+/)
-    .filter(Boolean);
-
-  // preserve concise outputs
-  if (sentences.length <= 10) {
-    return text;
-  }
-
-  return sentences
-    .slice(0, 10)
-    .join(" ")
-    .trim();
-}
 
 // ============================================================
 // 🔥 MAIN FORMATTER
@@ -211,19 +198,7 @@ export function formatOutput(
   text = removeDuplicateLines(text);
 
   // ----------------------------------------------------------
-  // Preserve already-structured outputs
-  // ----------------------------------------------------------
-  if (hasExistingStructure(text)) {
-    return text;
-  }
-
-  // ----------------------------------------------------------
-  // Light compression ONLY if needed
-  // ----------------------------------------------------------
-  text = lightlyCompress(text);
-
-  // ----------------------------------------------------------
-  // Preserve synthesis intelligence
+  // Preserve synthesis intelligence: no length-based trimming.
   // ----------------------------------------------------------
   return text;
 }

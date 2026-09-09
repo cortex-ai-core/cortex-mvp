@@ -28,13 +28,7 @@ async function authHandler(req, reply) {
       return reply.code(500).send({ error: "Server misconfigured." });
     }
 
-    // 🔍 DEBUG LOGS
-    console.log("TOKEN RECEIVED:", token);
-    console.log("JWT SECRET USED:", jwtSecret);
-
     const decoded = jwt.verify(token, jwtSecret);
-
-    console.log("✅ TOKEN VERIFIED:", decoded);
 
     // 🔥 CRITICAL — ATTACH USER TO REQUEST
     req.user = decoded;

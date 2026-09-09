@@ -11,6 +11,7 @@ export async function synthesizeFinalAnswer({
   contextWindow = "",
   model,
   identityContext = null,
+  onToken = null,
 }) {
 
   // ============================================================
@@ -531,6 +532,15 @@ ${evidenceText}
 REASONING NOTES:
 - ${reasoningNotes}
 
+CITATIONS:
+- The CONTEXT WINDOW lists sources as numbered blocks like "[3] File — page 4 — Section".
+- End every sentence that draws on a source with its number in square brackets, e.g. "... 13 credits [3]."
+- Cite sparingly: at most two numbers per sentence, choosing the source that most directly supports the fact. When several consecutive sentences draw on the same source, cite it once at the end of that passage rather than after each sentence.
+- For overviews and summaries, cite once per bullet or paragraph, at its end, with the one or two sources that best cover it. Do not cite every sentence.
+- Use only numbers that appear in the CONTEXT WINDOW. Never invent a number. Do not add a references list.
+- If the context has no numbered blocks, do not add citations.
+- If the sources do not answer the question, say so plainly ("The documents don't cover this.") and stop. Never answer from outside knowledge, even for well-known facts.
+
 TASK:
 Return a concise, evidence-grounded executive response.
 
@@ -554,19 +564,35 @@ Do NOT reference system structure.
   // ============================================================
   // 🔥 OPENAI RESPONSE
   // ============================================================
+  const messages = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userPrompt },
+  ];
+
+  // Streaming: when the caller passes onToken, deltas are forwarded as they
+  // arrive and the full text is still returned for formatting + citations.
+  if (typeof onToken === "function") {
+    const stream = await model.chat.completions.create({
+      model: "gpt-5.1",
+      messages,
+      temperature: 0.08,
+      stream: true,
+    });
+    let text = "";
+    for await (const part of stream) {
+      const delta = part.choices?.[0]?.delta?.content;
+      if (delta) {
+        text += delta;
+        onToken(delta);
+      }
+    }
+    return text.trim() || "I need more information.";
+  }
+
   const completion =
     await model.chat.completions.create({
       model: "gpt-5.1",
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: userPrompt,
-        },
-      ],
+      messages,
       temperature: 0.08,
     });
 

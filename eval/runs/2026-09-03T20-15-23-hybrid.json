@@ -1,0 +1,372 @@
+{
+  "summary": {
+    "mode": "hybrid",
+    "questions": 5,
+    "docRecallAtK": 1,
+    "allExpectedFound": 0.8,
+    "mrr": 1,
+    "pageRecallAtK": 0,
+    "mustInclude": 0.8,
+    "citationPrecision": 1,
+    "answersWithCitations": 1,
+    "abstainAccuracy": null,
+    "retrieveMs": {
+      "p50": 528,
+      "p95": 894
+    },
+    "chatMs": {
+      "p50": 2562,
+      "p95": 33824
+    }
+  },
+  "rows": [
+    {
+      "id": "lee-002",
+      "kind": "lookup",
+      "question": "What are the core education requirements for the AST Teacher Education degree, and how many credits are they?",
+      "retrieve": {
+        "ms": 894,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 13,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.637400199757678,
+            "score": 0.072658064516129
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.559265693730903,
+            "score": 0.0712861962461392
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.57864583163677,
+            "score": 0.07095037313432839
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 6,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.601699253837382,
+            "score": 0.07076576949620429
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 7,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.542188471135836,
+            "score": 0.06921426202321719
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": 0.642614384757855,
+            "score": 0.068421349599695
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "pageRecall": false,
+      "chat": {
+        "ms": 1770,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 430,
+        "citations": 1,
+        "answer": "The AST Teacher Education degree has a **Core Education Requirements block of 13 credits** [4]. It consists of:\n\n- **ED 277 – Introduction to Multicultural Education (3 credits)**\n- **ED 285 – Classroom Management in the Instructional Process (3 credits)**\n- **ED 290 – Foundations of Education (3 credits)**\n- **ED 291 – Developing Language and Literacy I (3 credits)**\n- **ED 295 – Field Experience"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-003",
+      "kind": "lookup",
+      "question": "Which courses can satisfy the FG global and multicultural perspectives requirement in the AST program?",
+      "retrieve": {
+        "ms": 528,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 17,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 29,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.406737902077654,
+            "score": 0.0488861962461392
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 15,
+            "section": "AST - Analysis of the Program/Unit",
+            "sim": 0.432157362619634,
+            "score": 0.0475716460100022
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 30,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.404918897249365,
+            "score": 0.0475138888888889
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 36,
+            "section": "AST Program Strengths and Weaknesses",
+            "sim": 0.41311117123322,
+            "score": 0.0472360221937687
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": 0.443272867411212,
+            "score": 0.0472139554434636
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.305166887970654,
+            "score": 0.00943396226415094
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 2562,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 601,
+        "citations": 2,
+        "answer": "The documents provided do not list which specific AST courses carry the FG (Global and Multicultural Perspectives) designation or how the FG requirement is satisfied within the AST degree plan. They reference AST degree requirements and several ED courses, but not their general education designations or FG alignment. [1][4]\n\nYou’ll need to consult one of the following local sources for an accurate"
+      },
+      "mustInclude": false,
+      "missing": [
+        "ANTH"
+      ],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-006",
+      "kind": "summary",
+      "question": "What is in the LEE_3311_Technical document?",
+      "retrieve": {
+        "ms": 358,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 24,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.473329464201711,
+            "score": 0.031099324975892
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 8,
+            "section": "CTE - Description",
+            "sim": 0.454773327018811,
+            "score": 0.0297619047619048
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 25,
+            "section": "Program Learning Outcomes",
+            "sim": 0.426362676269985,
+            "score": 0.026377688172043
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.370203078762243,
+            "score": 0.0241290322580645
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 52,
+            "section": "CTE - Alignment to the Strategic Plan",
+            "sim": 0.539503731179532,
+            "score": 0.0163934426229508
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 10,
+            "section": "The curriculum typically includes:",
+            "sim": 0.513507162449432,
+            "score": 0.0161290322580645
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 33824,
+        "status": 200,
+        "mode": "document",
+        "chars": 9630,
+        "citations": 39,
+        "answer": "The LEE_3311_Technical document is a 54‑page Comprehensive Review and Evaluation (CRE) of Leeward Community College’s Teacher Education Program (TEP) covering AY 2020–2025, with action plans and resource asks for 2025–2030. It functions as both an internal planning document and an external accountability artifact for UHCC, HTSB, and AAQEP. [1]\n\nAt a high level, it contains:\n\n1. **Program Overview "
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "intern-001",
+      "kind": "lookup",
+      "question": "What are the four stages of the SolluCIO Executive Internship development plan?",
+      "retrieve": {
+        "ms": 692,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.702682647343088,
+            "score": 0.049186885245901604
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.676550240186021,
+            "score": 0.0479136476426799
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.66622797992031,
+            "score": 0.0478980158730159
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.578088933574516,
+            "score": 0.046978898225957
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.634218564822259,
+            "score": 0.0469361305361305
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.613007572048308,
+            "score": 0.0462507462686567
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1639,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 227,
+        "citations": 1,
+        "answer": "The four stages of the SolluCIO Executive Internship development plan are:\n\n1. Observe\n2. Understand\n3. Contribute\n4. Own\n\nThese stages structure how responsibilities and autonomy increase over the course of the internship. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "cmp-001",
+      "kind": "comparison",
+      "question": "Compare the IT support backgrounds of Brad Shimomura and Ariel Wilson.",
+      "retrieve": {
+        "ms": 479,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.490328220161442,
+            "score": 0.06092247488101529
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.459040940564158,
+            "score": 0.06092247488101529
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.435987202113469,
+            "score": 0.0481460317460317
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.429012177378284,
+            "score": 0.0469503731343284
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.421139947647535,
+            "score": 0.0469361305361305
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.346346590283119,
+            "score": 0.0462573975044563
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": false,
+      "chat": {
+        "ms": 8159,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 3679,
+        "citations": 3,
+        "answer": "Brad and Ariel both have meaningful IT support experience, but with different depth, environments, and trajectories.\n\n**1. Nature of IT Support Experience**\n\n- **Brad Shimomura**\n  - Current hands-on IT Support Specialist in a K–12 school environment, directly supporting ~900 users across 5 buildings.[2]\n  - Manages and troubleshoots network devices (switches, access points, bridge devices) and en"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    }
+  ]
+}

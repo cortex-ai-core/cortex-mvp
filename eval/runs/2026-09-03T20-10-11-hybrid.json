@@ -1,0 +1,1946 @@
+{
+  "summary": {
+    "mode": "hybrid",
+    "questions": 28,
+    "docRecallAtK": 1,
+    "allExpectedFound": 1,
+    "mrr": 0.9333333333333332,
+    "pageRecallAtK": 0,
+    "mustInclude": 0.92,
+    "citationPrecision": 1,
+    "answersWithCitations": 0.96,
+    "abstainAccuracy": 1,
+    "retrieveMs": {
+      "p50": 452,
+      "p95": 873
+    },
+    "chatMs": {
+      "p50": 1343,
+      "p95": 7471
+    }
+  },
+  "rows": [
+    {
+      "id": "lee-001",
+      "kind": "lookup",
+      "question": "How many credits is the AST degree at Leeward Community College?",
+      "retrieve": {
+        "ms": 873,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.634763834304742,
+            "score": 0.04426645849596671
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.607944054367397,
+            "score": 0.044258064516129
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.575013255392661,
+            "score": 0.04325
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.515057001070778,
+            "score": 0.0403816425120773
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.443370857425484,
+            "score": 0.039271052146674
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": null,
+            "score": 0.010989010989011
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1471,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 112,
+        "citations": 2,
+        "answer": "The Associate in Science in Teaching (AST) degree at Leeward Community College requires 62 total credits. [2][4]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-002",
+      "kind": "lookup",
+      "question": "What are the core education requirements for the AST Teacher Education degree, and how many credits are they?",
+      "retrieve": {
+        "ms": 399,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 12,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.637400199757678,
+            "score": 0.060658064516129
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.559265693730903,
+            "score": 0.059286196246139206
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.57864583163677,
+            "score": 0.058950373134328396
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 6,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.601699253837382,
+            "score": 0.058765769496204295
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 7,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.542188471135836,
+            "score": 0.057214262023217194
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": null,
+            "score": 0.008
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "pageRecall": false,
+      "chat": {
+        "ms": 2843,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 928,
+        "citations": 2,
+        "answer": "The documents you provided do **not** list the specific “core education requirements” (i.e., the exact ED courses and general education courses) or their individual credit values for the AST degree. They only state that:\n\n- The **AST degree is 62 credits total**, consisting of a “rigorous core of pre-professional education and general education courses” plus a teaching portfolio aligned to Hawaiʻi"
+      },
+      "mustInclude": false,
+      "missing": [
+        "13"
+      ],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-003",
+      "kind": "lookup",
+      "question": "Which courses can satisfy the FG global and multicultural perspectives requirement in the AST program?",
+      "retrieve": {
+        "ms": 571,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 17,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 29,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.406737902077654,
+            "score": 0.0368861962461392
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 15,
+            "section": "AST - Analysis of the Program/Unit",
+            "sim": 0.432157362619634,
+            "score": 0.0355716460100022
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 30,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.404918897249365,
+            "score": 0.0355138888888889
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 36,
+            "section": "AST Program Strengths and Weaknesses",
+            "sim": 0.41311117123322,
+            "score": 0.0352360221937687
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": 0.443272867411212,
+            "score": 0.0352139554434636
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.305166887970654,
+            "score": 0.00943396226415094
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 2727,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 796,
+        "citations": 2,
+        "answer": "The documents you provided don’t list which specific AST courses carry the FG (Global and Multicultural Perspectives) designation or how the FG requirement is met within the AST degree plan. They reference ED 237 (Indigenous Perspectives in Teaching) and ED 277 (Introduction to Multicultural Education), but do not state that these are FG-designated courses or that they satisfy the FG requirement. "
+      },
+      "mustInclude": false,
+      "missing": [
+        "ANTH"
+      ],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-004",
+      "kind": "lookup",
+      "question": "What academic years does the Leeward Teacher Education Program comprehensive review cover?",
+      "retrieve": {
+        "ms": 269,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 9,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.680637499156165,
+            "score": 0.043544957774466
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.678964651005446,
+            "score": 0.041642545771578
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 29,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.671991620671688,
+            "score": 0.0380020481310804
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 31,
+            "section": "CTE - Curriculum Revision and Review (Fo",
+            "sim": 0.571617833263951,
+            "score": 0.037318815757279196
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 30,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.604199703828176,
+            "score": 0.0361177536231884
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 32,
+            "section": "SPED - Curriculum Revision and Review (F",
+            "sim": 0.578014958677004,
+            "score": 0.0340428432327166
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1038,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 127,
+        "citations": 1,
+        "answer": "The Leeward Teacher Education Program comprehensive review covers the five academic years from 2020–2021 through 2024–2025. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-005",
+      "kind": "lookup",
+      "question": "Besides the AST degree, what licensure pathways does the Leeward Teacher Education Program offer?",
+      "retrieve": {
+        "ms": 579,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 9,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.712443259942828,
+            "score": 0.0447868852459016
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.703230782786749,
+            "score": 0.0437540322580645
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.691799204051679,
+            "score": 0.0437460317460317
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.621216378785595,
+            "score": 0.0401913837601747
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.624687810761659,
+            "score": 0.0382345679012346
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 26,
+            "section": "Teacher Education Program - Shared PLO S",
+            "sim": 0.639312087354521,
+            "score": 0.0366068724519511
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 3918,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 1027,
+        "citations": 3,
+        "answer": "Beyond the AST degree, the Leeward Teacher Education Program offers two main licensure pathways:\n\n1. **Special Education (SPED) Licensure Pathways**\n   - **SPED Certificate of Competence II (16 credits):** Part of a 3+1 pathway with Chaminade University—students complete two years in AST, one year of upper-division SPED at Leeward, then a final year at Chaminade (coursework + student teaching) lea"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-006",
+      "kind": "summary",
+      "question": "What is in the LEE_3311_Technical document?",
+      "retrieve": {
+        "ms": 296,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 24,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.473329464201711,
+            "score": 0.031099324975892
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 8,
+            "section": "CTE - Description",
+            "sim": 0.454773327018811,
+            "score": 0.0297619047619048
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 25,
+            "section": "Program Learning Outcomes",
+            "sim": 0.426362676269985,
+            "score": 0.026377688172043
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.370203078762243,
+            "score": 0.0241290322580645
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 52,
+            "section": "CTE - Alignment to the Strategic Plan",
+            "sim": 0.539503731179532,
+            "score": 0.0163934426229508
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 10,
+            "section": "The curriculum typically includes:",
+            "sim": 0.513507162449432,
+            "score": 0.0161290322580645
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 3417,
+        "status": 200,
+        "mode": "document",
+        "chars": 317,
+        "citations": 0,
+        "answer": "The provided documents don’t mention anything called “LEE_3311_Technical” or describe its contents. None of the numbered pages in the Teacher Education Program CRE reference that filename, code, or a closely related label.\n\nSo, based only on this evidence set, I cannot say what is in the LEE_3311_Technical document."
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": null
+    },
+    {
+      "id": "lee-007",
+      "kind": "lookup",
+      "question": "Which courses make up the 62 credits of the AST degree?",
+      "retrieve": {
+        "ms": 452,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 14,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.498933629311048,
+            "score": 0.0437540322580645
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": 0.515954858948808,
+            "score": 0.043318815757279194
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.462265189408241,
+            "score": 0.0417095070422535
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.456840607643844,
+            "score": 0.040850145288501505
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 30,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.491812132686759,
+            "score": 0.0377780580075662
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.296904653694243,
+            "score": 0.0087719298245614
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 2269,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 934,
+        "citations": 3,
+        "answer": "The documents you provided do **not** list the full set of courses that make up the 62 credits for the AST degree. They only specify:\n\n- **Core Education Requirements (13 credits)**:\n  - ED 277 Introduction to Multicultural Education (3)\n  - ED 285 Classroom Management in the Instructional Process (3)\n  - ED 290 Foundations of Education (3)\n  - ED 291 Developing Language and Literacy I (3)\n  - ED "
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "phd-001",
+      "kind": "lookup",
+      "question": "How much does the Perin Health Patch weigh?",
+      "retrieve": {
+        "ms": 1692,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 8,
+        "top": [
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.568814915016278,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "",
+            "sim": 0.564937054268921,
+            "score": 0.032258064516129
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "6. Risk Controls and Safety Features",
+            "sim": 0.421365860402157,
+            "score": 0.0314980158730159
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.346011269412266,
+            "score": 0.0314980158730159
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.332145093765693,
+            "score": 0.0153846153846154
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "5. Clinical Validation Summary",
+            "sim": 0.311729193821043,
+            "score": 0.0151515151515152
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 780,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 43,
+        "citations": 1,
+        "answer": "The Perin Health Patch weighs 19 grams. [2]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "phd-002",
+      "kind": "lookup",
+      "question": "What is the FDA 510(k) number for the Perin Health System?",
+      "retrieve": {
+        "ms": 525,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.548941447359122,
+            "score": 0.049186885245901604
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.424206050439112,
+            "score": 0.0474096153846154
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "2. Intended Use and Clinical Environment",
+            "sim": 0.419769957365857,
+            "score": 0.046044268774703606
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "6. Risk Controls and Safety Features",
+            "sim": 0.448085010668266,
+            "score": 0.045430910609858
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "",
+            "sim": 0.494244642547275,
+            "score": 0.044156939234808706
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.268706442079258,
+            "score": 0.0276190476190476
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1499,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 75,
+        "citations": 1,
+        "answer": "The Perin Health System is cleared under FDA 510(k) number **K252984**. [2]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "phd-003",
+      "kind": "lookup",
+      "question": "What is the validated SpO2 accuracy of the Perin Health Patch?",
+      "retrieve": {
+        "ms": 279,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 8,
+        "top": [
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.546531961546759,
+            "score": 0.0380184426229508
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.438018871239659,
+            "score": 0.0360768882858435
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "5. Clinical Validation Summary",
+            "sim": 0.601278987950195,
+            "score": 0.0322664584959667
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.583457150011448,
+            "score": 0.032258064516129
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "",
+            "sim": 0.559291319406313,
+            "score": 0.0314980158730159
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "6. Risk Controls and Safety Features",
+            "sim": 0.513808454096804,
+            "score": 0.0305361305361305
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1204,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 213,
+        "citations": 1,
+        "answer": "The Perin Health Patch’s oxygen saturation (SpO₂) accuracy is validated with an Arms (root-mean-square) error of **3.3% versus arterial co-oximetry** in an induced hypoxia study over the **70–100% SpO₂** range.[5]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "phd-004",
+      "kind": "lookup",
+      "question": "What patient population is the Perin Health System intended for?",
+      "retrieve": {
+        "ms": 405,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "2. Intended Use and Clinical Environment",
+            "sim": 0.436284220448335,
+            "score": 0.054418442622950806
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.477867753404921,
+            "score": 0.048922474881015296
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.440627487229322,
+            "score": 0.0481460317460317
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "6. Risk Controls and Safety Features",
+            "sim": 0.345577682281547,
+            "score": 0.0471692307692308
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "",
+            "sim": 0.464749127738754,
+            "score": 0.046814746543778804
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 12,
+            "section": "SPED - Student and Service Population",
+            "sim": 0.303336875222568,
+            "score": 0.0299343821433374
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1343,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 355,
+        "citations": 2,
+        "answer": "The Perin Health System is intended for **non‑critical adult patients, 22 years or older**, and is used under prescription by healthcare professionals in **hospitals, clinics, long‑term care facilities, physician offices, and home environments** for long‑term, spot‑check monitoring and trend tracking—not for critical care or high‑acuity patients. [3][6]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "phd-005",
+      "kind": "lookup",
+      "question": "What are the validated cuffless blood pressure accuracy figures for the Perin Health Patch?",
+      "retrieve": {
+        "ms": 352,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 8,
+        "top": [
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.590932119294035,
+            "score": 0.038522474881015296
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.599827295245042,
+            "score": 0.0382664584959667
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.581338508581247,
+            "score": 0.0320020481310804
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "",
+            "sim": 0.570551656685677,
+            "score": 0.0307765151515152
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.452518215902027,
+            "score": 0.0305503731343284
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "5. Clinical Validation Summary",
+            "sim": 0.519791951193553,
+            "score": 0.0305361305361305
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 2158,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 567,
+        "citations": 1,
+        "answer": "The Perin Health Patch’s cuffless blood pressure algorithm (under its separate 510(k), not K252984) has the following validated accuracy versus the Transtek reference cuff: [5]\n\n- **Systolic BP:** mean error −0.08 ± 7.88 mmHg\n- **Diastolic BP:** mean error −0.23 ± 7.17 mmHg\n\nThese figures are based on an ISO 81060-2 protocol and are **calibration-dependent** on the cleared Transtek TeleRPM cuff (K"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "phd-006",
+      "kind": "summary",
+      "question": "Summarize the PHD device description.",
+      "retrieve": {
+        "ms": 352,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 8,
+        "top": [
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.581699909311911,
+            "score": 0.0382664584959667
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "2. Intended Use and Clinical Environment",
+            "sim": 0.598375782301704,
+            "score": 0.032258064516129
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.558347785181917,
+            "score": 0.0312576312576313
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "6. Risk Controls and Safety Features",
+            "sim": 0.572638880877894,
+            "score": 0.03125
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.51915117895373,
+            "score": 0.0303099885189437
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "",
+            "sim": 0.615927082915885,
+            "score": 0.0163934426229508
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 7471,
+        "status": 200,
+        "mode": "document",
+        "chars": 3936,
+        "citations": 6,
+        "answer": "The Perin Health Patch is a 19 g, chest‑worn, multi‑sensor wearable that serves as the core data collection node for the Perin Health System, an FDA‑cleared (510(k) K252984) Class II, prescription‑use remote patient monitoring platform regulated under 21 CFR 870.2910 (primary product code DRG, with additional cardiopulmonary and monitoring codes). It integrates auscultation, 1‑lead ECG, PPG, bioim"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "inc-001",
+      "kind": "lookup",
+      "question": "What is the incident number and date range of the MultiCare network incident?",
+      "retrieve": {
+        "ms": 627,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.563839527588635,
+            "score": 0.0306791569086651
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.304385963592311,
+            "score": 0.0279123861213413
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "4. Monitored Clinical Parameters and Val",
+            "sim": 0.204309786621338,
+            "score": 0.0267425810904072
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 14,
+            "section": "AST - Analysis of the Program/Unit",
+            "sim": 0.189388670820092,
+            "score": 0.0261290322580645
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.460248182860609,
+            "score": 0.025932953826692
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.234782953593939,
+            "score": 0.025708635464733
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1274,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 95,
+        "citations": 1,
+        "answer": "The incident number is **MC-NET-4821**, and the date range is **2026-04-28 to 2026-04-29**. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "inc-002",
+      "kind": "lookup",
+      "question": "Which core switch cluster showed the latency spike in the MultiCare incident?",
+      "retrieve": {
+        "ms": 617,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.63479207271261,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.52798552404895,
+            "score": 0.0320020481310804
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.461989573650563,
+            "score": 0.0292735042735043
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.335584858804752,
+            "score": 0.0289915966386555
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.541474592594562,
+            "score": 0.0272401433691756
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.477294351613849,
+            "score": 0.026614010989011
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 951,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 103,
+        "citations": 1,
+        "answer": "The latency spike was detected on the **Core Switch Cluster SW-CORE-03** in the MultiCare incident. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "jd-001",
+      "kind": "lookup",
+      "question": "How is the Executive Assistant and Industrial Engineering internship split between executive support and business operations?",
+      "retrieve": {
+        "ms": 663,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 18,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.572434133211749,
+            "score": 0.045611087420042606
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.517320279758583,
+            "score": 0.044618694885361604
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.555084144688475,
+            "score": 0.0445746031746032
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.526184070430635,
+            "score": 0.0442637770897833
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.526395346552985,
+            "score": 0.0430666666666667
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.700124294438334,
+            "score": 0.0327868852459016
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 0.16666666666666666,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 2578,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 820,
+        "citations": 2,
+        "answer": "The internship is intentionally structured as a 50/50 role:\n\n- **50% Executive & Administrative Support** – Direct support to the CEO and leadership team, including scheduling, meeting preparation, agendas, notes, follow-up items, presentations, communications, project tracking, documentation, and coordination of internal/leadership meetings. [4][5]\n- **50% Business Operations, Industrial Engineer"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "jd-002",
+      "kind": "lookup",
+      "question": "How many hours per week is the Executive Assistant and Industrial Engineering internship, and where does it require periodic travel?",
+      "retrieve": {
+        "ms": 637,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 18,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.484206310911962,
+            "score": 0.0464179211469534
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.493519715415588,
+            "score": 0.0458372294372294
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.453573999247368,
+            "score": 0.0446051282051282
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.477545147587648,
+            "score": 0.043998020555767
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.471816728876764,
+            "score": 0.0428912280701754
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.624795199537607,
+            "score": 0.0327868852459016
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 0.16666666666666666,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1150,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 227,
+        "citations": 1,
+        "answer": "The Executive Assistant & Industrial Engineering internship is approximately 20 hours per week and includes periodic travel to Burbank, California for product demonstrations, engineering collaboration, and field experience. [4]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "foster-001",
+      "kind": "lookup",
+      "question": "How long does the Empowering Foster Youth workforce media project run, and how many youth does it serve?",
+      "retrieve": {
+        "ms": 294,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 24,
+        "top": [
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.717868745837105,
+            "score": 0.0325224748810153
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.714990074650574,
+            "score": 0.0315136476426799
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.670726851320827,
+            "score": 0.0312576312576313
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.712678095643538,
+            "score": 0.031024531024531
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.582742337302784,
+            "score": 0.0308861962461392
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.674362351689088,
+            "score": 0.0305503731343284
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1059,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 156,
+        "citations": 2,
+        "answer": "The Empowering Foster Youth: A Workforce Media Project is designed as a 12‑month program and will directly serve 24 foster youth ages 16–24 on Oʻahu. [1][3]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "foster-002",
+      "kind": "lookup",
+      "question": "Which organization is behind the Empowering Foster Youth media project, and when was it founded?",
+      "retrieve": {
+        "ms": 347,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 24,
+        "top": [
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.727970045096219,
+            "score": 0.0325224748810153
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.642829613520773,
+            "score": 0.0314980158730159
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.657835228219083,
+            "score": 0.0312576312576313
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.66741021441307,
+            "score": 0.0310544053923929
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.516670455649417,
+            "score": 0.0308861962461392
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.593691879609529,
+            "score": 0.0305361305361305
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1078,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 194,
+        "citations": 1,
+        "answer": "The Empowering Foster Youth: A Workforce Media Project is led by ʻŌlelo Community Media, Oʻahu’s nonprofit public, education, and government (PEG) access provider, which was founded in 1989. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "intern-001",
+      "kind": "lookup",
+      "question": "What are the four stages of the SolluCIO Executive Internship development plan?",
+      "retrieve": {
+        "ms": 516,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 17,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.702682647343088,
+            "score": 0.049186885245901604
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.676550240186021,
+            "score": 0.0479136476426799
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.66622797992031,
+            "score": 0.0478980158730159
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.578088933574516,
+            "score": 0.046978898225957
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.634218564822259,
+            "score": 0.0469361305361305
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.319180289176499,
+            "score": 0.0436121436504998
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1125,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 126,
+        "citations": 1,
+        "answer": "The SolluCIO Executive Internship development plan is structured in four stages: Observe, Understand, Contribute, and Own. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "intern-002",
+      "kind": "lookup",
+      "question": "How are weekly assignments tracked in the SolluCIO Executive Internship, and what tool is preferred for questions?",
+      "retrieve": {
+        "ms": 430,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 18,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.635232831860449,
+            "score": 0.049186885245901604
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.578261090051636,
+            "score": 0.0484020481310804
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.589119864514899,
+            "score": 0.04768054740957971
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.572867408993757,
+            "score": 0.0476576312576313
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.577551064530436,
+            "score": 0.04765
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.363175335983267,
+            "score": 0.030098630136986302
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1340,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 149,
+        "citations": 1,
+        "answer": "Weekly assignments are tracked in Microsoft Planner, and Microsoft Teams is the preferred tool for asking questions and requesting clarification. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "resume-001",
+      "kind": "lookup",
+      "question": "Where did Ariel Wilson work most recently, and roughly how many tickets did she process per day?",
+      "retrieve": {
+        "ms": 417,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 17,
+        "top": [
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.327097174077572,
+            "score": 0.0474544053923929
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.316921504841706,
+            "score": 0.046978898225957
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.333455431465847,
+            "score": 0.0456360221937687
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.35023465236998,
+            "score": 0.0446832278481013
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.382668731864743,
+            "score": 0.044023285131627704
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 6,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.194909360664885,
+            "score": 0.0264945652173913
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1112,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 204,
+        "citations": 1,
+        "answer": "Ariel Wilson most recently worked as a Solution Center Analyst II at Salem Health from October 2020 to March 2026 in Salem, OR.[1]\n\nShe reports processing approximately 40 tickets per day in that role.[1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "resume-002",
+      "kind": "lookup",
+      "question": "What network equipment brand does Brad Shimomura have hands-on installation experience with?",
+      "retrieve": {
+        "ms": 429,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.663751115675836,
+            "score": 0.048922474881015296
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.54906491687943,
+            "score": 0.04841844262295081
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.560750421420953,
+            "score": 0.0484020481310804
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.560366240152642,
+            "score": 0.0478980158730159
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.499373416137397,
+            "score": 0.0471692307692308
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.282287294243224,
+            "score": 0.0252380952380952
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1155,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 153,
+        "citations": 1,
+        "answer": "Brad Shimomura has hands-on installation and setup experience with Ubiquiti network equipment (switches, bridge devices, and wireless access points). [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "resume-003",
+      "kind": "lookup",
+      "question": "What is Hiyab Mengisteab's role, and which EHR system does she have experience with?",
+      "retrieve": {
+        "ms": 616,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "Hiyab Mengisteab Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.716771392177084,
+            "score": 0.049186885245901604
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.35032982917445,
+            "score": 0.0289915966386555
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.420080179451561,
+            "score": 0.0288600288600289
+          },
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.327934284392864,
+            "score": 0.0283702213279678
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.288241693496553,
+            "score": 0.0274971941638608
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.367214707921759,
+            "score": 0.0272529069767442
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1208,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 136,
+        "citations": 1,
+        "answer": "Hiyab Mengisteab’s role is a Healthcare IT Analyst, and she has experience supporting Epic electronic health record (EHR) workflows. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "cmp-001",
+      "kind": "comparison",
+      "question": "Compare the IT support backgrounds of Brad Shimomura and Ariel Wilson.",
+      "retrieve": {
+        "ms": 492,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.459379523737237,
+            "score": 0.048922474881015296
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.49054579127874,
+            "score": 0.048922474881015296
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.436054011263116,
+            "score": 0.0481460317460317
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.429244958149095,
+            "score": 0.0469503731343284
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.421360897896798,
+            "score": 0.0469361305361305
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.305632017910041,
+            "score": 0.0441831371792398
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 13697,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 4469,
+        "citations": 3,
+        "answer": "Brad Shimomura and Ariel Wilson both have IT support backgrounds, but with different environments, scopes, and toolsets.\n\n**1. Environment & Customer Base**\n\n- **Brad Shimomura** works as an IT Support Specialist in a K–12 school setting, supporting about 900 users across 5 buildings (students, teachers, staff). His work blends end‑user support with hands‑on network and device management in an edu"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "oos-001",
+      "kind": "out_of_scope",
+      "question": "What is the capital of France?",
+      "retrieve": {
+        "ms": 490,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 21,
+        "top": [
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.0879491476348534,
+            "score": 0.0317780580075662
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.121397705653844,
+            "score": 0.0163934426229508
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.120098608779103,
+            "score": 0.0161290322580645
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.107892418279545,
+            "score": 0.0158730158730159
+          },
+          {
+            "file": "Empowering Foster Youth A Workforce Medi",
+            "page": null,
+            "section": "",
+            "sim": 0.105430547293119,
+            "score": 0.015625
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.0860901794172921,
+            "score": 0.0151515151515152
+          }
+        ]
+      },
+      "chat": {
+        "ms": 1019,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 31,
+        "citations": 0,
+        "answer": "The documents don’t cover this."
+      },
+      "abstained": true
+    },
+    {
+      "id": "oos-002",
+      "kind": "out_of_scope",
+      "question": "What was SolluCIO's revenue last quarter?",
+      "retrieve": {
+        "ms": 401,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.406728919367046,
+            "score": 0.049186885245901604
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.349994722724241,
+            "score": 0.048658064516129
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.335577519184574,
+            "score": 0.047424531024531
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.34545666024154,
+            "score": 0.0474096153846154
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.347400108206268,
+            "score": 0.0457865293865294
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.337378328680351,
+            "score": 0.0310096153846154
+          }
+        ]
+      },
+      "chat": {
+        "ms": 1618,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 314,
+        "citations": 0,
+        "answer": "The documents don’t provide any financial data, including SolluCIO’s revenue for last quarter.\n\nTo answer this, you’d need to pull from internal financial reports (e.g., P&L, board decks, or accounting system exports), as it’s not contained in the internship program, job description, or resume materials provided."
+      },
+      "abstained": true
+    },
+    {
+      "id": "oos-003",
+      "kind": "out_of_scope",
+      "question": "Who is the current CEO of MultiCare Health System?",
+      "retrieve": {
+        "ms": 385,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 18,
+        "top": [
+          {
+            "file": "INCIDENT-DemoMC.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.307119480214087,
+            "score": 0.0314980158730159
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "1. Device Overview and Regulatory Status",
+            "sim": 0.229226503964118,
+            "score": 0.0281581485053038
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "3. Software Systems: Mobile Application,",
+            "sim": 0.257634807751566,
+            "score": 0.0278637770897833
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.255139310843395,
+            "score": 0.0258075258075258
+          },
+          {
+            "file": "Perin Health Patch — Device Description",
+            "page": null,
+            "section": "2. Intended Use and Clinical Environment",
+            "sim": 0.194166522434466,
+            "score": 0.024540757749713
+          },
+          {
+            "file": "SolluCIO-ArielWilson-ServiceDesk2.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.30064458014135,
+            "score": 0.0242456896551724
+          }
+        ]
+      },
+      "chat": {
+        "ms": 2795,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 82,
+        "citations": 0,
+        "answer": "The documents provided do not identify the current CEO of MultiCare Health System."
+      },
+      "abstained": true
+    }
+  ]
+}

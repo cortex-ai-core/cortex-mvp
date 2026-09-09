@@ -7,59 +7,13 @@
 import fp from "fastify-plugin";
 import { createClient } from "@supabase/supabase-js";
 import { requireAuth } from "../lib/authMiddleware.js";
+import { hasPermission } from "../lib/permissions.js";
+import { hybridRetrieve } from "../retrieval/hybrid.js";
+import { resolveRetrievalMode, logRetrievalTrace } from "../retrieval/trace.js";
 
 // ============================================================
-// 🔐 PERMISSION ENGINE
+// 🔐 PERMISSIONS — shared map in lib/permissions.js
 // ============================================================
-
-const PERMISSION_MAP = {
-  super_admin: {
-    namespaces: ["*"],
-    actions: ["chat", "upload", "admin", "delete"]
-  },
-
-  advisor: {
-    namespaces: ["advisory"],
-    actions: ["chat", "upload"]
-  },
-
-  cyber: {
-    namespaces: ["cybersecurity"],
-    actions: ["chat"]
-  },
-
-  datamanagement: {
-    namespaces: ["datamanagement"],
-    actions: ["chat", "upload"]
-  },
-
-  recruiting: {
-    namespaces: ["recruiting"],
-    actions: ["chat", "upload"]
-  },
-
-  ventures: {
-    namespaces: ["ventures"],
-    actions: ["chat", "upload"]
-  }
-};
-
-function hasPermission(identity, action) {
-
-  const { role, namespace } = identity;
-
-  const rolePermissions = PERMISSION_MAP[role];
-
-  if (!rolePermissions) return false;
-
-  const namespaceAllowed =
-    rolePermissions.namespaces.includes("*") ||
-    rolePermissions.namespaces.includes(namespace);
-
-  if (!namespaceAllowed) return false;
-
-  return rolePermissions.actions.includes(action);
-}
 
 // ============================================================
 // 🔥 BASE RETRIEVAL CONTROL
@@ -326,7 +280,8 @@ function calculateRetrievalPressure(results = []) {
 
 function applyEcosystemContextAllocation(
   results = [],
-  contextBudget = 10000
+  contextBudget = 10000,
+  maxRounds = 3
 ) {
 
   if (!results.length) return results;
@@ -401,7 +356,9 @@ function applyEcosystemContextAllocation(
   // 🔥 PASS 2 — CONTROLLED SATURATION EXPANSION
   // ==========================================================
 
-  const MAX_ROUNDS = 3;
+  // Each round adds one more chunk per file. With a named document there is
+  // one file, so the round limit is the per-document limit; raise it.
+  const MAX_ROUNDS = maxRounds;
 
   let round = 1;
 
@@ -591,6 +548,141 @@ function applyRelationshipAwareScoring(results = []) {
 // ROUTE
 // ============================================================
 
+// ============================================================
+// 🔎 DOCUMENT-NAME INTENT + CHUNK → FILE LOOKUP
+// Docling chunks carry no "SOURCE FILE:" header, so the file is
+// resolved from the chunk id. If the question names a document,
+// retrieval is restricted to that document.
+// ============================================================
+
+const NAME_CACHE = new Map(); // namespace -> { at, docs }
+const NAME_NOISE = new Set([
+  "pdf", "docx", "doc", "xlsx", "pptx", "final", "copy", "draft", "version", "v1", "v2",
+  "document", "documents", "file", "files", "what", "about", "does", "the", "and", "for",
+  "with", "from", "this", "that", "into", "contain", "contains", "inside"
+]);
+
+function nameTokens(text = "") {
+  return String(text)
+    .replace(/\.[a-z0-9]{2,5}$/i, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")        // ArielWilson → Ariel Wilson
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")        // ServiceDesk2 → ServiceDesk 2
+    .replace(/(\d)([A-Za-z])/g, "$1 $2")
+    .split(/[^A-Za-z0-9]+/)
+    // keep 2-letter uppercase codes ("JD", "HR"); drop upload ids such as 1765784712
+    .filter(t => (t.length >= 3 || /^[A-Z0-9]{2}$/.test(t)) && !/^\d{7,}$/.test(t))
+    .map(t => t.toLowerCase())
+    .filter(t => !NAME_NOISE.has(t) && !STOPWORDS.has(t));
+}
+
+// Document-level similarity (migration 0006): a document whose profile is clearly
+// the closest to the question counts as named, at boost strength.
+const DOC_LEAD_MIN = Number(process.env.DOC_LEAD_MIN || 0.45);
+const DOC_LEAD_MARGIN = Number(process.env.DOC_LEAD_MARGIN || 0.06);
+
+const COMPARISON_INTENT = /\b(compare|comparison|comparing|versus|vs\.?|both|differ|difference|differences|between|fit|match|suit|against|relate|relative)\b/i;
+// Words that name a *kind* of document rather than a particular one; on their own
+// they never identify a file ("the report", "his resume").
+const GENERIC_NAME_WORDS = new Set([
+  "resume", "report", "program", "plan", "policy", "manual", "guide", "notes", "summary", "proposal",
+  "description", "internship", "executive", "assistant", "project", "overview", "template", "agreement",
+  "contract", "letter", "form", "schedule", "meeting", "recap", "standards", "package", "addendum",
+  "section", "statement", "device", "health", "technical", "review", "annual", "quarterly", "monthly",
+  "final", "draft", "update", "presentation", "deck", "sheet", "budget", "invoice", "memo", "brief"
+]);
+const isYear = t => /^(19|20)\d{2}$/.test(t);
+
+async function namespaceDocuments(supabase, namespace) {
+  const hit = NAME_CACHE.get(namespace);
+  if (hit && Date.now() - hit.at < 30000) return hit.docs;
+  const { data } = await supabase
+    .from("documents")
+    .select("id, file_name, display_name, status")
+    .eq("namespace", namespace);
+  const docs = (data || []).filter(d => !d.status || d.status === "ready");
+  NAME_CACHE.set(namespace, { at: Date.now(), docs });
+  return docs;
+}
+
+// Two strengths of match:
+//  - filter: a code-like token (digits, but not a bare year) or three name words —
+//    the question is clearly about this file, so retrieval is restricted to it;
+//  - boost: two name words covering most of a name — the file is guaranteed a
+//    place in the results and lifted, but other documents are not excluded.
+// Comparison questions, and questions that name more than one document, never
+// filter: excluding the other side of a comparison produced wrong answers.
+function findNamedDocuments(docs, query) {
+  const qTokens = nameTokens(query);
+  const q = new Set(qTokens);
+  if (!q.size) return [];
+  const queryYears = qTokens.filter(isYear);
+  // how many documents each name word belongs to (a word shared by several files
+  // such as "internship" cannot single out one of them)
+  const nameCounts = new Map();
+  for (const d of docs) {
+    for (const t of new Set([...nameTokens(d.file_name), ...nameTokens(d.display_name || "")])) {
+      nameCounts.set(t, (nameCounts.get(t) || 0) + 1);
+    }
+  }
+  const hits = [];
+  for (const d of docs) {
+    const fileToks = [...new Set(nameTokens(d.file_name))];
+    const displayToks = [...new Set(nameTokens(d.display_name || ""))];
+    const toks = [...new Set([...fileToks, ...displayToks])];
+    if (!toks.length) continue;
+    const matched = toks.filter(t => q.has(t));
+    if (!matched.length) continue;
+
+    // "the 2023 report" must not lock onto "2024 Annual Report"
+    const nameYears = toks.filter(isYear);
+    if (queryYears.length && nameYears.length && !nameYears.some(y => q.has(y))) continue;
+
+    // coverage against each name separately: the display name is short and the
+    // file name often carries dates and ids that no question repeats
+    const coverageOf = list => (list.length ? list.filter(t => q.has(t)).length / list.length : 0);
+    const coverage = Math.max(coverageOf(fileToks), coverageOf(displayToks));
+    const codeMatch = matched.some(t => /\d/.test(t) && !isYear(t));
+
+    const filter = codeMatch || matched.length >= 3;
+    // A boost never excludes anything, so two name words are enough even when the
+    // file name carries extra words ("SolluCIO-ArielWilson-ServiceDesk2"), and a
+    // single distinctive word ("brad", "multicare") that occurs in exactly one
+    // document's name is enough too: people and organisations are usually named
+    // with one word in a question.
+    const unique = matched.filter(t => t.length >= 4 && !GENERIC_NAME_WORDS.has(t) && nameCounts.get(t) === 1);
+    const boost = !filter && ((matched.length >= 2 && coverage >= 0.3) || unique.length > 0);
+    if (filter || boost) {
+      hits.push({ id: d.id, file_name: d.file_name, matched, score: coverage + (codeMatch ? 1 : 0), filter });
+    }
+  }
+  const top = hits.sort((a, b) => b.score - a.score).slice(0, 3);
+  if (top.length > 1 || COMPARISON_INTENT.test(query)) {
+    for (const h of top) h.filter = false;
+  }
+  return top;
+}
+
+async function chunkFiles(supabase, ids) {
+  const map = new Map();
+  if (!ids.length) return map;
+  const { data } = await supabase
+    .from("document_chunks")
+    .select("id, document_id, chunk_index, page_start, page_end, section_label, documents(file_name, display_name)")
+    .in("id", ids);
+  for (const r of data || []) {
+    map.set(r.id, {
+      document_id: r.document_id,
+      chunk_index: r.chunk_index,
+      page_start: r.page_start ?? null,
+      page_end: r.page_end ?? null,
+      section_label: r.section_label || null,
+      file_name: r.documents?.file_name || null,
+      display_name: r.documents?.display_name || null
+    });
+  }
+  return map;
+}
+
 export default fp(async function retrieveRoute(fastify, opts) {
 
   fastify.post(
@@ -629,10 +721,13 @@ export default fp(async function retrieveRoute(fastify, opts) {
         const retrievalProfile =
           determineQueryProfile(query);
 
-        const supabase = createClient(
-          process.env.SUPABASE_URL,
-          process.env.SUPABASE_SERVICE_KEY
-        );
+        // One shared client (keep-alive) unless the server did not decorate one.
+        const supabase =
+          fastify.supabase ||
+          createClient(
+            process.env.SUPABASE_URL,
+            process.env.SUPABASE_SERVICE_KEY
+          );
 
         const normalizedQuery =
           normalizeRetrievalQuery(query);
@@ -643,6 +738,16 @@ export default fp(async function retrieveRoute(fastify, opts) {
             term =>
               term.length > 3 &&
               !STOPWORDS.has(term)
+          );
+
+        // ======================================================
+        // 🔎 DOCUMENT-NAME INTENT
+        // ======================================================
+
+        const namedDocs =
+          findNamedDocuments(
+            await namespaceDocuments(supabase, namespace),
+            query
           );
 
         // ======================================================
@@ -675,11 +780,71 @@ export default fp(async function retrieveRoute(fastify, opts) {
           );
         }
 
+        // ======================================================
+        // 📄 DOCUMENT-LEVEL SIMILARITY
+        // Which documents is the question about as a whole? Feeds a
+        // prior on chunk scores and can name the leading document.
+        // ======================================================
+        let docScores = [];
+        try {
+          const { data: dp, error: dpErr } = await supabase.rpc("match_document_profiles", {
+            query_embedding: embedding,
+            query_namespace: namespace,
+            match_count: 10
+          });
+          if (dpErr) throw new Error(dpErr.message);
+          docScores = dp || [];
+        } catch (err) {
+          fastify.log.warn({ err: err?.message }, "retrieve: document profiles unavailable (migration 0006 not applied?)");
+        }
+        const lead = docScores[0];
+        const runnerUp = docScores[1];
+        if (
+          lead &&
+          lead.similarity >= DOC_LEAD_MIN &&
+          (!runnerUp || lead.similarity - runnerUp.similarity >= DOC_LEAD_MARGIN) &&
+          !namedDocs.some(d => d.id === lead.id)
+        ) {
+          namedDocs.push({ id: lead.id, file_name: lead.file_name, matched: ["profile"], score: lead.similarity, filter: false, semantic: true });
+        }
+
+        // ======================================================
+        // 🔀 RETRIEVAL MODE (Phase 2): hybrid SQL vs legacy pipeline
+        // ======================================================
+        const retrievalMode = resolveRetrievalMode(req);
+        const traceStart = Date.now();
+
+        if (retrievalMode === "hybrid") {
+          const hybrid = await hybridRetrieve({
+            supabase,
+            query: query.trim().replace(/\s+/g, " ").replace(/\?+$/, ""),
+            embedding,
+            namespace,
+            namedDocs,
+            docScores,
+            log: fastify.log
+          });
+
+          logRetrievalTrace(supabase, fastify.log, {
+            query, namespace, mode: "hybrid", userId: identity.userId,
+            latencyMs: Date.now() - traceStart, results: hybrid.results, namedDocs
+          });
+
+          return reply.send({
+            results: hybrid.results,
+            namedDocuments: namedDocs.map(d => ({ id: d.id, file_name: d.file_name, filter: d.filter === true, semantic: d.semantic === true })),
+            documents: docScores.slice(0, 5).map(d => ({ id: d.id, file_name: d.file_name, similarity: Number(d.similarity?.toFixed?.(3) ?? d.similarity) })),
+            mode: "hybrid"
+          });
+        }
+
         const { data, error } =
           await supabase.rpc("match_documents", {
             query_embedding: embedding,
             match_threshold: 0.10,
-            match_count: retrievalProfile.matchCount,
+            match_count: namedDocs.length
+              ? Math.max(retrievalProfile.matchCount, 60)
+              : retrievalProfile.matchCount,
             query_namespace: namespace,
           });
 
@@ -696,31 +861,90 @@ export default fp(async function retrieveRoute(fastify, opts) {
         }
 
         // ======================================================
+        // 🔗 RESOLVE FILE PER CHUNK, RESTRICT TO NAMED DOCUMENT
+        // ======================================================
+
+        let rows = data || [];
+        let fileById = await chunkFiles(supabase, rows.map(r => r.id));
+
+        // Only filter-strength matches restrict the legacy path; boost matches are advisory.
+        const legacyFilterDocs = namedDocs.filter(d => d.filter === true);
+        if (legacyFilterDocs.length) {
+          const wanted = new Set(legacyFilterDocs.map(d => d.id));
+          rows = rows.filter(r => wanted.has(fileById.get(r.id)?.document_id));
+
+          // Overview questions ("what is in X?") score low on similarity, so top up
+          // with the document's opening sections in reading order.
+          if (rows.length < retrievalProfile.topK) {
+            const have = new Set(rows.map(r => r.id));
+            const { data: lead } = await supabase
+              .from("document_chunks")
+              .select("id, chunk_text, document_id, chunk_index, page_start, page_end, section_label, documents(file_name, display_name)")
+              .in("document_id", [...wanted])
+              .order("chunk_index", { ascending: true })
+              .limit(retrievalProfile.topK * 2);
+            for (const c of lead || []) {
+              if (have.has(c.id)) continue;
+              rows.push({ id: c.id, chunk_text: c.chunk_text, similarity: 0.5 });
+              fileById.set(c.id, {
+                document_id: c.document_id, chunk_index: c.chunk_index,
+                page_start: c.page_start ?? null, page_end: c.page_end ?? null, section_label: c.section_label || null,
+                file_name: c.documents?.file_name || null, display_name: c.documents?.display_name || null
+              });
+              if (rows.length >= retrievalProfile.topK * 2) break;
+            }
+          }
+
+          fastify.log.info({
+            route: "/api/retrieve",
+            namedDocuments: namedDocs.map(d => d.file_name),
+            restrictedRows: rows.length
+          });
+        }
+
+        // ======================================================
         // 🧠 FORMAT + ECOSYSTEM IDENTITY STABILIZATION
         // ======================================================
 
-        let formatted = (data || []).map((row) => {
+        let formatted = rows.map((row) => {
 
           const content =
             (row.chunk_text || "")
               .replace(/\s+/g, " ")
               .trim();
 
+          const known = fileById.get(row.id);
+
           const extractedFilename =
+            known?.file_name ||
             row.filename ||
             row.chunk_text.match(
               /SOURCE FILE:\s*([^\n\r]+)/i
             )?.[1]?.trim();
 
+          const hasHeader =
+            /SOURCE FILE:/i.test(row.chunk_text || "");
+
           return {
 
-            content,
+            content:
+              known?.file_name && !hasHeader
+                ? `SOURCE FILE: ${known.file_name}\n${content}`
+                : content,
 
             similarity: row.similarity,
 
             filename:
               extractedFilename ||
-              generateSyntheticEcosystemId(content)
+              generateSyntheticEcosystemId(content),
+
+            document_id: known?.document_id || null,
+            chunk_id: row.id,
+            chunk_index: known?.chunk_index ?? null,
+            page_start: known?.page_start ?? null,
+            page_end: known?.page_end ?? null,
+            section_label: known?.section_label || null,
+            display_name: known?.display_name || null
           };
         });
 
@@ -740,7 +964,8 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
         if (!formatted.length) {
           return reply.send({
-            results: []
+            results: [],
+            namedDocuments: namedDocs.map(d => ({ id: d.id, file_name: d.file_name }))
           });
         }
 
@@ -850,9 +1075,10 @@ export default fp(async function retrieveRoute(fastify, opts) {
           fileCounts[key] =
             (fileCounts[key] || 0) + 1;
 
+          // A named document is the whole point of the question; don't cap it at 3.
           return (
             fileCounts[key] <=
-            MAX_RESULTS_PER_FILE
+            (namedDocs.length ? MAX_RESULTS_PER_FILE * 5 : MAX_RESULTS_PER_FILE)
           );
         });
 
@@ -861,7 +1087,9 @@ export default fp(async function retrieveRoute(fastify, opts) {
         // ======================================================
 
         const adaptiveContextBudget =
-          retrievalPressure.highPressure
+          namedDocs.length
+            ? MAX_CONTEXT_BUDGET
+            : retrievalPressure.highPressure
             ? Math.min(
                 retrievalProfile.contextBudget + 2000,
                 MAX_CONTEXT_BUDGET
@@ -871,11 +1099,14 @@ export default fp(async function retrieveRoute(fastify, opts) {
         formatted =
           applyEcosystemContextAllocation(
             formatted,
-            adaptiveContextBudget
+            adaptiveContextBudget,
+            namedDocs.length ? 40 : 3
           );
 
         const adaptiveTopK =
-          retrievalPressure.highPressure
+          namedDocs.length
+            ? Math.max(retrievalProfile.topK + 6, 12)
+            : retrievalPressure.highPressure
             ? retrievalProfile.topK + 4
             : retrievalProfile.topK;
 
@@ -900,8 +1131,15 @@ export default fp(async function retrieveRoute(fastify, opts) {
           ragUsed: formatted.length > 0
         });
 
+        logRetrievalTrace(supabase, fastify.log, {
+          query, namespace, mode: "legacy", userId: identity.userId,
+          latencyMs: Date.now() - traceStart, results: formatted, namedDocs
+        });
+
         return reply.send({
-          results: formatted
+          results: formatted,
+          namedDocuments: namedDocs.map(d => ({ id: d.id, file_name: d.file_name, filter: d.filter === true })),
+          mode: "legacy"
         });
 
       } catch (err) {
