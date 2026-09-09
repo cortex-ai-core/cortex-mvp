@@ -1,0 +1,509 @@
+{
+  "summary": {
+    "mode": "hybrid",
+    "questions": 7,
+    "docRecallAtK": 1,
+    "allExpectedFound": 0.7142857142857143,
+    "mrr": 1,
+    "pageRecallAtK": null,
+    "mustInclude": 0.8571428571428571,
+    "citationPrecision": 0.8816326530612244,
+    "answersWithCitations": 1,
+    "abstainAccuracy": null,
+    "retrieveMs": {
+      "p50": 433,
+      "p95": 1340
+    },
+    "chatMs": {
+      "p50": 4747,
+      "p95": 9686
+    }
+  },
+  "rows": [
+    {
+      "id": "jd-001",
+      "kind": "lookup",
+      "question": "How is the Executive Assistant and Industrial Engineering internship split between executive support and business operations?",
+      "retrieve": {
+        "ms": 1340,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 20,
+        "top": [
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.700095555839727,
+            "score": 0.0320184426229508
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.653765146369317,
+            "score": 0.0312576312576313
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.661613089445323,
+            "score": 0.0310544053923929
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.57242816762998,
+            "score": 0.0304147465437788
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.626803184949552,
+            "score": 0.0303308823529412
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.601343924930105,
+            "score": 0.0296442687747036
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 7254,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 734,
+        "citations": 2,
+        "answer": "The internship is intentionally structured as a 50 / 50 split:\n\n- **50% Executive & Administrative Support**\n  Activities include supporting the CEO’s daily operations, coordinating calendars and meetings, preparing agendas and notes, organizing documentation, tracking projects, and coordinating internal leadership activities.[1][2]\n\n- **50% Business Operations, Industrial Engineering, Consulting "
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "jd-002",
+      "kind": "lookup",
+      "question": "How many hours per week is the Executive Assistant and Industrial Engineering internship, and where does it require periodic travel?",
+      "retrieve": {
+        "ms": 906,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.624795199537607,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.561550553034813,
+            "score": 0.0303308823529412
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.484206310911962,
+            "score": 0.0300179211469534
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.493519715415588,
+            "score": 0.0299107142857143
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.590171794936701,
+            "score": 0.0291160452450775
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.550267579884236,
+            "score": 0.0290832455216017
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1295,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 226,
+        "citations": 1,
+        "answer": "The Executive Assistant & Industrial Engineering internship is approximately 20 hours per week and includes periodic travel to Burbank, California for product demonstrations, engineering collaboration, and field experience.[1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "intern-001",
+      "kind": "lookup",
+      "question": "What are the four stages of the SolluCIO Executive Internship development plan?",
+      "retrieve": {
+        "ms": 386,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 17,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.702682647343088,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.676550240186021,
+            "score": 0.0317540322580645
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.66622797992031,
+            "score": 0.0317460317460317
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.578088933574516,
+            "score": 0.0308349146110057
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.634218564822259,
+            "score": 0.0307692307692308
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.632116931131092,
+            "score": 0.0303030303030303
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1442,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 187,
+        "citations": 1,
+        "answer": "The four stages are:\n\n1. **Observe**\n2. **Understand**\n3. **Contribute**\n4. **Own**\n\nThese stages structure the progression of responsibilities and learning throughout the internship. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "intern-002",
+      "kind": "lookup",
+      "question": "How are weekly assignments tracked in the SolluCIO Executive Internship, and what tool is preferred for questions?",
+      "retrieve": {
+        "ms": 433,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 19,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.635232831860449,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.578261090051636,
+            "score": 0.0317460317460317
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.572867408993757,
+            "score": 0.0315136476426799
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.589119864514899,
+            "score": 0.0312805474095797
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.577551064530436,
+            "score": 0.03125
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.563595579504966,
+            "score": 0.0298507462686567
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1140,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 149,
+        "citations": 1,
+        "answer": "Weekly assignments are tracked in Microsoft Planner, and Microsoft Teams is the preferred tool for asking questions and requesting clarification. [1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "cmp-001",
+      "kind": "comparison",
+      "question": "Compare the IT support backgrounds of Brad Shimomura and Ariel Wilson.",
+      "retrieve": {
+        "ms": 421,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.459379523737237,
+            "score": 0.044522474881015295
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.49054579127874,
+            "score": 0.044522474881015295
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.436054011263116,
+            "score": 0.0317460317460317
+          },
+          {
+            "file": "Hiyab Mengisteab Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.276427012627973,
+            "score": 0.0314011339475549
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.429244958149095,
+            "score": 0.0310096153846154
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 6,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.250761477946772,
+            "score": 0.030978233495233
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": false,
+      "chat": {
+        "ms": 6787,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 3561,
+        "citations": 3,
+        "answer": "Here’s a concise comparison of their IT support backgrounds based on the documents.\n\n**Role focus and environment**\n\n- **Brad Shimomura** – IT Support Specialist at a K–12 school (Salem Academy Christian School), supporting ~900 users across 5 buildings, with responsibility for both end‑user support and network infrastructure (switches, access points, bridge devices). He also builds small internal"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "cmp-002",
+      "kind": "comparison",
+      "question": "How would Brad fit into the executive internship program?",
+      "retrieve": {
+        "ms": 423,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 19,
+        "top": [
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.532264962544929,
+            "score": 0.0317460317460317
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.531423000994954,
+            "score": 0.0312805474095797
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.535476002391627,
+            "score": 0.0306791569086651
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.530964897024825,
+            "score": 0.0303099885189437
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.510916874008978,
+            "score": 0.0299107142857143
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.526752581269715,
+            "score": 0.0296312554872695
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": false,
+      "chat": {
+        "ms": 9686,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 4196,
+        "citations": 7,
+        "answer": "Brad aligns well with the intent and structure of the Executive Internship and could slot in as a high-value, more technically oriented intern with strong operations and tooling leverage.\n\nStrategic fit\n- The internship is designed to blend executive exposure with business operations, technology, and process improvement, preparing future leaders who understand how a growing technology company is b"
+      },
+      "mustInclude": false,
+      "missing": [
+        "Salem"
+      ],
+      "citationPrecision": 0.5714285714285714
+    },
+    {
+      "id": "cmp-003",
+      "kind": "comparison",
+      "question": "Is Hiyab Mengisteab a good candidate for the Executive Assistant internship?",
+      "retrieve": {
+        "ms": 586,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "Hiyab Mengisteab Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.506056688315851,
+            "score": 0.0310544053923929
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.519603101888202,
+            "score": 0.0302823315118397
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.462996674663164,
+            "score": 0.0299069561364643
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.47434416017281,
+            "score": 0.0295138888888889
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.504010479135368,
+            "score": 0.0292063492063492
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.470057914111854,
+            "score": 0.0290832455216017
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 4747,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 1703,
+        "citations": 5,
+        "answer": "The documents don’t provide enough information to determine whether Hiyab Mengisteab is a strong fit for this Executive Assistant & Industrial Engineering Internship.\n\nWhat we know:\n\n- Hiyab is a Healthcare IT Analyst with experience supporting Epic workflows, reporting, and operational analytics, which indicates comfort with complex systems, data, and healthcare operations. [1]\n- The internship, "
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 0.6
+    }
+  ]
+}

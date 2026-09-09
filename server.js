@@ -2,8 +2,8 @@
 //  CORTÉX — SERVER ENGINE (FULL STAGE-46 RESTORE + 47.6G READY)
 // =============================================================
 
-import dotenv from "dotenv";
-dotenv.config({ path: "./.env" });
+// Must be the first import: loads .env (or .env.production) before any other module reads process.env
+import "./backend/lib/env.js";
 
 console.log("ENV JWT_SECRET:", process.env.JWT_SECRET);
 
@@ -21,8 +21,12 @@ import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { pathToFileURL } from "url";
 
+import multipart from "@fastify/multipart";
 import authPlugin from "./backend/lib/authMiddleware.js";
+import { createIngestWorker } from "./backend/ingest/worker.js";
+import { parserHealth } from "./backend/ingest/parserClient.js";
 
 // ✅ FIX APPLIED — bodyLimit added (NO OTHER CHANGES)
 const fastify = Fastify({
@@ -35,13 +39,20 @@ const fastify = Fastify({
 // -------------------------------------------------------------
 await fastify.register(cors, {
   origin: "*",
-  methods: ["GET", "POST", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 });
 
 // -------------------------------------------------------------
 // AUTH
 // -------------------------------------------------------------
+await fastify.register(multipart, {
+  limits: {
+    fileSize: Number(process.env.MAX_UPLOAD_MB || 50) * 1024 * 1024,
+    files: 1,
+  },
+});
+
 await fastify.register(authPlugin);
 
 // -------------------------------------------------------------
@@ -64,6 +75,20 @@ const openai = new OpenAI({
 fastify.decorate("openai", openai);
 
 // -------------------------------------------------------------
+// INGEST WORKER + PARSER STATUS (started after listen)
+// -------------------------------------------------------------
+const ingestWorker = createIngestWorker(fastify);
+fastify.decorate("ingestWorker", ingestWorker);
+
+let parserStatusCache = { at: 0, value: null };
+fastify.decorate("parserStatus", async () => {
+  if (Date.now() - parserStatusCache.at > 15000) {
+    parserStatusCache = { at: Date.now(), value: await parserHealth() };
+  }
+  return parserStatusCache.value ? { online: true, ...parserStatusCache.value } : { online: false };
+});
+
+// -------------------------------------------------------------
 // HEALTH CHECK
 // -------------------------------------------------------------
 fastify.get("/api/health", async () => ({
@@ -80,6 +105,7 @@ const allowedRoutes = new Set([
   "auth.js",
   "chat.js",
   "document.js",
+  "documentTypes.js",
   "ingest.js",
   "retrieve.js" 
 ]);
@@ -97,7 +123,7 @@ for (const file of fs.readdirSync(routesDir)) {
   console.log(`📡 Loading route: ${file}`);
 
   const routePath = path.join(routesDir, file);
-  const module = await import(routePath);
+  const module = await import(pathToFileURL(routePath).href);
 
   if (typeof module.default === "function") {
     await fastify.register(module.default);
@@ -118,6 +144,10 @@ try {
   });
 
   console.log(`🔥 CORTÉX SERVER RUNNING — PORT ${PORT} [STAGE-46 + 47.6G]`);
+
+  if (process.env.INGEST_WORKER !== "off") {
+    ingestWorker.start();
+  }
 
 } catch (err) {
   fastify.log.error(err);

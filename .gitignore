@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.example
 .next/
 dist/
 uploads/
@@ -7,4 +9,6 @@ uploads/
 *.png
 *.docx
 *.txt
+!parser/samples/*.pdf
+!parser/samples/*.png
 .vs/

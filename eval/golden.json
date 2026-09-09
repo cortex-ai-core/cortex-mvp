@@ -1,0 +1,335 @@
+{
+  "namespace": "core",
+  "notes": "Golden questions against the Core workspace. expected_documents match on file name substring (case-insensitive). answer_must_include are case-insensitive substrings. kind: lookup | summary | comparison | out_of_scope.",
+  "questions": [
+    {
+      "id": "lee-001",
+      "kind": "lookup",
+      "question": "How many credits is the AST degree at Leeward Community College?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "answer_must_include": [
+        "62"
+      ]
+    },
+    {
+      "id": "lee-002",
+      "kind": "lookup",
+      "question": "What are the core education requirements for the AST Teacher Education degree, and how many credits are they?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "expected_pages": [
+        5
+      ],
+      "answer_must_include": [
+        "13"
+      ]
+    },
+    {
+      "id": "lee-003",
+      "kind": "lookup",
+      "question": "Which courses can satisfy the FG global and multicultural perspectives requirement in the AST program?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "answer_must_include": [
+        "ANTH"
+      ]
+    },
+    {
+      "id": "lee-004",
+      "kind": "lookup",
+      "question": "What academic years does the Leeward Teacher Education Program comprehensive review cover?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "answer_must_include": [
+        "2020"
+      ]
+    },
+    {
+      "id": "lee-005",
+      "kind": "lookup",
+      "question": "Besides the AST degree, what licensure pathways does the Leeward Teacher Education Program offer?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "answer_must_include": [
+        "SPED"
+      ]
+    },
+    {
+      "id": "lee-006",
+      "kind": "summary",
+      "question": "What is in the LEE_3311_Technical document?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "answer_must_include": [
+        "Teacher Education"
+      ]
+    },
+    {
+      "id": "lee-007",
+      "kind": "lookup",
+      "question": "Which courses make up the 62 credits of the AST degree?",
+      "expected_documents": [
+        "2025_LEE_3311"
+      ],
+      "answer_must_include": [
+        "ED 277"
+      ]
+    },
+    {
+      "id": "phd-001",
+      "kind": "lookup",
+      "question": "How much does the Perin Health Patch weigh?",
+      "expected_documents": [
+        "PHD_DEVICE"
+      ],
+      "answer_must_include": [
+        "19"
+      ]
+    },
+    {
+      "id": "phd-002",
+      "kind": "lookup",
+      "question": "What is the FDA 510(k) number for the Perin Health System?",
+      "expected_documents": [
+        "PHD_DEVICE"
+      ],
+      "answer_must_include": [
+        "K252984"
+      ]
+    },
+    {
+      "id": "phd-003",
+      "kind": "lookup",
+      "question": "What is the validated SpO2 accuracy of the Perin Health Patch?",
+      "expected_documents": [
+        "PHD_DEVICE"
+      ],
+      "answer_must_include": [
+        "3.3"
+      ]
+    },
+    {
+      "id": "phd-004",
+      "kind": "lookup",
+      "question": "What patient population is the Perin Health System intended for?",
+      "expected_documents": [
+        "PHD_DEVICE"
+      ],
+      "answer_must_include": [
+        "22"
+      ]
+    },
+    {
+      "id": "phd-005",
+      "kind": "lookup",
+      "question": "What are the validated cuffless blood pressure accuracy figures for the Perin Health Patch?",
+      "expected_documents": [
+        "PHD_DEVICE"
+      ],
+      "answer_must_include": [
+        "7.88"
+      ]
+    },
+    {
+      "id": "phd-006",
+      "kind": "summary",
+      "question": "Summarize the PHD device description.",
+      "expected_documents": [
+        "PHD_DEVICE"
+      ],
+      "answer_must_include": [
+        "Perin"
+      ]
+    },
+    {
+      "id": "inc-001",
+      "kind": "lookup",
+      "question": "What is the incident number and date range of the MultiCare network incident?",
+      "expected_documents": [
+        "INCIDENT-DemoMC"
+      ],
+      "answer_must_include": [
+        "MC-NET-4821"
+      ]
+    },
+    {
+      "id": "inc-002",
+      "kind": "lookup",
+      "question": "Which core switch cluster showed the latency spike in the MultiCare incident?",
+      "expected_documents": [
+        "INCIDENT-DemoMC"
+      ],
+      "answer_must_include": [
+        "SW-CORE-03"
+      ]
+    },
+    {
+      "id": "jd-001",
+      "kind": "lookup",
+      "question": "How is the Executive Assistant and Industrial Engineering internship split between executive support and business operations?",
+      "expected_documents": [
+        "JD-Internship"
+      ],
+      "answer_must_include": [
+        "50"
+      ]
+    },
+    {
+      "id": "jd-002",
+      "kind": "lookup",
+      "question": "How many hours per week is the Executive Assistant and Industrial Engineering internship, and where does it require periodic travel?",
+      "expected_documents": [
+        "JD-Internship"
+      ],
+      "answer_must_include": [
+        "20",
+        "Burbank"
+      ]
+    },
+    {
+      "id": "foster-001",
+      "kind": "lookup",
+      "question": "How long does the Empowering Foster Youth workforce media project run, and how many youth does it serve?",
+      "expected_documents": [
+        "Empowering Foster Youth"
+      ],
+      "answer_must_include": [
+        "12",
+        "24"
+      ]
+    },
+    {
+      "id": "foster-002",
+      "kind": "lookup",
+      "question": "Which organization is behind the Empowering Foster Youth media project, and when was it founded?",
+      "expected_documents": [
+        "Empowering Foster Youth"
+      ],
+      "answer_must_include": [
+        "lelo",
+        "1989"
+      ]
+    },
+    {
+      "id": "intern-001",
+      "kind": "lookup",
+      "question": "What are the four stages of the SolluCIO Executive Internship development plan?",
+      "expected_documents": [
+        "SolluCIO Executive Internship"
+      ],
+      "answer_must_include": [
+        "Observe",
+        "Own"
+      ]
+    },
+    {
+      "id": "intern-002",
+      "kind": "lookup",
+      "question": "How are weekly assignments tracked in the SolluCIO Executive Internship, and what tool is preferred for questions?",
+      "expected_documents": [
+        "SolluCIO Executive Internship"
+      ],
+      "answer_must_include": [
+        "Planner",
+        "Teams"
+      ]
+    },
+    {
+      "id": "resume-001",
+      "kind": "lookup",
+      "question": "Where did Ariel Wilson work most recently, and roughly how many tickets did she process per day?",
+      "expected_documents": [
+        "ArielWilson"
+      ],
+      "answer_must_include": [
+        "Salem",
+        "40"
+      ]
+    },
+    {
+      "id": "resume-002",
+      "kind": "lookup",
+      "question": "What network equipment brand does Brad Shimomura have hands-on installation experience with?",
+      "expected_documents": [
+        "Brad Shimomura"
+      ],
+      "answer_must_include": [
+        "Ubiquit"
+      ]
+    },
+    {
+      "id": "resume-003",
+      "kind": "lookup",
+      "question": "What is Hiyab Mengisteab's role, and which EHR system does she have experience with?",
+      "expected_documents": [
+        "Hiyab Mengisteab"
+      ],
+      "answer_must_include": [
+        "Healthcare IT Analyst",
+        "Epic"
+      ]
+    },
+    {
+      "id": "cmp-001",
+      "kind": "comparison",
+      "question": "Compare the IT support backgrounds of Brad Shimomura and Ariel Wilson.",
+      "expected_documents": [
+        "Brad Shimomura",
+        "ArielWilson"
+      ],
+      "answer_must_include": [
+        "Shimomura",
+        "Wilson"
+      ]
+    },
+    {
+      "id": "cmp-002",
+      "kind": "comparison",
+      "question": "How would Brad fit into the executive internship program?",
+      "expected_documents": [
+        "Brad Shimomura",
+        "Internship"
+      ],
+      "answer_must_include": [
+        "network"
+      ]
+    },
+    {
+      "id": "cmp-003",
+      "kind": "comparison",
+      "question": "Is Hiyab Mengisteab a good candidate for the Executive Assistant internship?",
+      "expected_documents": [
+        "Hiyab Mengisteab",
+        "Internship"
+      ],
+      "answer_must_include": [
+        "Hiyab"
+      ]
+    },
+    {
+      "id": "oos-001",
+      "kind": "out_of_scope",
+      "question": "What is the capital of France?",
+      "expected_documents": []
+    },
+    {
+      "id": "oos-002",
+      "kind": "out_of_scope",
+      "question": "What was SolluCIO's revenue last quarter?",
+      "expected_documents": []
+    },
+    {
+      "id": "oos-003",
+      "kind": "out_of_scope",
+      "question": "Who is the current CEO of MultiCare Health System?",
+      "expected_documents": []
+    }
+  ]
+}

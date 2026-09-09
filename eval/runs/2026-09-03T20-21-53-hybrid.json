@@ -1,0 +1,370 @@
+{
+  "summary": {
+    "mode": "hybrid",
+    "questions": 5,
+    "docRecallAtK": 1,
+    "allExpectedFound": 0.8,
+    "mrr": 1,
+    "pageRecallAtK": 1,
+    "mustInclude": 1,
+    "citationPrecision": 1,
+    "answersWithCitations": 1,
+    "abstainAccuracy": null,
+    "retrieveMs": {
+      "p50": 401,
+      "p95": 460
+    },
+    "chatMs": {
+      "p50": 2123,
+      "p95": 9122
+    }
+  },
+  "rows": [
+    {
+      "id": "lee-002",
+      "kind": "lookup",
+      "question": "What are the core education requirements for the AST Teacher Education degree, and how many credits are they?",
+      "retrieve": {
+        "ms": 437,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 10,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 5,
+            "section": "I. Core Education Requirements: 13 credi",
+            "sim": 0.586885218328482,
+            "score": 0.0495681818181818
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.637400199757678,
+            "score": 0.044258064516129
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.559265693730903,
+            "score": 0.0428861962461392
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.57864583163677,
+            "score": 0.0425503731343284
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 6,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.601699253837382,
+            "score": 0.0423657694962043
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 7,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.542188471135836,
+            "score": 0.040814262023217196
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "pageRecall": true,
+      "chat": {
+        "ms": 2347,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 566,
+        "citations": 2,
+        "answer": "The AST Teacher Education degree has **Core Education Requirements totaling 13 credits** [5].\n\nRequired core ED courses (all must be completed with a C or better) [4][5]:\n- **ED 277** Introduction to Multicultural Education (3 credits)\n- **ED 285** Classroom Management in the Instructional Process (3 credits)\n- **ED 290** Foundations of Education (3 credits)\n- **ED 291** Developing Language and Li"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-003",
+      "kind": "lookup",
+      "question": "Which courses can satisfy the FG global and multicultural perspectives requirement in the AST program?",
+      "retrieve": {
+        "ms": 401,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 12,
+        "top": [
+          {
+            "file": "Teacher Education Program",
+            "page": 6,
+            "section": "II. Education Electives: minimum 9 credi",
+            "sim": 0.441892255367772,
+            "score": 0.0426217858812529
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 29,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.406737902077654,
+            "score": 0.0368861962461392
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 15,
+            "section": "AST - Analysis of the Program/Unit",
+            "sim": 0.432157362619634,
+            "score": 0.0355716460100022
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 30,
+            "section": "AST - Curriculum Revision and Review (Fo",
+            "sim": 0.404918897249365,
+            "score": 0.0355138888888889
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 36,
+            "section": "AST Program Strengths and Weaknesses",
+            "sim": 0.41311117123322,
+            "score": 0.0352360221937687
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 5,
+            "section": "II. Education Electives: minimum 9 credi",
+            "sim": null,
+            "score": 0.03835960729312761
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1999,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 444,
+        "citations": 1,
+        "answer": "The AST program lists the following options to satisfy the FG (Global and Multicultural Perspectives) requirement; students must take **one course from two different groups (A, B, C)**:\n\n- **Group A:** ANTH 151, ART 175, HIST 151\n- **Group B:** ANTH 152, ART 176, HIST 152, GEO 102\n- **Group C:** GEO 151, MUS 107, REL 150\n\nYou complete the FG requirement by choosing **two FG courses total**, each f"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "jd-001",
+      "kind": "lookup",
+      "question": "How is the Executive Assistant and Industrial Engineering internship split between executive support and business operations?",
+      "retrieve": {
+        "ms": 460,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 19,
+        "top": [
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.700095555839727,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.653765146369317,
+            "score": 0.0320020481310804
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.661613089445323,
+            "score": 0.0315136476426799
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.626803184949552,
+            "score": 0.03125
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.601343924930105,
+            "score": 0.0303030303030303
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.57242816762998,
+            "score": 0.0292110874200426
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 2123,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 895,
+        "citations": 2,
+        "answer": "The internship is intentionally structured as a 50/50 role:\n\n- **50% Executive & Administrative Support**\n  Time is dedicated to supporting the CEO with scheduling, meetings, documentation, project tracking, presentations, and general executive operations. This includes calendar coordination, meeting agendas/notes, follow-up actions, organizing business documentation, and coordinating internal lea"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "jd-002",
+      "kind": "lookup",
+      "question": "How many hours per week is the Executive Assistant and Industrial Engineering internship, and where does it require periodic travel?",
+      "retrieve": {
+        "ms": 382,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.624795199537607,
+            "score": 0.0327868852459016
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.561550553034813,
+            "score": 0.0314980158730159
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.590171794936701,
+            "score": 0.0306217858812529
+          },
+          {
+            "file": "JD-Internship.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.550267579884236,
+            "score": 0.0300904977375566
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.484206310911962,
+            "score": 0.0300179211469534
+          },
+          {
+            "file": "SolluCIO Executive Internship Program.do",
+            "page": null,
+            "section": "",
+            "sim": 0.493519715415588,
+            "score": 0.0294372294372294
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1450,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 226,
+        "citations": 1,
+        "answer": "The Executive Assistant & Industrial Engineering internship is approximately 20 hours per week and includes periodic travel to Burbank, California for product demonstrations, engineering collaboration, and field experience.[1]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "cmp-001",
+      "kind": "comparison",
+      "question": "Compare the IT support backgrounds of Brad Shimomura and Ariel Wilson.",
+      "retrieve": {
+        "ms": 208,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 16,
+        "top": [
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.459379523737237,
+            "score": 0.044522474881015295
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.49054579127874,
+            "score": 0.044522474881015295
+          },
+          {
+            "file": "Hiyab Mengisteab Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.276427012627973,
+            "score": 0.032522769042270805
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.436054011263116,
+            "score": 0.0317460317460317
+          },
+          {
+            "file": "Teacher Education Program",
+            "page": 36,
+            "section": "AST Program Strengths and Weaknesses",
+            "sim": 0.245922517098954,
+            "score": 0.0310631808278867
+          },
+          {
+            "file": "Brad Shimomura Resume.docx",
+            "page": null,
+            "section": "",
+            "sim": 0.429244958149095,
+            "score": 0.0305503731343284
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": false,
+      "chat": {
+        "ms": 9122,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 3391,
+        "citations": 4,
+        "answer": "Here’s a concise comparison of their IT support backgrounds, with emphasis on how each could operate in a technical support environment.\n\n**1. Core IT Support Focus**\n\n- **Brad Shimomura** – Explicitly positioned as an IT Support Specialist with end‑user and network support in a K–12 school environment (about 900 users across 5 buildings). His work spans tickets, device remediation, and network in"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    }
+  ]
+}

@@ -1,0 +1,301 @@
+{
+  "summary": {
+    "mode": "hybrid",
+    "questions": 4,
+    "docRecallAtK": 1,
+    "allExpectedFound": 1,
+    "mrr": 1,
+    "pageRecallAtK": 1,
+    "mustInclude": 1,
+    "citationPrecision": 1,
+    "answersWithCitations": 1,
+    "abstainAccuracy": null,
+    "retrieveMs": {
+      "p50": 608,
+      "p95": 651
+    },
+    "chatMs": {
+      "p50": 3078,
+      "p95": 7824
+    }
+  },
+  "rows": [
+    {
+      "id": "lee-001",
+      "kind": "lookup",
+      "question": "How many credits is the AST degree at Leeward Community College?",
+      "retrieve": {
+        "ms": 608,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 15,
+        "top": [
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.515057001070778,
+            "score": 0.0643816425120773
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": 0.443370857425484,
+            "score": 0.063271052146674
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.575013255392661,
+            "score": 0.05525
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.634763834304742,
+            "score": 0.056266458495966704
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.607944054367397,
+            "score": 0.056258064516129
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": null,
+            "score": 0.04557583138173303
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 1552,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 109,
+        "citations": 2,
+        "answer": "The Associate in Science in Teaching (AST) degree at Leeward Community College is a 62-credit program. [3][6]"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-002",
+      "kind": "lookup",
+      "question": "What are the core education requirements for the AST Teacher Education degree, and how many credits are they?",
+      "retrieve": {
+        "ms": 517,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 13,
+        "top": [
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": null,
+            "score": 0.0506322580645161
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.637400199757678,
+            "score": 0.056258064516129
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.559265693730903,
+            "score": 0.054886196246139204
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.57864583163677,
+            "score": 0.0545503731343284
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": null,
+            "score": 0.06621136363636362
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 5,
+            "section": "I. Core Education Requirements: 13 credi",
+            "sim": 0.586885218328482,
+            "score": 0.0735681818181818
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "pageRecall": true,
+      "chat": {
+        "ms": 2325,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 416,
+        "citations": 1,
+        "answer": "The AST Teacher Education degree has 13 credits of core education requirements, consisting of five courses [6]:\n\n- ED 277 Introduction to Multicultural Education (3 credits) [6]\n- ED 285 Classroom Management in the Instructional Process (3 credits) [6]\n- ED 290 Foundations of Education (3 credits) [6]\n- ED 291 Developing Language and Literacy I (3 credits) [6]\n- ED 295 Field Experience in Educatio"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-003",
+      "kind": "lookup",
+      "question": "Which courses can satisfy the FG global and multicultural perspectives requirement in the AST program?",
+      "retrieve": {
+        "ms": 651,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 12,
+        "top": [
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 5,
+            "section": "II. Education Electives: minimum 9 credi",
+            "sim": null,
+            "score": 0.034837788461538476
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 6,
+            "section": "II. Education Electives: minimum 9 credi",
+            "sim": null,
+            "score": 0.03870865384615386
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 6,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": 0.42985097122617,
+            "score": 0.043009615384615396
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 7,
+            "section": "IV. Graduation Requirements: 15 credits",
+            "sim": null,
+            "score": 0.03870865384615386
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 8,
+            "section": "CTE - Description",
+            "sim": null,
+            "score": 0.034837788461538476
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 14,
+            "section": "AST - Analysis of the Program/Unit",
+            "sim": null,
+            "score": 0.03741448140900198
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 3078,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 536,
+        "citations": 1,
+        "answer": "The AST program’s FG (Global and Multicultural Perspectives) requirement is met by taking **one course from two different FG groups (A, B, C)** from the following list [2]:\n\n- **Group A (FG-A)**:\n  - ANTH 151\n  - ART 175\n  - HIST 151\n\n- **Group B (FG-B)**:\n  - ANTH 152\n  - ART 176\n  - HIST 152\n  - GEO 102\n\n- **Group C (FG-C)**:\n  - GEO 151\n  - MUS 107\n  - REL 150\n\nStudents must choose **two FG cou"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    },
+    {
+      "id": "lee-007",
+      "kind": "lookup",
+      "question": "Which courses make up the 62 credits of the AST degree?",
+      "retrieve": {
+        "ms": 506,
+        "status": 200,
+        "mode": "hybrid",
+        "count": 12,
+        "top": [
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": null,
+            "score": 0.04516076612903225
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 1,
+            "section": "Teacher Education Program - Leeward Comm",
+            "sim": null,
+            "score": 0.05017862903225805
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.498933629311048,
+            "score": 0.0557540322580645
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 2,
+            "section": "AST Degree Program",
+            "sim": 0.456840607643844,
+            "score": 0.0528501452885015
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 3,
+            "section": "AST Degree Program",
+            "sim": 0.462265189408241,
+            "score": 0.053709507042253496
+          },
+          {
+            "file": "2025_LEE_3311_Technical-Teacher-Educatio",
+            "page": 4,
+            "section": "AST Degree Program",
+            "sim": 0.515954858948808,
+            "score": 0.0553188157572792
+          }
+        ]
+      },
+      "docRecall": true,
+      "rr": 1,
+      "allExpectedFound": true,
+      "chat": {
+        "ms": 7824,
+        "status": 200,
+        "mode": "retrieval",
+        "chars": 2601,
+        "citations": 4,
+        "answer": "The documents only partially list the AST degree requirements and do not provide a full, course-by-course breakdown that clearly sums to 62 credits. Based on what is available:\n\n1. **Core Education Requirements – 13 credits** [7]\n   - ED 277 Introduction to Multicultural Education (3)\n   - ED 285 Classroom Management in the Instructional Process (3)\n   - ED 290 Foundations of Education (3)\n   - ED"
+      },
+      "mustInclude": true,
+      "missing": [],
+      "citationPrecision": 1
+    }
+  ]
+}
