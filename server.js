@@ -34,7 +34,7 @@ const fastify = Fastify({
 // -------------------------------------------------------------
 await fastify.register(cors, {
   origin: "*",
-  methods: ["GET", "POST", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 });
 
@@ -80,7 +80,8 @@ const allowedRoutes = new Set([
   "chat.js",
   "document.js",
   "ingest.js",
-  "retrieve.js" 
+  "retrieve.js",
+  "settings.js"
 ]);
 
 for (const file of fs.readdirSync(routesDir)) {
