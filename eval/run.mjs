@@ -52,14 +52,18 @@ const quantile = (arr, q) => {
 // note: the model writes curly apostrophes (don’t), so both forms are accepted
 const ABSTAIN = /documents? (?:don['’]?t|do not|does not|doesn['’]?t) \w+|don['’]?t (?:cover|have)|do not (?:cover|have)|no matching documents|not (?:contain|include|cover|mention|identify|state|specify|provide|address)|not (?:identified|stated|specified|provided|mentioned|covered|found)|not found in|no (?:information|data|financial|revenue|record|reference)|contains? no|isn'?t (?:covered|mentioned|in the)|does not (?:appear|address|identify|state|specify|contain|include|mention)|cannot (?:be (?:answered|determined) from|reliably)|outside (?:the|these) (?:documents|materials|sources)/i;
 
-async function login() {
+async function loginWith(email, password, namespaceId) {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: EMAIL, password: PASSWORD, namespaceId: golden.namespaceId }),
+    body: JSON.stringify({ email, password, namespaceId }),
   });
   const j = await res.json();
-  if (!j.token) throw new Error(`login failed: ${j.error || res.status} (set EVAL_EMAIL / EVAL_PASSWORD in .env)`);
+  if (!j.token) throw new Error(`login failed for ${email}: ${j.error || res.status} (set EVAL_EMAIL / EVAL_PASSWORD in .env)`);
   return j.token;
+}
+
+function login() {
+  return loginWith(EMAIL, PASSWORD, golden.namespaceId);
 }
 
 async function post(path, token, body) {
@@ -82,40 +86,98 @@ if (args.memory === "true") {
   const mg = JSON.parse(readFileSync(join(here, "memory-golden.json"), "utf8"));
   const scenarios = mg.scenarios.filter((s) => !IDS || IDS.has(s.id));
   console.log(`\nCortéx memory eval · ${scenarios.length} scenarios · ${BASE}\n`);
+  // Logins a turn can run as (design doc 5.11 isolation): the primary
+  // account, a second account in the same namespace, and the primary
+  // account signed into another namespace. Fetched once, on first use.
+  const EMAIL_2 = envVal("EVAL_EMAIL_2");
+  const PASSWORD_2 = envVal("EVAL_PASSWORD_2");
+  const tokens = { primary: token };
+  const loginAs = async (who) => {
+    if (tokens[who] !== undefined) return tokens[who];
+    tokens[who] = null;
+    try {
+      if (who === "second" && EMAIL_2 && PASSWORD_2) tokens.second = await loginWith(EMAIL_2, PASSWORD_2, mg.namespaceId);
+      else if (who === "other_namespace" && mg.otherNamespaceId) tokens.other_namespace = await loginWith(EMAIL, PASSWORD, mg.otherNamespaceId);
+    } catch (err) {
+      console.log(`login as "${who}" failed: ${err.message}`);   // the scenario is skipped, not failed
+    }
+    return tokens[who];
+  };
+  const del = (path, tok) => fetch(`${BASE}${path}`, { method: "DELETE", headers: { Authorization: `Bearer ${tok}` } }).catch(() => {});
+
   const results = [];
   let passedScenarios = 0;
+  let skippedScenarios = 0;
   for (const s of scenarios) {
-    let conversationId = null;
+    const needs = [...new Set(s.turns.map((t) => t.as || "primary"))];
+    const missing = [];
+    for (const who of needs) if (!(await loginAs(who))) missing.push(who);
+    if (missing.length) {
+      skippedScenarios++;
+      console.log(`${s.id.padEnd(11)} SKIP  needs login "${missing.join(", ")}" (set EVAL_EMAIL_2 / EVAL_PASSWORD_2 in .env, or otherNamespaceId in memory-golden.json)`);
+      results.push({ id: s.id, family: s.family, skipped: true, missing });
+      continue;
+    }
+    const marker = `ZQX${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const fill = (str) => String(str || "").replace(/\{\{marker\}\}/g, marker);
+    const conversations = {};        // per login: the current conversation id
+    const openedThreads = [];        // [{ who, id }] to delete afterwards
+    const savedMemories = [];        // [{ who, id }] to delete afterwards
     const turns = [];
     let ok = true;
     for (const [i, t] of s.turns.entries()) {
-      const c = await post("/api/chat", token, { message: t.message, conversationId });
-      conversationId = c.body?.conversationId || conversationId;
+      const who = t.as || "primary";
+      const tok = tokens[who];
+      if (t.new_conversation) conversations[who] = null;
+      const c = await post("/api/chat", tok, { message: fill(t.message), conversationId: conversations[who] || null });
+      if (c.body?.conversationId && c.body.conversationId !== conversations[who]) {
+        conversations[who] = c.body.conversationId;
+        openedThreads.push({ who, id: c.body.conversationId });
+      }
       const answer = c.body?.finalAnswer || "";
       const cites = Array.isArray(c.body?.citations) ? c.body.citations : [];
+      const used = Array.isArray(c.body?.memoriesUsed) ? c.body.memoriesUsed : [];
+      if (c.body?.memorySaved?.id && c.body.memorySaved.action !== "duplicate") savedMemories.push({ who, id: c.body.memorySaved.id });
       const e = t.expect || {};
       const checks = {};
       if (e.cites_any) checks.cites_any = cites.some((x) => matchesDoc(x, e.cites_any));
-      if (e.answer_must_include) checks.answer_must_include = e.answer_must_include.every((m) => norm(answer).includes(norm(m)));
+      if (e.answer_must_include) checks.answer_must_include = e.answer_must_include.every((m) => norm(answer).includes(norm(fill(m))));
+      if (e.answer_must_not_include) checks.answer_must_not_include = e.answer_must_not_include.every((m) => !norm(answer).includes(norm(fill(m))));
       if (e.mode_in) checks.mode_in = e.mode_in.includes(c.body?.mode);
       if (e.not_abstain) checks.not_abstain = !ABSTAIN.test(answer) && answer.length > 40;
+      if (e.abstain) checks.abstain = ABSTAIN.test(answer);
+      if (e.memory_saved !== undefined) checks.memory_saved = Boolean(c.body?.memorySaved?.id) === Boolean(e.memory_saved);
+      if (e.memories_used_min !== undefined) checks.memories_used_min = used.length >= e.memories_used_min;
+      if (e.memories_used_max !== undefined) checks.memories_used_max = used.length <= e.memories_used_max;
+      if (e.saved_memory_fetch) {
+        const target = savedMemories[savedMemories.length - 1];
+        if (!target) checks.saved_memory_fetch = false;
+        else {
+          const r = await fetch(`${BASE}/api/memory/${target.id}`, { headers: { Authorization: `Bearer ${tok}` } }).catch(() => ({ status: 0 }));
+          checks.saved_memory_fetch = e.saved_memory_fetch === "ok" ? r.status === 200 : r.status === 404;
+        }
+      }
       const turnOk = c.status === 200 && Object.values(checks).every(Boolean);
       ok = ok && turnOk;
-      turns.push({ message: t.message, status: c.status, ms: c.ms, mode: c.body?.mode, intent: c.body?.intent, citations: cites.length, checks, ok: turnOk, answer: answer.slice(0, 300) });
+      turns.push({ message: fill(t.message), as: who, status: c.status, ms: c.ms, mode: c.body?.mode, intent: c.body?.intent, citations: cites.length, memoriesUsed: used.length, memorySaved: c.body?.memorySaved || null, checks, ok: turnOk, answer: answer.slice(0, 300) });
       const flag = (v) => (v === true ? "✓" : v === false ? "✗" : "·");
-      console.log(`${s.id.padEnd(11)} turn ${i + 1}  ${turnOk ? "PASS" : "FAIL"}  mode=${String(c.body?.mode || "-").padEnd(14)} intent=${String(c.body?.intent?.type || "-")}/${String(c.body?.intent?.scope || "-")}  cites=${String(cites.length).padEnd(3)} ${Object.entries(checks).map(([k, v]) => `${k} ${flag(v)}`).join("  ")}  ${c.ms}ms`);
+      console.log(`${s.id.padEnd(11)} turn ${i + 1}${who === "primary" ? "" : ` as ${who}`}  ${turnOk ? "PASS" : "FAIL"}  mode=${String(c.body?.mode || "-").padEnd(14)} intent=${String(c.body?.intent?.type || "-")}/${String(c.body?.intent?.scope || "-")}  cites=${String(cites.length).padEnd(3)} mem=${String(used.length).padEnd(2)} ${Object.entries(checks).map(([k, v]) => `${k} ${flag(v)}`).join("  ")}  ${c.ms}ms`);
     }
     if (ok) passedScenarios++;
-    results.push({ id: s.id, family: s.family, ok, conversationId, turns });
-    if (conversationId) await fetch(`${BASE}/api/conversations/${conversationId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    results.push({ id: s.id, family: s.family, ok, marker, turns });
+    for (const m of savedMemories) await del(`/api/memory/${m.id}`, tokens[m.who]);
+    for (const th of openedThreads) await del(`/api/conversations/${th.id}`, tokens[th.who]);
   }
-  console.log(`\n=== memory summary ===\nscenarios passed     ${passedScenarios} / ${scenarios.length}`);
+  const ran = scenarios.length - skippedScenarios;
+  console.log(`\n=== memory summary ===\nscenarios passed     ${passedScenarios} / ${ran}${skippedScenarios ? `   (${skippedScenarios} skipped)` : ""}`);
   mkdirSync(join(here, "runs"), { recursive: true });
   const stampM = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const outM = join(here, "runs", `${stampM}-memory.json`);
-  writeFileSync(outM, JSON.stringify({ summary: { passed: passedScenarios, total: scenarios.length }, results }, null, 2));
+  writeFileSync(outM, JSON.stringify({ summary: { passed: passedScenarios, ran, skipped: skippedScenarios, total: scenarios.length }, results }, null, 2));
   console.log(`saved ${outM}`);
-  process.exit(passedScenarios === scenarios.length ? 0 : 1);
+  process.exitCode = passedScenarios === ran ? 0 : 1;
+  await new Promise((r) => setTimeout(r, 200));
+  process.exit(process.exitCode);
 }
 
 const rows = [];

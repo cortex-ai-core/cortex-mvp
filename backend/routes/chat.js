@@ -13,13 +13,18 @@ import { effectiveSettings } from "../memory/settings.js";
 import { getOrCreateConversation, appendMessage, titleFrom, isUuid } from "../memory/conversations.js";
 // 🧠 Memory, layer 1 continued: the thread window in the prompt (design doc 5.5, hook H3)
 import { loadWindow, maybeSummarize } from "../memory/window.js";
+// 🧠 Memory, layer 2: durable memories (design doc 5.6, 5.7, hooks H3/H4/H5)
+import { recallMemories } from "../memory/recall.js";
+import { saveMemory, touchMemories } from "../memory/store.js";
+import { finishTrace } from "../retrieval/trace.js";
+import { randomUUID } from "node:crypto";
 
 // 🔒 DLP
 import { runDLPScan, stripSensitiveFields } from "../lib/dlp.js";
 
 // 🔥 Step 46 Reasoning Modules
 import { classifyIntent, intentLabel } from "../reasoning/intent.js";
-import { synthesizeFinalAnswer } from "../reasoning/synthesis.js";
+import { synthesizeFinalAnswer, extractConflicts } from "../reasoning/synthesis.js";
 import { formatOutput } from "../reasoning/outputFormatter.js";
 
 // 🔥 Step 47 Identity Layer
@@ -893,6 +898,79 @@ export default fp(async function chatRoute(fastify) {
             log: fastify.log
           });
 
+        // ------------------------------------------------
+        // 🧠 "Remember that …" (design doc 5.7, P3.5). The intent module
+        // extracted the note to keep; save it by hand with importance 4
+        // and confirm. Nothing else runs for this turn.
+        // ------------------------------------------------
+        if (intent.type === "remember" && intent.rememberContent) {
+          let reply;
+          let memorySaved = null;
+          if (privateMode) {
+            reply = "Private mode is on, so nothing is saved. Turn it off if you want me to keep that.";
+          } else if (!memory.enabled) {
+            reply = "Memory is off in this workspace, so I can't keep that for later.";
+          } else if (!hasPermission(identity, "memory_write")) {
+            reply = "Your role can't save memories here, so I can't keep that.";
+          } else {
+            try {
+              const { memory: saved, action } = await saveMemory(fastify.supabase, openai, identity, {
+                content: intent.rememberContent,
+                kind: intent.rememberKind || "note",
+                scope: "user",
+                importance: 4,
+                sourceType: "user_explicit",
+                sourceConversationId: memory.conversation?.id || null,
+                sourceMessageId: savedUser?.id || null,
+              }, { settings: memory.settings, log: fastify.log });
+              if (action === "blocked") {
+                reply = "I can't keep that: it looks like it contains sensitive data.";
+              } else {
+                memorySaved = { id: saved.id, content: saved.content, kind: saved.kind, scope: saved.scope, action };
+                reply =
+                  action === "duplicate" ? `I already have that noted: "${saved.content}"` :
+                  action === "superseded" ? `Updated what I had. I'll remember: "${saved.content}"` :
+                  `Noted. I'll remember: "${saved.content}"`;
+              }
+            } catch (err) {
+              fastify.log.warn({ err: err?.message }, "chat: remember failed");
+              reply = err?.statusCode ? err.message : "I couldn't save that just now. Please try again.";
+            }
+          }
+          await saveTurn("assistant", reply, { mode: "memory", memoryIds: memorySaved ? [memorySaved.id] : null });
+          if (sse) sse.sources([], "memory");
+          return respond(200, withConversation({
+            finalAnswer: reply,
+            citations: [],
+            sources: [],
+            mode: "memory",
+            memorySaved,
+            memoriesUsed: [],
+            intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source }
+          }));
+        }
+
+        // ------------------------------------------------
+        // 🧠 H3 (recall part) — what do we already know that bears on
+        // this message. Runs alongside retrieval; awaited before the
+        // prompt is built. Skipped for literal and rewrite turns (E5.4).
+        // Failure means no memory block, never an error.
+        // ------------------------------------------------
+        const recallPromise =
+          memory.enabled && memory.settings?.recall_enabled && !["literal", "rewrite"].includes(intent.type)
+            ? recallMemories(fastify.supabase, openai, identity, {
+                message: intent.standaloneQuery || sanitizedMessage,
+                previousUserMessage: thread?.context?.lastUser || null,
+                settings: memory.settings,
+                log: fastify.log
+              }).catch(err => { fastify.log.warn({ err: err?.message }, "chat: memory recall unavailable"); return null; })
+            : Promise.resolve(null);
+
+        // One trace row per turn (design doc 5.11): retrieval writes it
+        // under this id and the answer completes it below.
+        const traceId = randomUUID();
+        let hadRetrieval = false;
+
         const normalized =
           sanitizedMessage.toLowerCase();
 
@@ -1012,7 +1090,8 @@ export default fp(async function chatRoute(fastify) {
                 query: retrievalQuery,
                 namespaceId,
                 conversationId: memory.conversation?.id || null,
-                historyTurns: thread?.turns ?? 0
+                historyTurns: thread?.turns ?? 0,
+                traceId
               },
 
               headers: {
@@ -1034,6 +1113,7 @@ export default fp(async function chatRoute(fastify) {
               error: "Document search is unavailable right now. Please try again in a moment."
             });
           }
+          hadRetrieval = true;   // retrieval wrote the trace row under traceId
           let parsed = {};
           try { parsed = JSON.parse(res.body || "{}"); } catch { parsed = {}; }
 
@@ -1181,6 +1261,9 @@ export default fp(async function chatRoute(fastify) {
 
         const activeSources = wholeDocument ? wholeDocument.sources : retrievalSources;
         const answerMode = wholeDocument ? (wholeDocument.mode || "document") : privateMode ? "private" : "retrieval";
+
+        // 🧠 H3 (recall part) resolves here: the memory block for the prompt.
+        const recall = await recallPromise;
         if (sse) {
           sse.sources(activeSources.map(s => ({
             n: s.n, document_id: s.document_id, file_name: s.file_name, display_name: s.display_name,
@@ -1205,6 +1288,10 @@ export default fp(async function chatRoute(fastify) {
               priorMessages: thread?.messages || [],
               conversationSummary: thread?.summary?.text || null,
 
+              // 🧠 H4 (memory part): the MEMORY block, under its own heading
+              // in the system prompt, away from the document context.
+              memoryBlock: recall?.block || null,
+
               contextWindow:
                 ragContext,
 
@@ -1226,9 +1313,12 @@ export default fp(async function chatRoute(fastify) {
             ? `${normalizedMessage}\nPrimary Entity: ${resolvedName}`
             : normalizedMessage;
 
+        // E1.7: lift the model's "conflicts noticed" note out for the trace
+        const { answer: rawAnswerText, conflicts } = extractConflicts(rawAnswer);
+
         const formattedAnswer =
           formatOutput(
-            rawAnswer,
+            rawAnswerText,
             {
               intent: intentLabel(intent),
 
@@ -1265,6 +1355,9 @@ export default fp(async function chatRoute(fastify) {
           historyTurns: thread?.turns ?? 0,
           historyTokens: thread?.tokens ?? 0,
           hasSummary: Boolean(thread?.summary),
+          memoriesUsed: recall?.memories?.length ?? 0,
+          memoryBlockTokens: recall?.tokens ?? 0,
+          conflicts: conflicts.length,
           retrievalPriority,
           retrievedChunks: activeSources.length,
           inputLength:
@@ -1290,9 +1383,27 @@ export default fp(async function chatRoute(fastify) {
         }));
         const mode = answerMode;
 
-        // 🧠 H5 — the answer, with its mode, citations and sources, so a
-        // reloaded thread looks exactly like the live one
-        await saveTurn("assistant", citedAnswer, { mode, citations, sources: publicSources });
+        // 🧠 H5 — the answer, with its mode, citations, sources and the ids
+        // of the memories used, so a reloaded thread looks exactly like the
+        // live one and "why did it say that" has a link.
+        const memoryIds = recall?.memoryIds || [];
+        const savedAssistant = await saveTurn("assistant", citedAnswer, { mode, citations, sources: publicSources, memoryIds: memoryIds.length ? memoryIds : null });
+
+        // The memories the answer used: bump their counters and log the recall.
+        if (memoryIds.length && memory.enabled) {
+          touchMemories(fastify.supabase, identity, memoryIds, {
+            conversationId: memory.conversation?.id || null, messageId: savedAssistant?.id || null, log: fastify.log
+          }).catch(() => {});
+        }
+
+        // Complete the turn's trace row: memories, block size, mode, conflicts.
+        finishTrace(fastify.supabase, fastify.log, {
+          traceId, hadRetrieval,
+          query: intent.standaloneQuery || sanitizedMessage, namespaceId, userId: identity.userId,
+          conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
+          memoryIds, memoryBlockTokens: recall?.tokens ?? 0, answerMode: mode, conflicts: conflicts.length ? conflicts : null,
+          latencyMs: Date.now() - start
+        });
 
         // Fold older turns into the running summary once the thread has
         // grown past the trigger. Off the request path; the reply does not wait.
@@ -1305,6 +1416,7 @@ export default fp(async function chatRoute(fastify) {
           citations,
           sources: publicSources,
           mode,
+          memoriesUsed: (recall?.memories || []).map(m => ({ id: m.id, kind: m.kind, scope: m.scope, content: m.content })),
           intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source }
         }));
 

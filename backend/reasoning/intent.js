@@ -41,9 +41,11 @@ const SCHEMA = {
   schema: {
     type: "object",
     additionalProperties: false,
-    required: ["type", "scope", "maturity", "needs_evidence", "literal", "document_hints", "standalone_query"],
+    required: ["type", "scope", "maturity", "needs_evidence", "literal", "document_hints", "standalone_query", "remember_content", "remember_kind"],
     properties: {
       standalone_query: { type: "string" },
+      remember_content: { type: "string" },
+      remember_kind: { type: "string", enum: ["fact", "preference", "decision", "entity", "task", "note", "none"] },
       type: { type: "string", enum: INTENT_TYPES },
       scope: { type: "string", enum: INTENT_SCOPES },
       maturity: { type: "string", enum: ["exploratory", "refinement", "deployable", "general"] },
@@ -84,6 +86,8 @@ maturity: exploratory (ideas, outline, brainstorm), refinement (revise, improve)
 needs_evidence: true when a good answer must be grounded in documents rather than general knowledge.
 literal: true only when the user asks for text to be repeated verbatim.
 document_hints: file names or document titles the message mentions, verbatim, at most five, else [].
+remember_content: only when type is "remember": the fact, preference or decision to keep, rewritten as one standalone note in the third person about the user or their workspace, at most 300 characters, without "remember that". Otherwise "".
+remember_kind: only when type is "remember": fact, preference, decision, entity, task or note. Otherwise "none".
 
 Examples:
 "How many credits does the teacher education program require?" → lookup / topic
@@ -94,6 +98,8 @@ Examples:
 "Give me an overview of everything we have uploaded" → summary / knowledge_base
 "Rewrite this to sound more formal: ..." → rewrite / none
 "thanks, that's all" → general / none
+"Remember that our fiscal year starts July 1" → remember / none, remember_content "The user's organization's fiscal year starts July 1.", remember_kind fact
+"Please keep answers short, bullets only" → remember / none, remember_content "Prefers short answers as bullet lists.", remember_kind preference
 With PREVIOUS TURN "What does the Operations Playbook cover?" and DOCUMENTS CITED "Operations Playbook.docx": "Give me its three most important points as bullets" → standalone_query "Give me the three most important points of the Operations Playbook as bullets", summary / document
 With PREVIOUS TURN "Give me the three most important points of the Operations Playbook": "why?" → standalone_query "Why are those the three most important points of the Operations Playbook?", question / document`;
 
@@ -164,9 +170,16 @@ function normalize(p, source, ms, message = "") {
   const rewritten = typeof p?.standalone_query === "string" ? p.standalone_query.trim() : "";
   // a rewrite is only used when it is a real sentence and not wildly longer than the message
   const standaloneQuery = !literal && rewritten && rewritten.length <= Math.max(200, original.length * 4) ? rewritten : original;
+  // "remember that …": what to keep, and as what kind (design doc 5.7)
+  const rememberKinds = ["fact", "preference", "decision", "entity", "task", "note"];
+  const rememberContent = type === "remember"
+    ? String(p?.remember_content || "").replace(/\s+/g, " ").trim().slice(0, 300) || rememberFallback(original)
+    : "";
   return {
     standaloneQuery,
     type: literal ? "literal" : type,
+    rememberContent,
+    rememberKind: type === "remember" ? (rememberKinds.includes(p?.remember_kind) ? p.remember_kind : "note") : null,
     scope,
     maturity: literal ? "locked" : (INTENT_MATURITY.includes(p?.maturity) ? p.maturity : "general"),
     needsEvidence: literal ? false : Boolean(p?.needs_evidence),
@@ -175,6 +188,15 @@ function normalize(p, source, ms, message = "") {
     source,
     ms: ms ?? null,
   };
+}
+
+/** The note to keep when the model gave none: the message without its "remember that" opener. */
+function rememberFallback(message = "") {
+  return String(message || "")
+    .replace(/^\s*(please\s+)?(remember|note|keep in mind|for future reference)(\s+that|\s+this)?[:,\s]*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 300);
 }
 
 function withTimeout(promise, ms) {
@@ -233,7 +255,12 @@ export function decodeIntentByRules(message = "", { hasAttachment = false } = {}
   else if (type === "general" || type === "remember") scope = "none";
 
   const needsEvidence = ["question", "lookup", "summary", "analysis", "compare"].includes(type) || scope === "knowledge_base" || scope === "document";
-  return normalize({ type, scope, maturity, needs_evidence: needsEvidence, literal: false, document_hints: [] }, "rules", 0, message);
+  const remember = type === "remember";
+  return normalize({
+    type, scope, maturity, needs_evidence: needsEvidence, literal: false, document_hints: [],
+    remember_content: remember ? rememberFallback(message) : "",
+    remember_kind: remember ? (/\b(prefer|like|want|always|never|please use)\b/.test(msg) ? "preference" : /\b(decided|decision|chose|agreed)\b/.test(msg) ? "decision" : "fact") : "none",
+  }, "rules", 0, message);
 }
 
 /** Old name kept for any caller that still imports it; synchronous, rules only. */

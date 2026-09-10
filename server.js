@@ -111,7 +111,8 @@ const allowedRoutes = new Set([
   "ingest.js",
   "retrieve.js",
   "settings.js",
-  "conversations.js"
+  "conversations.js",
+  "memory.js"
 ]);
 
 for (const file of fs.readdirSync(routesDir)) {

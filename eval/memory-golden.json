@@ -1,31 +1,269 @@
 {
   "namespace": "core",
   "namespaceId": "d5068743-69e8-4c1d-af36-151e7afc9fa6",
-  "notes": "Multi-turn scenarios for the memory work (design doc 5.11). Each scenario is one conversation; turns are sent in order with the conversationId the server returns. expect.cites_any: at least one citation's file or display name contains one of these substrings (case-insensitive). expect.answer_must_include: substrings of the answer. expect.mode_in: the answer mode must be one of these. expect.not_abstain: the answer must not be a 'documents don't cover this' reply. family: follow-up (Phase 2), carry-over, isolation, forget-correct, administration (later phases).",
+  "otherNamespaceId": "f3e2f9e4-30f0-4343-9dec-2c347136c766",
+  "notes": "Multi-turn scenarios for the memory work (design doc 5.11). Each scenario is one conversation unless a turn sets new_conversation; turns are sent in order with the conversationId the server returns. A turn's `as` picks the login: primary (default, EVAL_EMAIL), second (EVAL_EMAIL_2, same namespace; scenario is skipped when unset), other_namespace (the primary account signed into otherNamespaceId). {{marker}} in a message is replaced by a random token per run so seeded facts are unique. expect.cites_any: at least one citation's file or display name contains one of these substrings (case-insensitive). expect.answer_must_include / answer_must_not_include: substrings of the answer ({{marker}} allowed). expect.mode_in: the answer mode must be one of these. expect.not_abstain: the answer must not be a 'documents don't cover this' reply. expect.abstain: it must be one (guards against general-knowledge leaks). expect.memory_saved: a memory was saved this turn. expect.memories_used_min / memories_used_max: bounds on the memories the answer used. expect.saved_memory_fetch: 'ok' or '404' when fetching the memory saved earlier in the scenario as this turn's login. Memories saved during a scenario are deleted afterwards. family: follow-up (Phase 2), carry-over and isolation (Phase 3), forget-correct, administration (later phases).",
   "scenarios": [
     {
       "id": "follow-001",
       "family": "follow-up",
       "turns": [
-        { "message": "Which documents cover the internship program?", "expect": { "cites_any": ["Internship"], "not_abstain": true } },
-        { "message": "Summarise the second one", "expect": { "cites_any": ["Internship"], "not_abstain": true, "mode_in": ["retrieval", "document"] } }
+        {
+          "message": "Which documents cover the internship program?",
+          "expect": {
+            "cites_any": [
+              "Internship"
+            ],
+            "not_abstain": true
+          }
+        },
+        {
+          "message": "Summarise the second one",
+          "expect": {
+            "cites_any": [
+              "Internship"
+            ],
+            "not_abstain": true,
+            "mode_in": [
+              "retrieval",
+              "document"
+            ]
+          }
+        }
       ]
     },
     {
       "id": "follow-002",
       "family": "follow-up",
       "turns": [
-        { "message": "How many credits does the teacher education program require?", "expect": { "answer_must_include": ["credit"], "not_abstain": true } },
-        { "message": "And which document says that?", "expect": { "cites_any": ["LEE", "Teacher"], "not_abstain": true } }
+        {
+          "message": "How many credits does the teacher education program require?",
+          "expect": {
+            "answer_must_include": [
+              "credit"
+            ],
+            "not_abstain": true
+          }
+        },
+        {
+          "message": "And which document says that?",
+          "expect": {
+            "cites_any": [
+              "LEE",
+              "Teacher"
+            ],
+            "not_abstain": true
+          }
+        }
       ]
     },
     {
       "id": "follow-003",
       "family": "follow-up",
       "turns": [
-        { "message": "What does the Operations Playbook cover?", "expect": { "cites_any": ["Operations Playbook"], "not_abstain": true } },
-        { "message": "Give me its three most important points as bullets", "expect": { "cites_any": ["Operations Playbook"], "not_abstain": true } },
-        { "message": "why?", "expect": { "not_abstain": true, "mode_in": ["retrieval", "document"] } }
+        {
+          "message": "What does the Operations Playbook cover?",
+          "expect": {
+            "cites_any": [
+              "Operations Playbook"
+            ],
+            "not_abstain": true
+          }
+        },
+        {
+          "message": "Give me its three most important points as bullets",
+          "expect": {
+            "cites_any": [
+              "Operations Playbook"
+            ],
+            "not_abstain": true
+          }
+        },
+        {
+          "message": "why?",
+          "expect": {
+            "not_abstain": true,
+            "mode_in": [
+              "retrieval",
+              "document"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "carry-001",
+      "family": "carry-over",
+      "turns": [
+        {
+          "message": "Remember that the {{marker}} initiative's fiscal year starts on July 1.",
+          "expect": {
+            "mode_in": [
+              "memory"
+            ],
+            "memory_saved": true,
+            "answer_must_include": [
+              "July 1"
+            ]
+          }
+        },
+        {
+          "message": "When does the {{marker}} initiative's fiscal year start?",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_min": 1,
+            "answer_must_include": [
+              "July 1"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "carry-002",
+      "family": "carry-over",
+      "turns": [
+        {
+          "message": "Please remember: for the {{marker}} account I prefer answers as short bullet lists with a one-line summary first.",
+          "expect": {
+            "mode_in": [
+              "memory"
+            ],
+            "memory_saved": true
+          }
+        },
+        {
+          "message": "For the {{marker}} account, what format do I like answers in?",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_min": 1,
+            "answer_must_include": [
+              "bullet"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "carry-003",
+      "family": "carry-over",
+      "turns": [
+        {
+          "message": "Remember that our {{marker}} liaison is Chandler Bing.",
+          "expect": {
+            "mode_in": [
+              "memory"
+            ],
+            "memory_saved": true
+          }
+        },
+        {
+          "message": "Who is our {{marker}} liaison?",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_min": 1,
+            "answer_must_include": [
+              "Chandler Bing"
+            ]
+          }
+        },
+        {
+          "message": "What TV show is Chandler Bing from?",
+          "expect": {
+            "abstain": true,
+            "answer_must_not_include": [
+              "Friends"
+            ]
+          }
+        },
+        {
+          "message": "Who is Chandler Bing?",
+          "expect": {
+            "memories_used_min": 1,
+            "answer_must_include": [
+              "liaison"
+            ],
+            "answer_must_not_include": [
+              "Friends"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "isolate-001",
+      "family": "isolation",
+      "turns": [
+        {
+          "message": "Remember that the {{marker}} vendor contract renews on March 15.",
+          "expect": {
+            "mode_in": [
+              "memory"
+            ],
+            "memory_saved": true
+          }
+        },
+        {
+          "message": "When does the {{marker}} vendor contract renew?",
+          "as": "other_namespace",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_max": 0,
+            "answer_must_not_include": [
+              "March 15"
+            ],
+            "saved_memory_fetch": "404"
+          }
+        },
+        {
+          "message": "When does the {{marker}} vendor contract renew?",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_min": 1,
+            "answer_must_include": [
+              "March 15"
+            ],
+            "saved_memory_fetch": "ok"
+          }
+        }
+      ]
+    },
+    {
+      "id": "isolate-002",
+      "family": "isolation",
+      "turns": [
+        {
+          "message": "Remember that the {{marker}} audit is due on October 9.",
+          "expect": {
+            "mode_in": [
+              "memory"
+            ],
+            "memory_saved": true
+          }
+        },
+        {
+          "message": "When is the {{marker}} audit due?",
+          "as": "second",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_max": 0,
+            "answer_must_not_include": [
+              "October 9"
+            ],
+            "saved_memory_fetch": "404"
+          }
+        },
+        {
+          "message": "When is the {{marker}} audit due?",
+          "new_conversation": true,
+          "expect": {
+            "memories_used_min": 1,
+            "answer_must_include": [
+              "October 9"
+            ],
+            "saved_memory_fetch": "ok"
+          }
+        }
       ]
     }
   ]

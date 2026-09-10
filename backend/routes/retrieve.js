@@ -692,7 +692,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
       try {
 
-        const { query, namespaceId: requestedNamespaceId, conversationId = null, historyTurns = null } = req.body || {};
+        const { query, namespaceId: requestedNamespaceId, conversationId = null, historyTurns = null, traceId = null } = req.body || {};
 
         // The token decides the namespace. A body value is accepted only
         // when it agrees, so a client cannot search another workspace.
@@ -825,7 +825,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
           });
 
           logRetrievalTrace(supabase, fastify.log, {
-            query, namespaceId, conversationId, historyTurns, mode: "hybrid", userId: identity.userId,
+            traceId, query, namespaceId, conversationId, historyTurns, mode: "hybrid", userId: identity.userId,
             latencyMs: Date.now() - traceStart, results: hybrid.results, namedDocs
           });
 
@@ -1131,7 +1131,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
         });
 
         logRetrievalTrace(supabase, fastify.log, {
-          query, namespaceId, conversationId, historyTurns, mode: "legacy", userId: identity.userId,
+          traceId, query, namespaceId, conversationId, historyTurns, mode: "legacy", userId: identity.userId,
           latencyMs: Date.now() - traceStart, results: formatted, namedDocs
         });
 
