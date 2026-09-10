@@ -15,8 +15,11 @@ import { getOrCreateConversation, appendMessage, titleFrom, isUuid } from "../me
 import { loadWindow, maybeSummarize } from "../memory/window.js";
 // 🧠 Memory, layer 2: durable memories (design doc 5.6, 5.7, hooks H3/H4/H5)
 import { recallMemories } from "../memory/recall.js";
-import { saveMemory, touchMemories } from "../memory/store.js";
-import { finishTrace } from "../retrieval/trace.js";
+import { saveMemory, touchMemories, enforceUserCap } from "../memory/store.js";
+// 🧠 Memory, layer 2 continued: automatic extraction (design doc 5.7, hook H6)
+import { extractMemories, relateToExisting } from "../memory/extract.js";
+import { finishTrace, recordTurnUsage } from "../retrieval/trace.js";
+import { newUsage, recordUsage, usageSummary } from "../lib/usage.js";
 import { randomUUID } from "node:crypto";
 
 // 🔒 DLP
@@ -769,6 +772,16 @@ export default fp(async function chatRoute(fastify) {
 
       const identity = identityFrom(req);
 
+      // Every model call this turn makes adds itself here (P4.4: cost per
+      // turn). The synchronous part goes back with the answer; the whole
+      // thing, with extraction and the summariser, goes on the trace row.
+      const usage = newUsage();
+
+      // One trace row per turn (design doc 5.11): retrieval writes it
+      // under this id and the answer completes it below.
+      const traceId = randomUUID();
+      let hadRetrieval = false;
+
       const userId =
         identity.userId || "unknown";
 
@@ -897,6 +910,7 @@ export default fp(async function chatRoute(fastify) {
             context: thread?.context || null,
             log: fastify.log
           });
+        if (intent.usage) recordUsage(usage, "intent", intent.usage.model, intent.usage);
 
         // ------------------------------------------------
         // 🧠 "Remember that …" (design doc 5.7, P3.5). The intent module
@@ -914,7 +928,13 @@ export default fp(async function chatRoute(fastify) {
             reply = "Your role can't save memories here, so I can't keep that.";
           } else {
             try {
-              const { memory: saved, action } = await saveMemory(fastify.supabase, openai, identity, {
+              // A correction ("our liaison is now Y") replaces the note it
+              // corrects even when the wording is too different for the
+              // near-duplicate rule to notice (P4.4 forget-and-correct).
+              const relation = await relateToExisting(fastify.supabase, openai, identity, {
+                content: intent.rememberContent, settings: memory.settings, usage, log: fastify.log
+              });
+              const { memory: saved, action, counterpart, attested } = await saveMemory(fastify.supabase, openai, identity, {
                 content: intent.rememberContent,
                 kind: intent.rememberKind || "note",
                 scope: "user",
@@ -922,15 +942,28 @@ export default fp(async function chatRoute(fastify) {
                 sourceType: "user_explicit",
                 sourceConversationId: memory.conversation?.id || null,
                 sourceMessageId: savedUser?.id || null,
-              }, { settings: memory.settings, log: fastify.log });
+                relation: relation.relation,
+                targetId: relation.targetId,
+                embedding: relation.embedding,
+              }, { settings: memory.settings, usage, log: fastify.log });
               if (action === "blocked") {
                 reply = "I can't keep that: it looks like it contains sensitive data.";
               } else {
-                memorySaved = { id: saved.id, content: saved.content, kind: saved.kind, scope: saved.scope, action };
+                memorySaved = { id: saved.id, content: saved.content, kind: saved.kind, scope: saved.scope, action, truth_status: saved.truth_status, counterpart: counterpart || null };
+                // Design doc 9.5: the reply says what the write did, including
+                // the outcome of a vote against a note from someone else.
                 reply =
-                  action === "duplicate" ? `I already have that noted: "${saved.content}"` :
+                  action === "duplicate" ? (attested ? `I already have that noted, and this conversation now backs it too: "${saved.content}"` : `I already have that noted: "${saved.content}"`) :
                   action === "superseded" ? `Updated what I had. I'll remember: "${saved.content}"` :
+                  action === "accepted" ? `Noted. I'll remember: "${saved.content}". It outweighs an earlier note here ("${counterpart?.content}"), which is now set aside.` :
+                  action === "denied" ? `Noted, but an earlier note here carries more weight: "${counterpart?.content}". I'll go by that one and keep yours on record as a dissent.` :
+                  action === "contested" ? `Noted. That disagrees with another note here ("${counterpart?.content}"), and neither outweighs the other, so I'll show both sides until someone resolves it.` :
+                  action === "retracted" ? `Understood. I've retracted: "${saved.content}"` :
                   `Noted. I'll remember: "${saved.content}"`;
+                // P4.3: over the per-user cap, the least-used memories are archived.
+                if (!["duplicate", "retracted", "denial_recorded"].includes(action)) {
+                  enforceUserCap(fastify.supabase, identity, memory.settings?.max_active_per_user, { log: fastify.log }).catch(() => {});
+                }
               }
             } catch (err) {
               fastify.log.warn({ err: err?.message }, "chat: remember failed");
@@ -938,6 +971,15 @@ export default fp(async function chatRoute(fastify) {
             }
           }
           await saveTurn("assistant", reply, { mode: "memory", memoryIds: memorySaved ? [memorySaved.id] : null });
+          const rememberTrace = finishTrace(fastify.supabase, fastify.log, {
+            traceId, hadRetrieval: false,
+            query: sanitizedMessage, namespaceId, userId: identity.userId,
+            conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
+            memoryIds: memorySaved ? [memorySaved.id] : [], memoryBlockTokens: 0, answerMode: "memory", conflicts: null,
+            latencyMs: Date.now() - start
+          });
+          const rememberUsage = usageSummary(usage);
+          rememberTrace.then(() => recordTurnUsage(fastify.supabase, fastify.log, { traceId, usage: rememberUsage, extractedMemoryIds: [] })).catch(() => {});
           if (sse) sse.sources([], "memory");
           return respond(200, withConversation({
             finalAnswer: reply,
@@ -946,6 +988,8 @@ export default fp(async function chatRoute(fastify) {
             mode: "memory",
             memorySaved,
             memoriesUsed: [],
+            traceId,
+            usage: rememberUsage,
             intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source }
           }));
         }
@@ -962,14 +1006,10 @@ export default fp(async function chatRoute(fastify) {
                 message: intent.standaloneQuery || sanitizedMessage,
                 previousUserMessage: thread?.context?.lastUser || null,
                 settings: memory.settings,
+                usage,
                 log: fastify.log
               }).catch(err => { fastify.log.warn({ err: err?.message }, "chat: memory recall unavailable"); return null; })
             : Promise.resolve(null);
-
-        // One trace row per turn (design doc 5.11): retrieval writes it
-        // under this id and the answer completes it below.
-        const traceId = randomUUID();
-        let hadRetrieval = false;
 
         const normalized =
           sanitizedMessage.toLowerCase();
@@ -1297,7 +1337,9 @@ export default fp(async function chatRoute(fastify) {
 
               model: openai,
 
-              identityContext
+              identityContext,
+
+              usage
 
             }),
 
@@ -1397,7 +1439,7 @@ export default fp(async function chatRoute(fastify) {
         }
 
         // Complete the turn's trace row: memories, block size, mode, conflicts.
-        finishTrace(fastify.supabase, fastify.log, {
+        const tracePromise = finishTrace(fastify.supabase, fastify.log, {
           traceId, hadRetrieval,
           query: intent.standaloneQuery || sanitizedMessage, namespaceId, userId: identity.userId,
           conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
@@ -1405,18 +1447,60 @@ export default fp(async function chatRoute(fastify) {
           latencyMs: Date.now() - start
         });
 
-        // Fold older turns into the running summary once the thread has
-        // grown past the trigger. Off the request path; the reply does not wait.
-        if (memory.enabled && memory.conversation) {
-          maybeSummarize(fastify.supabase, openai, identity, memory.conversation.id, memory.settings, fastify.log).catch(() => {});
-        }
+        // ------------------------------------------------
+        // 🧠 H6 — look for new memories, after the response (design doc
+        // 5.7, P4.2). Runs once the answer is on its way, so it never
+        // slows the reply and never throws into the request. Only where
+        // the namespace allows it and the role may write; never in
+        // private mode (memory is off there) and not for literal or
+        // rewrite turns, which carry nothing about the user. The
+        // summariser and the trace's usage record run in the same pass.
+        // ------------------------------------------------
+        const extractionScheduled = Boolean(
+          memory.enabled && memory.settings?.extract_enabled &&
+          hasPermission(identity, "memory_write") &&
+          !["literal", "rewrite"].includes(intent.type)
+        );
+        const afterReply = async () => {
+          let extracted = null;
+          if (extractionScheduled) {
+            extracted = await extractMemories(fastify.supabase, openai, identity, {
+              question: intent.standaloneQuery || sanitizedMessage,
+              originalMessage: sanitizedMessage,
+              answer: citedAnswer,
+              relatedMemories: recall?.memories || [],
+              conversationId: memory.conversation?.id || null,
+              messageId: savedAssistant?.id || null,
+              settings: memory.settings,
+              usage,
+              log: fastify.log
+            }).catch(err => { fastify.log.warn({ err: err?.message }, "chat: extraction failed"); return null; });
+          }
+          // Fold older turns into the running summary once the thread has
+          // grown past the trigger.
+          if (memory.enabled && memory.conversation) {
+            await maybeSummarize(fastify.supabase, openai, identity, memory.conversation.id, memory.settings, fastify.log, { usage }).catch(() => {});
+          }
+          await tracePromise.catch(() => {});
+          // The trace says what extraction did, including when it was
+          // skipped, so "nothing extracted" is distinguishable from "not yet".
+          const extraction = extractionScheduled
+            ? { ran: Boolean(extracted?.ran), reason: extracted?.reason || null, saved: extracted?.saved?.length || 0, dropped: extracted?.dropped?.length || 0 }
+            : { ran: false, reason: "not scheduled", saved: 0, dropped: 0 };
+          await recordTurnUsage(fastify.supabase, fastify.log, {
+            traceId, usage: usageSummary(usage, { extraction }), extractedMemoryIds: (extracted?.saved || []).map(s => s.id)
+          });
+        };
+        setImmediate(() => afterReply().catch(err => fastify.log.warn({ err: err?.message }, "chat: after-reply hooks failed")));
 
         return respond(200, withConversation({
           finalAnswer: citedAnswer,
           citations,
           sources: publicSources,
           mode,
-          memoriesUsed: (recall?.memories || []).map(m => ({ id: m.id, kind: m.kind, scope: m.scope, content: m.content })),
+          memoriesUsed: (recall?.memories || []).map(m => ({ id: m.id, kind: m.kind, scope: m.scope, content: m.content, truth_status: m.truth_status || "accepted", counterpart_id: m.counterpart_id || null })),
+          traceId,
+          usage: usageSummary(usage, { pending: extractionScheduled ? ["extraction"] : [] }),
           intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source }
         }));
 

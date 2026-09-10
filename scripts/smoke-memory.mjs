@@ -44,9 +44,14 @@ try {
   const b = await saveMemory(supabase, openai, identity, { content: `  the ${marker} project's FISCAL year starts on july 1 ` }, { settings });
   check("same fact again is a duplicate, one row", b.action === "duplicate" && b.memory?.id === a.memory.id, b.action);
 
-  const c = await saveMemory(supabase, openai, identity, { content: `The ${marker} project's fiscal year begins on July 1.`, kind: "fact" }, { settings });
+  // design doc 9.3: a near duplicate is the same proposition; the same source restating it is a duplicate
+  const c0 = await saveMemory(supabase, openai, identity, { content: `The ${marker} project's fiscal year begins on July 1.`, kind: "fact" }, { settings });
+  created.add(c0.memory?.id);
+  check("near duplicate is the same proposition (duplicate, not a new row)", c0.action === "duplicate" && c0.memory?.id === a.memory.id, c0.action);
+  // design doc 9.5: a different value from the same person is an update and supersedes
+  const c = await saveMemory(supabase, openai, identity, { content: `The ${marker} project's fiscal year starts on August 1.`, kind: "fact", relation: "different_value", targetId: a.memory.id }, { settings });
   created.add(c.memory?.id);
-  check("near duplicate supersedes the old row", c.action === "superseded" && c.memory?.supersedes_id === a.memory.id, c.action);
+  check("a new value from the same person supersedes", c.action === "superseded" && c.memory?.supersedes_id === a.memory.id, c.action);
   const old = await getMemory(supabase, identity, a.memory.id);
   check("old row marked superseded, not overwritten", old?.status === "superseded" && old?.content === a.memory.content, old?.status);
 

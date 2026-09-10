@@ -14,6 +14,7 @@
 // =============================================================
 
 import { fitNewest, estimateTokens, clipToTokens } from "./budget.js";
+import { recordUsage } from "../lib/usage.js";
 
 const SUMMARY_MAX_TOKENS = 300;
 
@@ -100,7 +101,7 @@ const SUMMARY_SYSTEM = `You maintain a running summary of one conversation betwe
  * are always left verbatim, so the window still reads naturally after
  * the fold. Returns what it did, never throws.
  */
-export async function maybeSummarize(supabase, openai, identity, conversationId, settings, log) {
+export async function maybeSummarize(supabase, openai, identity, conversationId, settings, log, { usage = null } = {}) {
   try {
     const trigger = settings?.summary_trigger_tokens ?? 3000;
     const keepVerbatim = Math.max(0, (settings?.history_turns ?? 10) * 2);
@@ -134,6 +135,7 @@ export async function maybeSummarize(supabase, openai, identity, conversationId,
       messages: [{ role: "system", content: SUMMARY_SYSTEM }, { role: "user", content: user }],
       ...(/^gpt-5/.test(model) ? { reasoning_effort: "low", verbosity: "low" } : { temperature: 0.2 }),
     });
+    recordUsage(usage, "summary", model, res.usage);
     const text = (res.choices?.[0]?.message?.content || "").trim();
     if (!text) return { ran: false, reason: "empty summary" };
 

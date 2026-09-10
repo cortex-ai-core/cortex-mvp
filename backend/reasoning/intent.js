@@ -23,7 +23,7 @@
 
 export const INTENT_TYPES = [
   "question", "lookup", "summary", "analysis", "compare", "draft",
-  "rewrite", "communication", "instruction", "remember", "general", "literal",
+  "rewrite", "communication", "instruction", "remember", "inform", "general", "literal",
 ];
 export const INTENT_SCOPES = ["none", "attached", "document", "documents", "topic", "knowledge_base"];
 export const INTENT_MATURITY = ["exploratory", "refinement", "deployable", "general", "locked"];
@@ -71,6 +71,7 @@ type — what the user wants done:
 - communication: asks to write an email, message, or reply to someone
 - instruction: asks how to do something, step by step
 - remember: asks the assistant to remember or note a fact or preference for later
+- inform: tells the assistant something without asking for anything: a fact, an update, a correction, context about a person, project or decision ("Tom did the cybersecurity work for the Perin patch.", "Our CFO is now Priya Raman."). Not a request to remember, not a question.
 - general: greeting, small talk, meta questions about the assistant, anything else
 - literal: asks for text to be repeated exactly as given
 
@@ -100,6 +101,8 @@ Examples:
 "thanks, that's all" → general / none
 "Remember that our fiscal year starts July 1" → remember / none, remember_content "The user's organization's fiscal year starts July 1.", remember_kind fact
 "Please keep answers short, bullets only" → remember / none, remember_content "Prefers short answers as bullet lists.", remember_kind preference
+"Tom did the cybersecurity work for the Perin Health Patch." → inform / topic, needs_evidence false
+"Our CFO is now Priya Raman." → inform / none, needs_evidence false
 With PREVIOUS TURN "What does the Operations Playbook cover?" and DOCUMENTS CITED "Operations Playbook.docx": "Give me its three most important points as bullets" → standalone_query "Give me the three most important points of the Operations Playbook as bullets", summary / document
 With PREVIOUS TURN "Give me the three most important points of the Operations Playbook": "why?" → standalone_query "Why are those the three most important points of the Operations Playbook?", question / document`;
 
@@ -123,7 +126,7 @@ function remember(key, intent) {
 export async function classifyIntent(message = "", { openai = null, hasAttachment = false, log = null, context = null } = {}) {
   const key = keyFor(message, hasAttachment, context);
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.intent;
+  if (hit && Date.now() - hit.at < CACHE_MS) return { ...hit.intent, usage: null, cached: true };
 
   const rules = decodeIntentByRules(message, { hasAttachment });
   if (INTENT_MODE === "rules" || !openai || !String(message || "").trim()) return remember(key, rules);
@@ -153,11 +156,15 @@ export async function classifyIntent(message = "", { openai = null, hasAttachmen
     const raw = res.choices?.[0]?.message?.content || "";
     const parsed = JSON.parse(raw);
     const intent = normalize(parsed, "model", Date.now() - t0, message);
+    // what the call cost, for the turn's usage tally; absent on a cache hit or the rules path
+    intent.usage = res.usage ? { model: INTENT_MODEL, prompt_tokens: res.usage.prompt_tokens, completion_tokens: res.usage.completion_tokens } : null;
     log?.info?.({ intent: intent.type, scope: intent.scope, maturity: intent.maturity, evidence: intent.needsEvidence, rewritten: intent.standaloneQuery !== String(message).trim(), ms: intent.ms, model: INTENT_MODEL }, "intent: classified");
     return remember(key, intent);
   } catch (err) {
+    // not cached: a timeout under load should not pin the keyword guess on
+    // this message for the next ten minutes
     log?.warn?.({ err: err?.message, ms: Date.now() - t0 }, "intent: model classification failed; using rules");
-    return remember(key, rules);
+    return rules;
   }
 }
 
@@ -246,13 +253,15 @@ export function decodeIntentByRules(message = "", { hasAttachment = false } = {}
   else if (/\b(analysis|analy[sz]e|assess|evaluate|implications|risks?)\b/.test(msg)) type = "analysis";
   else if (/^(what|why|when|where|who|which)\b|\?|\bexplain\b/.test(msg)) type = "question";
   else if (/^how\b|\bhelp me\b/.test(msg)) type = "instruction";
+  // a declarative sentence with no request in it: the user is telling us something
+  else if (/^(our|my|the|we|i|he|she|they|[a-z]+ (is|was|did|has|have|will))\b/.test(msg) && !/\b(please|can you|could you|would you|give me|show me|tell me|find|list|draft|write)\b/.test(msg)) type = "inform";
 
   let scope = "topic";
   if (type === "rewrite" || type === "literal") scope = hasAttachment ? "attached" : "none";
   else if (KNOWLEDGE_BASE_PATTERN.test(msg)) scope = "knowledge_base";
   else if (OVERVIEW_PATTERN.test(msg)) scope = "document";          // confirmed later against the documents the question names
   else if (hasAttachment && type !== "question") scope = "attached";
-  else if (type === "general" || type === "remember") scope = "none";
+  else if (type === "general" || type === "remember" || type === "inform") scope = "none";
 
   const needsEvidence = ["question", "lookup", "summary", "analysis", "compare"].includes(type) || scope === "knowledge_base" || scope === "document";
   const remember = type === "remember";

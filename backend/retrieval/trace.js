@@ -13,21 +13,23 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * chooses the id up front and hands it to retrieval, so the same row
  * is updated here; a turn that ran no retrieval (knowledge-base mode,
  * a remembered note, no evidence needed) gets its own row instead.
- * Fire-and-forget.
+ * Fire-and-forget for the caller; the returned promise lets the
+ * after-reply hooks (extraction, summariser) wait for the row before
+ * they add their own usage to it.
  */
 export function finishTrace(supabase, log, { traceId, hadRetrieval, query, namespaceId, userId, conversationId, historyTurns, memoryIds, memoryBlockTokens, answerMode, conflicts, latencyMs }) {
-  if (!ENABLED || !supabase || !UUID.test(String(traceId || ""))) return;
+  if (!ENABLED || !supabase || !UUID.test(String(traceId || ""))) return Promise.resolve(false);
   const patch = {
     memory_ids: Array.isArray(memoryIds) && memoryIds.length ? memoryIds : null,
     memory_block_tokens: Number.isFinite(memoryBlockTokens) ? memoryBlockTokens : null,
     answer_mode: answerMode || null,
     conflicts: conflicts ?? null,
   };
-  const done = ({ error }) => { if (error) log?.warn?.({ err: error.message }, "trace finish failed"); };
+  const done = ({ error }) => { if (error) { log?.warn?.({ err: error.message }, "trace finish failed"); return false; } return true; };
   if (hadRetrieval) {
-    supabase.from("rag_queries").update(patch).eq("id", traceId).then(done);
+    return supabase.from("rag_queries").update(patch).eq("id", traceId).then(done);
   } else {
-    supabase.from("rag_queries").insert([{
+    return supabase.from("rag_queries").insert([{
       id: traceId,
       query: String(query || "").slice(0, 2000),
       namespace_id: namespaceId || null,
@@ -41,6 +43,31 @@ export function finishTrace(supabase, log, { traceId, hadRetrieval, query, names
       ...patch,
     }]).then(done);
   }
+}
+
+/**
+ * After the reply: record the whole turn's usage (the synchronous calls
+ * plus extraction and the summariser) and the memories extraction wrote.
+ * Columns from migration 0009; a database without them logs once.
+ */
+let usageColumnsMissing = false;
+export async function recordTurnUsage(supabase, log, { traceId, usage, extractedMemoryIds }) {
+  if (!ENABLED || !supabase || usageColumnsMissing || !UUID.test(String(traceId || ""))) return false;
+  const patch = {
+    usage: usage ?? null,
+    extracted_memory_ids: Array.isArray(extractedMemoryIds) && extractedMemoryIds.length ? extractedMemoryIds : null,
+  };
+  const { error } = await supabase.from("rag_queries").update(patch).eq("id", traceId);
+  if (error) {
+    if (/column .*(usage|extracted_memory_ids).* does not exist|PGRST204/i.test(error.message || "") || error.code === "PGRST204") {
+      usageColumnsMissing = true;
+      log?.info?.("trace: rag_queries.usage not present yet (migration 0009); turn usage is not stored");
+    } else {
+      log?.warn?.({ err: error.message }, "trace usage update failed");
+    }
+    return false;
+  }
+  return true;
 }
 
 export function resolveRetrievalMode(req) {

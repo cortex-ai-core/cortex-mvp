@@ -16,6 +16,7 @@
 
 import { estimateTokens } from "./budget.js";
 import { embedText } from "./store.js";
+import { describeVote, VISIBLE_TRUTH } from "./policy.js";
 
 const SHORT_MESSAGE_WORDS = 12;
 const VECTOR_K = 20;
@@ -44,9 +45,27 @@ export function scoreMemory(r, { now = Date.now(), floor = 0.35 } = {}) {
   return 0.60 * sim + 0.20 * importance + 0.15 * recency + 0.05 * usage;
 }
 
+// Design doc 9.6: the line shows the proposition's truth state. Accepted
+// notes read as before, with the date they were noted so the later of two
+// wins. Reported notes say who reported them. Contested notes show both
+// sides and the basis of the vote. Denied, retracted and superseded rows
+// never reach here (the search functions leave them out).
 function lineFor(m) {
   const who = m.scope === "namespace" ? "workspace" : "user";
-  return `- (${m.kind} · ${who}) ${m.content}`;
+  const day = m.created_at ? String(m.created_at).slice(0, 10) : null;
+  const truth = m.truth_status || "accepted";
+  if (truth === "contested" && m.contest) return contestedLines(m, who);
+  if (truth === "reported") return `- (${m.kind} · ${who} · reported${m.reporter ? ` by ${m.reporter}` : ""}${day ? `, ${day}` : ""}) ${m.content}`;
+  return `- (${m.kind} · ${who} · ${truth}${day ? ` · noted ${day}` : ""}) ${m.content}`;
+}
+
+function contestedLines(m, who) {
+  const c = m.contest;
+  const topic = m.subject && m.predicate ? `${m.subject}: ${m.predicate}` : "two notes disagree";
+  const side = (s, verb) => `    ${s.who} (${s.how}${s.date ? `, ${s.date}` : ""}) ${verb} ${s.content}`;
+  const lines = [`- (${m.kind} · ${who} · CONTESTED) ${topic}:`, side(c.this, "says") + ";", side(c.other, "says") + "."];
+  if (c.basis) lines.push(`    Basis: ${c.basis}.`);
+  return lines.join("\n");
 }
 
 /** Appendix E. Empty string when there is nothing to say. */
@@ -56,16 +75,79 @@ export function formatMemoryBlock(memories = []) {
 }
 
 /**
+ * For contested and reported memories, fetch what the block needs: the
+ * open state (counterpart, dimensions), the live attestations of both
+ * sides (who said it, how, when) and the counterpart's text. Nothing is
+ * fetched for plain accepted notes. Quiet until migration 0010 exists.
+ */
+async function decorate(supabase, identity, memories) {
+  const special = memories.filter((m) => m.truth_status === "contested" || m.truth_status === "reported");
+  if (!special.length) return memories;
+  const ids = special.map((m) => m.id);
+  const { data: states, error } = await supabase.from("memory_states").select("memory_id, counterpart_id, dimensions, reason, effective_range, computed_at").in("memory_id", ids).order("computed_at", { ascending: false });
+  if (error) return memories;
+  const open = new Map();
+  for (const s of states || []) if (!open.has(s.memory_id) && /,\s*\)$/.test(String(s.effective_range))) open.set(s.memory_id, s);
+  const counterpartIds = [...new Set([...open.values()].map((s) => s.counterpart_id).filter(Boolean))];
+  const allIds = [...new Set([...ids, ...counterpartIds])];
+  // subject and predicate for the topic line, and the counterpart's text
+  const { data: rows } = await supabase.from("memories").select("id, content, kind, scope, subject, predicate, created_at").in("id", allIds).eq("namespace_id", identity.namespaceId);
+  const counterparts = (rows || []).filter((r) => counterpartIds.includes(r.id));
+  const detail = new Map((rows || []).map((r) => [r.id, r]));
+  const { data: atts } = await supabase.from("attestations").select("memory_id, actor, source_layer, source_ref, asserted_at, stance").in("memory_id", allIds).eq("status", "accepted").is("invalidated_at", null).order("asserted_at", { ascending: true });
+  const actorIds = [...new Set((atts || []).map((a) => a.actor).filter((a) => /^[0-9a-f-]{36}$/i.test(a || "")))].filter((a) => a !== identity.userId);
+  const { data: users } = actorIds.length ? await supabase.from("user").select("id, email").in("id", actorIds) : { data: [] };
+  const nameOf = (actor) => (users || []).find((u) => u.id === actor)?.email?.split("@")[0] || null;
+
+  const describeSide = (memoryId, text, isSelf) => {
+    const rows = (atts || []).filter((a) => a.memory_id === memoryId && a.stance === "asserts");
+    const first = rows[0];
+    const who = !first ? "someone"
+      : first.actor === identity.userId ? "you"
+      : first.source_layer === "knowledge" ? "knowledge"
+      : first.source_layer === "admin" ? `an admin${nameOf(first.actor) ? ` (${nameOf(first.actor)})` : ""}`
+      : nameOf(first.actor) || "a colleague";
+    const ref = first?.source_ref || {};
+    const how = ref.document_id ? "document" : ref.conversation_id ? "conversation" : first?.source_layer === "admin" && who !== "you" ? "import" : "note";
+    const count = new Set(rows.map((a) => a.source_ref?.document_id || a.source_ref?.conversation_id || a.actor)).size;
+    return { who, how: count > 1 ? `${how}, ${count} sources` : how, date: first?.asserted_at ? String(first.asserted_at).slice(0, 10) : null, content: text, isSelf };
+  };
+
+  return memories.map((m) => {
+    if (m.truth_status === "reported") {
+      const first = (atts || []).find((a) => a.memory_id === m.id && a.stance === "reports");
+      return { ...m, reporter: first ? (first.actor === identity.userId ? "you" : nameOf(first.actor) || "a colleague") : null };
+    }
+    if (m.truth_status !== "contested") return m;
+    const s = open.get(m.id);
+    const other = s?.counterpart_id ? (counterparts || []).find((c) => c.id === s.counterpart_id) : null;
+    if (!s || !other) return m;                          // a single-proposition contest renders as a plain line
+    const thisSide = describeSide(m.id, m.content, true);
+    const otherSide = describeSide(other.id, other.content, false);
+    const d = detail.get(m.id) || {};
+    const subject = m.subject || d.subject || other.subject || null;
+    const predicate = m.predicate || d.predicate || other.predicate || null;
+    let basis = null;
+    if (s.dimensions) {
+      const asVote = { dimensions: Object.fromEntries(["authority", "independent", "confidence", "direct", "first_party"].map((k) => [k, s.dimensions[k] === "this" ? "a" : s.dimensions[k] === "other" ? "b" : "tie"])), winner: null, tally: { a: s.dimensions.tally?.this ?? 0, b: s.dimensions.tally?.other ?? 0 } };
+      basis = describeVote(asVote, thisSide.who, otherSide.who);
+    }
+    return { ...m, subject, predicate, contest: { this: thisSide, other: otherSide, counterpartId: other.id, basis } };
+  });
+}
+
+/**
  * Recall for one turn.
  *
  * @param {object} supabase
  * @param {object} openai
  * @param {{organizationId,namespaceId,userId}} identity
- * @param {{message, previousUserMessage?, settings?, embedding?, log?}} opts
+ * @param {{message, previousUserMessage?, settings?, embedding?, usage?, log?}} opts
  *   embedding: a query embedding to reuse (same model as documents) instead of embedding again
+ *   usage: the turn's usage tally (lib/usage.js) to record the embedding call on
  * @returns {{ memories: object[], memoryIds: string[], block: string, tokens: number, query: string, candidates: number, ms: number }}
  */
-export async function recallMemories(supabase, openai, identity, { message, previousUserMessage = null, settings = null, embedding = null, log = null } = {}) {
+export async function recallMemories(supabase, openai, identity, { message, previousUserMessage = null, settings = null, embedding = null, usage = null, log = null } = {}) {
   const t0 = Date.now();
   const empty = { memories: [], memoryIds: [], block: "", tokens: 0, query: "", candidates: 0, ms: 0 };
   if (!identity?.organizationId || !identity?.namespaceId || !identity?.userId) return empty;
@@ -85,7 +167,7 @@ export async function recallMemories(supabase, openai, identity, { message, prev
     include_shared: true,
   };
 
-  const vec = embedding || (await embedText(openai, query));
+  const vec = embedding || (await embedText(openai, query, { usage, stage: "recall_embed" }));
   const [semantic, keyword] = await Promise.all([
     supabase.rpc("match_memories", { query_embedding: vec, match_count: VECTOR_K, ...scope }),
     supabase.rpc("search_memories_keyword", { query_text: query.slice(0, 500), match_count: KEYWORD_K, ...scope }),
@@ -105,7 +187,7 @@ export async function recallMemories(supabase, openai, identity, { message, prev
   if (keywordOnly.length) {
     const { data: rows } = await supabase
       .from("memories")
-      .select("id, scope, kind, content, importance, access_count, last_accessed_at, created_at")
+      .select("id, scope, kind, content, importance, access_count, last_accessed_at, created_at, truth_status, subject, predicate")
       .in("id", keywordOnly.map((r) => r.id))
       .eq("organization_id", identity.organizationId)
       .eq("namespace_id", identity.namespaceId)
@@ -116,12 +198,16 @@ export async function recallMemories(supabase, openai, identity, { message, prev
   const candidates = [...byId.values()];
   const now = Date.now();
   const ranked = candidates
-    .filter((r) => (Number.isFinite(r.similarity) ? r.similarity >= floor : true))     // keyword-only hits sit at the floor and pass
+    .filter((r) => !r.truth_status || VISIBLE_TRUTH.includes(r.truth_status))            // denied, retracted, superseded: never shown (9.6)
+    // a keyword match passes regardless of similarity: "Who is Tom?" sits at
+    // 0.27 against "Tom Greer is the COO" yet the name is exactly what matters
+    .filter((r) => r.keyword_rank != null || !Number.isFinite(r.similarity) || r.similarity >= floor)
+    .map((r) => (r.keyword_rank != null && (!Number.isFinite(r.similarity) || r.similarity < floor) ? { ...r, similarity: floor } : r))
     .map((r) => ({ ...r, score: scoreMemory(r, { now, floor }) }))
     .sort((a, b) => b.score - a.score);
 
   // Trim: best first until the block reaches its token cap, never more than k.
-  const chosen = [];
+  let chosen = [];
   let tokens = estimateTokens(MEMORY_BLOCK_HEADING);
   for (const r of ranked) {
     if (chosen.length >= k) break;
@@ -131,10 +217,20 @@ export async function recallMemories(supabase, openai, identity, { message, prev
     tokens += t;
   }
 
+  // Contested and reported notes need their sides and reporters (9.6). A
+  // contested pair renders once, and the block is re-measured afterwards
+  // since a contested entry is several lines.
+  chosen = await decorate(supabase, identity, chosen);
+  const shown = new Set(chosen.map((m) => m.id));
+  chosen = chosen.filter((m) => !(m.contest && shown.has(m.contest.counterpartId) && chosen.findIndex((x) => x.id === m.contest.counterpartId) < chosen.indexOf(m)));
+  tokens = estimateTokens(MEMORY_BLOCK_HEADING) + chosen.reduce((sum, m) => sum + estimateTokens(lineFor(m)) + 1, 0);
+  while (chosen.length > 1 && tokens > blockTokens) { const dropped = chosen.pop(); tokens -= estimateTokens(lineFor(dropped)) + 1; }
+
   const block = formatMemoryBlock(chosen);
   const result = {
     memories: chosen.map((r) => ({
-      id: r.id, scope: r.scope, kind: r.kind, content: r.content, importance: r.importance,
+      id: r.id, scope: r.scope, kind: r.kind, content: r.content, importance: r.importance, created_at: r.created_at || null,
+      truth_status: r.truth_status || "accepted", counterpart_id: r.contest?.counterpartId || null,
       similarity: Number.isFinite(r.similarity) ? Number(r.similarity.toFixed(3)) : null, score: Number(r.score.toFixed(3)),
     })),
     memoryIds: chosen.map((r) => r.id),
