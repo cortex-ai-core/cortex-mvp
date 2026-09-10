@@ -127,11 +127,11 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * @param {import("@supabase/supabase-js").SupabaseClient} args.supabase
  * @param {string} args.query            raw user question (normalized lightly)
  * @param {number[]} args.embedding      query embedding
- * @param {string} args.namespace
+ * @param {string} args.namespaceId    namespace uuid (the only namespace key)
  * @param {{id:string,file_name:string,filter?:boolean}[]} args.namedDocs  documents the question names, if any
  * @param {object} [args.log]
  */
-export async function hybridRetrieve({ supabase, query, embedding, namespace, namedDocs = [], docScores = [], log }) {
+export async function hybridRetrieve({ supabase, query, embedding, namespaceId, namedDocs = [], docScores = [], log }) {
   const filterDocs = namedDocs.filter((d) => d.filter === true);
   const boostDocs = namedDocs.filter((d) => d.filter !== true);
   const named = filterDocs.length > 0;
@@ -144,7 +144,7 @@ export async function hybridRetrieve({ supabase, query, embedding, namespace, na
     supabase.rpc("hybrid_search", {
       query_text: queryText,
       query_embedding: embedding,
-      query_namespace: namespace,
+      query_namespace_id: namespaceId,
       semantic_weight: DEFAULTS.semanticWeight,
       keyword_weight: DEFAULTS.keywordWeight,
       rrf_k: DEFAULTS.rrfK,
@@ -356,7 +356,7 @@ export async function hybridRetrieve({ supabase, query, embedding, namespace, na
   log?.info?.({
     route: "/api/retrieve",
     mode: "hybrid",
-    namespace,
+    namespaceId,
     named: filterDocs.map((d) => d.file_name),
     boosted: boostDocs.map((d) => d.file_name),
     candidates: results.length + extras.length,

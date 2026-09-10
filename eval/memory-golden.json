@@ -1,0 +1,32 @@
+{
+  "namespace": "core",
+  "namespaceId": "d5068743-69e8-4c1d-af36-151e7afc9fa6",
+  "notes": "Multi-turn scenarios for the memory work (design doc 5.11). Each scenario is one conversation; turns are sent in order with the conversationId the server returns. expect.cites_any: at least one citation's file or display name contains one of these substrings (case-insensitive). expect.answer_must_include: substrings of the answer. expect.mode_in: the answer mode must be one of these. expect.not_abstain: the answer must not be a 'documents don't cover this' reply. family: follow-up (Phase 2), carry-over, isolation, forget-correct, administration (later phases).",
+  "scenarios": [
+    {
+      "id": "follow-001",
+      "family": "follow-up",
+      "turns": [
+        { "message": "Which documents cover the internship program?", "expect": { "cites_any": ["Internship"], "not_abstain": true } },
+        { "message": "Summarise the second one", "expect": { "cites_any": ["Internship"], "not_abstain": true, "mode_in": ["retrieval", "document"] } }
+      ]
+    },
+    {
+      "id": "follow-002",
+      "family": "follow-up",
+      "turns": [
+        { "message": "How many credits does the teacher education program require?", "expect": { "answer_must_include": ["credit"], "not_abstain": true } },
+        { "message": "And which document says that?", "expect": { "cites_any": ["LEE", "Teacher"], "not_abstain": true } }
+      ]
+    },
+    {
+      "id": "follow-003",
+      "family": "follow-up",
+      "turns": [
+        { "message": "What does the Operations Playbook cover?", "expect": { "cites_any": ["Operations Playbook"], "not_abstain": true } },
+        { "message": "Give me its three most important points as bullets", "expect": { "cites_any": ["Operations Playbook"], "not_abstain": true } },
+        { "message": "why?", "expect": { "not_abstain": true, "mode_in": ["retrieval", "document"] } }
+      ]
+    }
+  ]
+}

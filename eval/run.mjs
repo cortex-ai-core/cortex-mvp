@@ -30,8 +30,10 @@ const IDS = args.ids ? new Set(args.ids.split(",")) : null;
 
 const env = readFileSync(join(here, "..", ".env"), "utf8");
 const envVal = (k) => (env.match(new RegExp(`^${k}=(.*)$`, "m")) || [])[1]?.trim().replace(/^"|"$/g, "");
-const USERNAME = args.user || "chan";
-const PASSWORD = envVal("ADMIN_PASSWORD");
+// Login is Supabase Auth (email + password) since the dev-branch auth route.
+// Put EVAL_EMAIL / EVAL_PASSWORD in .env, or pass --user / --password.
+const EMAIL = args.user || envVal("EVAL_EMAIL");
+const PASSWORD = args.password || envVal("EVAL_PASSWORD");
 
 const golden = JSON.parse(readFileSync(join(here, "golden.json"), "utf8"));
 const questions = golden.questions.filter((q) => !IDS || IDS.has(q.id));
@@ -53,10 +55,10 @@ const ABSTAIN = /documents? (?:don['’]?t|do not|does not|doesn['’]?t) \w+|do
 async function login() {
   const res = await fetch(`${BASE}/api/auth/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: USERNAME, password: PASSWORD }),
+    body: JSON.stringify({ email: EMAIL, password: PASSWORD, namespaceId: golden.namespaceId }),
   });
   const j = await res.json();
-  if (!j.token) throw new Error("login failed");
+  if (!j.token) throw new Error(`login failed: ${j.error || res.status} (set EVAL_EMAIL / EVAL_PASSWORD in .env)`);
   return j.token;
 }
 
@@ -73,6 +75,49 @@ async function post(path, token, body) {
 
 // ------------------------------------------------------------ run
 const token = await login();
+
+// ------------------------------------------------------------ memory scenarios
+//   npm run eval -- --memory            multi-turn scenarios from eval/memory-golden.json
+if (args.memory === "true") {
+  const mg = JSON.parse(readFileSync(join(here, "memory-golden.json"), "utf8"));
+  const scenarios = mg.scenarios.filter((s) => !IDS || IDS.has(s.id));
+  console.log(`\nCortéx memory eval · ${scenarios.length} scenarios · ${BASE}\n`);
+  const results = [];
+  let passedScenarios = 0;
+  for (const s of scenarios) {
+    let conversationId = null;
+    const turns = [];
+    let ok = true;
+    for (const [i, t] of s.turns.entries()) {
+      const c = await post("/api/chat", token, { message: t.message, conversationId });
+      conversationId = c.body?.conversationId || conversationId;
+      const answer = c.body?.finalAnswer || "";
+      const cites = Array.isArray(c.body?.citations) ? c.body.citations : [];
+      const e = t.expect || {};
+      const checks = {};
+      if (e.cites_any) checks.cites_any = cites.some((x) => matchesDoc(x, e.cites_any));
+      if (e.answer_must_include) checks.answer_must_include = e.answer_must_include.every((m) => norm(answer).includes(norm(m)));
+      if (e.mode_in) checks.mode_in = e.mode_in.includes(c.body?.mode);
+      if (e.not_abstain) checks.not_abstain = !ABSTAIN.test(answer) && answer.length > 40;
+      const turnOk = c.status === 200 && Object.values(checks).every(Boolean);
+      ok = ok && turnOk;
+      turns.push({ message: t.message, status: c.status, ms: c.ms, mode: c.body?.mode, intent: c.body?.intent, citations: cites.length, checks, ok: turnOk, answer: answer.slice(0, 300) });
+      const flag = (v) => (v === true ? "✓" : v === false ? "✗" : "·");
+      console.log(`${s.id.padEnd(11)} turn ${i + 1}  ${turnOk ? "PASS" : "FAIL"}  mode=${String(c.body?.mode || "-").padEnd(14)} intent=${String(c.body?.intent?.type || "-")}/${String(c.body?.intent?.scope || "-")}  cites=${String(cites.length).padEnd(3)} ${Object.entries(checks).map(([k, v]) => `${k} ${flag(v)}`).join("  ")}  ${c.ms}ms`);
+    }
+    if (ok) passedScenarios++;
+    results.push({ id: s.id, family: s.family, ok, conversationId, turns });
+    if (conversationId) await fetch(`${BASE}/api/conversations/${conversationId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+  }
+  console.log(`\n=== memory summary ===\nscenarios passed     ${passedScenarios} / ${scenarios.length}`);
+  mkdirSync(join(here, "runs"), { recursive: true });
+  const stampM = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const outM = join(here, "runs", `${stampM}-memory.json`);
+  writeFileSync(outM, JSON.stringify({ summary: { passed: passedScenarios, total: scenarios.length }, results }, null, 2));
+  console.log(`saved ${outM}`);
+  process.exit(passedScenarios === scenarios.length ? 0 : 1);
+}
+
 const rows = [];
 console.log(`\nCortéx eval · mode=${MODE} · ${questions.length} questions · k=${K} · ${BASE}\n`);
 
@@ -81,7 +126,7 @@ for (const q of questions) {
 
   // ---- retrieval
   if (ONLY !== "chat") {
-    const r = await post("/api/retrieve", token, { query: q.question, namespace: golden.namespace });
+    const r = await post("/api/retrieve", token, { query: q.question, namespaceId: golden.namespaceId });
     const results = Array.isArray(r.body?.results) ? r.body.results : [];
     const top = results.slice(0, K);
     const names = top;
@@ -108,6 +153,8 @@ for (const q of questions) {
   // ---- answer
   if (ONLY !== "retrieve") {
     const c = await post("/api/chat", token, { message: q.question });
+    // with memory on, every question starts a saved thread; the eval cleans up after itself
+    if (c.body?.conversationId) await fetch(`${BASE}/api/conversations/${c.body.conversationId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     const answer = c.body?.finalAnswer || "";
     const cites = Array.isArray(c.body?.citations) ? c.body.citations : [];
     row.chat = { ms: c.ms, status: c.status, mode: c.body?.mode || null, chars: answer.length, citations: cites.length, answer: answer.slice(0, 400) };

@@ -12,6 +12,11 @@ export async function synthesizeFinalAnswer({
   model,
   identityContext = null,
   onToken = null,
+  // Thread history (design doc 5.5): earlier turns of this conversation as
+  // real chat turns, and a running summary of turns older than those.
+  // Both default to empty, so a call without them behaves exactly as before.
+  priorMessages = [],
+  conversationSummary = null,
 }) {
 
   // ============================================================
@@ -564,8 +569,32 @@ Do NOT reference system structure.
   // ============================================================
   // 🔥 OPENAI RESPONSE
   // ============================================================
+  // Earlier turns go in as real chat turns between the system prompt and
+  // the current request. They are continuity, not evidence: the model may
+  // rely on them to understand a follow-up, but every cited fact must come
+  // from the current CONTEXT WINDOW, and the [n] numbers inside earlier
+  // assistant turns belonged to earlier context windows.
+  const history = Array.isArray(priorMessages)
+    ? priorMessages
+        .filter(m => m && (m.role === "user" || m.role === "assistant") && String(m.content || "").trim())
+        .map(m => ({ role: m.role, content: String(m.content) }))
+    : [];
+  const historyNotes = [];
+  if (conversationSummary && String(conversationSummary).trim()) {
+    historyNotes.push(`EARLIER IN THIS CONVERSATION (a summary of turns not shown below):\n${String(conversationSummary).trim()}`);
+  }
+  if (history.length || historyNotes.length) {
+    historyNotes.push(
+      "The conversation turns that follow are this thread's recent history. Use them to resolve references like \"the second one\", \"it\", or \"that program\", and to keep continuity. " +
+      "They are not evidence: cite only the numbered sources in the current CONTEXT WINDOW. Citation numbers inside earlier assistant turns referred to earlier sources and must not be reused. " +
+      "The final USER MESSAGE is the one to answer."
+    );
+  }
+
   const messages = [
     { role: "system", content: systemPrompt },
+    ...(historyNotes.length ? [{ role: "system", content: historyNotes.join("\n\n") }] : []),
+    ...history,
     { role: "user", content: userPrompt },
   ];
 

@@ -25,6 +25,7 @@ import multipart from "@fastify/multipart";
 import authPlugin from "./backend/lib/authMiddleware.js";
 import { createIngestWorker } from "./backend/ingest/worker.js";
 import { parserHealth } from "./backend/ingest/parserClient.js";
+import { describeDefaults } from "./backend/memory/settings.js";
 
 // ✅ FIX APPLIED — bodyLimit added (NO OTHER CHANGES)
 const fastify = Fastify({
@@ -78,6 +79,9 @@ fastify.decorate("openai", openai);
 const ingestWorker = createIngestWorker(fastify);
 fastify.decorate("ingestWorker", ingestWorker);
 
+// Memory switches at boot (design doc 5.12). Namespace rows override these at runtime.
+fastify.log.info({ memory: describeDefaults() }, "memory: defaults loaded");
+
 let parserStatusCache = { at: 0, value: null };
 fastify.decorate("parserStatus", async () => {
   if (Date.now() - parserStatusCache.at > 15000) {
@@ -106,7 +110,8 @@ const allowedRoutes = new Set([
   "documentTypes.js",
   "ingest.js",
   "retrieve.js",
-  "settings.js"
+  "settings.js",
+  "conversations.js"
 ]);
 
 for (const file of fs.readdirSync(routesDir)) {

@@ -7,7 +7,7 @@
 import fp from "fastify-plugin";
 import { createClient } from "@supabase/supabase-js";
 import { requireAuth } from "../lib/authMiddleware.js";
-import { hasPermission } from "../lib/permissions.js";
+import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
 import { hybridRetrieve } from "../retrieval/hybrid.js";
 import { resolveRetrievalMode, logRetrievalTrace } from "../retrieval/trace.js";
 
@@ -592,15 +592,15 @@ const GENERIC_NAME_WORDS = new Set([
 ]);
 const isYear = t => /^(19|20)\d{2}$/.test(t);
 
-async function namespaceDocuments(supabase, namespace) {
-  const hit = NAME_CACHE.get(namespace);
+async function namespaceDocuments(supabase, namespaceId) {
+  const hit = NAME_CACHE.get(namespaceId);
   if (hit && Date.now() - hit.at < 30000) return hit.docs;
   const { data } = await supabase
     .from("documents")
     .select("id, file_name, display_name, status")
-    .eq("namespace", namespace);
+    .eq("namespace_id", namespaceId);
   const docs = (data || []).filter(d => !d.status || d.status === "ready");
-  NAME_CACHE.set(namespace, { at: Date.now(), docs });
+  NAME_CACHE.set(namespaceId, { at: Date.now(), docs });
   return docs;
 }
 
@@ -687,18 +687,17 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
   fastify.post(
     "/api/retrieve",
-    { preHandler: requireAuth() },
+    { preHandler: [requireAuth(), requireNamespaceMember(fastify)] },
     async (req, reply) => {
 
       try {
 
-        const { query, namespace = "default" } = req.body || {};
+        const { query, namespaceId: requestedNamespaceId, conversationId = null, historyTurns = null } = req.body || {};
 
-        const identity = {
-          userId: req.user?.id,
-          role: req.user?.role,
-          namespace: req.user?.namespace
-        };
+        // The token decides the namespace. A body value is accepted only
+        // when it agrees, so a client cannot search another workspace.
+        const identity = identityFrom(req);
+        const namespaceId = identity.namespaceId;
 
         if (!hasPermission(identity, "chat")) {
           return reply.code(403).send({
@@ -706,7 +705,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
           });
         }
 
-        if (namespace !== identity.namespace) {
+        if (requestedNamespaceId && requestedNamespaceId !== namespaceId) {
           return reply.code(403).send({
             error: "Namespace mismatch. Access denied."
           });
@@ -746,7 +745,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
         const namedDocs =
           findNamedDocuments(
-            await namespaceDocuments(supabase, namespace),
+            await namespaceDocuments(supabase, namespaceId),
             query
           );
 
@@ -789,7 +788,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
         try {
           const { data: dp, error: dpErr } = await supabase.rpc("match_document_profiles", {
             query_embedding: embedding,
-            query_namespace: namespace,
+            query_namespace_id: namespaceId,
             match_count: 10
           });
           if (dpErr) throw new Error(dpErr.message);
@@ -819,14 +818,14 @@ export default fp(async function retrieveRoute(fastify, opts) {
             supabase,
             query: query.trim().replace(/\s+/g, " ").replace(/\?+$/, ""),
             embedding,
-            namespace,
+            namespaceId,
             namedDocs,
             docScores,
             log: fastify.log
           });
 
           logRetrievalTrace(supabase, fastify.log, {
-            query, namespace, mode: "hybrid", userId: identity.userId,
+            query, namespaceId, conversationId, historyTurns, mode: "hybrid", userId: identity.userId,
             latencyMs: Date.now() - traceStart, results: hybrid.results, namedDocs
           });
 
@@ -845,7 +844,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
             match_count: namedDocs.length
               ? Math.max(retrievalProfile.matchCount, 60)
               : retrievalProfile.matchCount,
-            query_namespace: namespace,
+            query_namespace_id: namespaceId,
           });
 
         if (error) {
@@ -1118,7 +1117,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
 
         fastify.log.info({
           route: "/api/retrieve",
-          namespace,
+          namespaceId,
           normalizedQuery,
           queryTerms,
           queryType: retrievalProfile.type,
@@ -1132,7 +1131,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
         });
 
         logRetrievalTrace(supabase, fastify.log, {
-          query, namespace, mode: "legacy", userId: identity.userId,
+          query, namespaceId, conversationId, historyTurns, mode: "legacy", userId: identity.userId,
           latencyMs: Date.now() - traceStart, results: formatted, namedDocs
         });
 

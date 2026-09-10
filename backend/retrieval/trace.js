@@ -13,11 +13,13 @@ export function resolveRetrievalMode(req) {
   return (process.env.RETRIEVAL_MODE || "legacy").toLowerCase() === "hybrid" ? "hybrid" : "legacy";
 }
 
-export function logRetrievalTrace(supabase, log, { query, namespace, mode, userId, latencyMs, results, namedDocs }) {
+export function logRetrievalTrace(supabase, log, { query, namespaceId, mode, userId, latencyMs, results, namedDocs, conversationId, historyTurns }) {
   if (!ENABLED || !supabase) return;
   const row = {
     query: String(query || "").slice(0, 2000),
-    namespace: namespace || null,
+    namespace_id: namespaceId || null,
+    conversation_id: conversationId || null,
+    history_turns: Number.isFinite(historyTurns) ? historyTurns : null,
     mode: mode || null,
     user_id: userId || null,
     latency_ms: Number.isFinite(latencyMs) ? Math.round(latencyMs) : null,
