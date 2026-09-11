@@ -1,3 +1,4 @@
+import { readPreferences, writePreferences, validPreferencesPatch } from "../../lib/userPreferences.js";
 import {
   canAccessOrganization,
   findUser,
@@ -51,7 +52,8 @@ async function validateNamespaceNames(fastify, organizationId, names) {
 
 async function authorizeTarget(fastify, scope, userId) {
   const result = await findUser(fastify, userId);
-  if (result.error || !result.data) return { status: 404, error: "User not found." };
+  if (result.error) return { status: 500, error: "Unable to load user." };
+  if (!result.data) return { status: 404, error: "User not found." };
   if (!canAccessOrganization(scope, result.data.organization.id)) {
     return { status: 403, error: "User organization access denied." };
   }
@@ -99,6 +101,33 @@ async function removeMembership(fastify, scope, userId, namespaceId) {
 }
 
 export default async function userManagement(fastify) {
+  for (const method of ["GET", "PATCH"]) {
+    fastify.route({
+      method, url: "/api/settings/users/:userId/personalization",
+      async handler(req, reply) {
+        const scope = requireSettingsManager(req, reply);
+        if (!scope) return;
+        const target = await authorizeTarget(fastify, scope, req.params.userId);
+        if (target.error) return reply.code(target.status).send({ error: target.error });
+        if (method === "PATCH" && !validPreferencesPatch(req.body, true)) {
+          return reply.code(400).send({ error: "Provide personalization text up to 4,000 characters only." });
+        }
+        try {
+          const preferences = method === "GET"
+            ? await readPreferences(fastify, target.user.id)
+            : await writePreferences(fastify, target.user.id, req.body);
+          if (method === "PATCH") req.log.info({
+            event: "user_personalization_updated", actorUserId: req.user.userId,
+            targetUserId: target.user.id, timestamp: new Date().toISOString(),
+          }, "User personalization updated");
+          return { personalization: preferences.personalization };
+        } catch {
+          return reply.code(500).send({ error: "Unable to " + (method === "GET" ? "load" : "save") + " personalization." });
+        }
+      },
+    });
+  }
+
   // Lists users globally for super_admin and only within the caller's
   // organization for admin. namespaceId is an optional additional filter.
   fastify.get("/api/settings/users", async (req, reply) => {

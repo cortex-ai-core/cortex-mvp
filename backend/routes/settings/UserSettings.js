@@ -1,9 +1,6 @@
 import { findUser, membershipsFor, withNamespaces } from "./shared.js";
 
-const responseStyles = new Set([
-  "neutral", "ceo", "king", "advisory", "recruiting",
-  "cybersecurity", "datamanagement", "ventures",
-]);
+import { readPreferences, writePreferences, validPreferencesPatch } from "../../lib/userPreferences.js";
 
 export default async function userSettings(fastify) {
   async function currentUser(req, reply) {
@@ -26,35 +23,24 @@ export default async function userSettings(fastify) {
   fastify.get("/api/settings/user/preferences", async (req, reply) => {
     const user = await currentUser(req, reply);
     if (!user) return;
-    const { data, error } = await fastify.supabase
-      .from("user_settings")
-      .select("response_style")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (error) {
+    try {
+      return { preferences: await readPreferences(fastify, user.id) };
+    } catch {
       return reply.code(500).send({ error: "Unable to load preferences." });
     }
-    return { preferences: data || { response_style: "neutral" } };
   });
 
   fastify.patch("/api/settings/user/preferences", async (req, reply) => {
     const user = await currentUser(req, reply);
     if (!user) return;
-    const body = req.body;
-    if (!body || typeof body !== "object" || Array.isArray(body) ||
-        Object.keys(body).some((key) => key !== "response_style") ||
-        !responseStyles.has(body.response_style)) {
-      return reply.code(400).send({ error: "Provide a valid response_style only." });
+    if (!validPreferencesPatch(req.body)) {
+      return reply.code(400).send({ error: "Provide a valid response_style or personalization (up to 4,000 characters)." });
     }
-    const { data, error } = await fastify.supabase
-      .from("user_settings")
-      .upsert({ user_id: user.id, response_style: body.response_style }, { onConflict: "user_id" })
-      .select("response_style")
-      .single();
-    if (error) {
+    try {
+      return { preferences: await writePreferences(fastify, user.id, req.body) };
+    } catch {
       return reply.code(500).send({ error: "Unable to save preferences." });
     }
-    return { preferences: data };
   });
 
   // GET /api/settings/user
