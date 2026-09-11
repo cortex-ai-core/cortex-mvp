@@ -4,6 +4,7 @@
 
 import fp from "fastify-plugin";
 import { requireAuth } from "../lib/authMiddleware.js";
+import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
 import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { v4 as uuidv4 } from "uuid";
@@ -20,30 +21,8 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// -------------------------------------------------------------
-// PERMISSION ENGINE (UNCHANGED)
-// -------------------------------------------------------------
-const PERMISSION_MAP = {
-  super_admin: { namespaces: ["*"], actions: ["chat", "upload", "admin", "delete"] },
-  advisor: { namespaces: ["advisory"], actions: ["chat", "upload"] },
-  cyber: { namespaces: ["cybersecurity"], actions: ["chat"] },
-  datamanagement: { namespaces: ["datamanagement"], actions: ["chat", "upload"] },
-  recruiting: { namespaces: ["recruiting"], actions: ["chat", "upload"] },
-  ventures: { namespaces: ["ventures"], actions: ["chat", "upload"] }
-};
-
-function hasPermission(identity, action) {
-  const { role, namespace } = identity;
-  const rolePermissions = PERMISSION_MAP[role];
-  if (!rolePermissions) return false;
-
-  const namespaceAllowed =
-    rolePermissions.namespaces.includes("*") ||
-    rolePermissions.namespaces.includes(namespace);
-
-  if (!namespaceAllowed) return false;
-  return rolePermissions.actions.includes(action);
-}
+// Permissions come from backend/lib/permissions.js (roles → actions);
+// namespace access is membership, checked by requireNamespaceMember.
 
 // -------------------------------------------------------------
 // v1.6 — ENTITY EXTRACTION (DETERMINISTIC, NO LLM, SAFE FILTER)
@@ -119,12 +98,12 @@ async function ingestRoute(fastify, opts) {
 
   fastify.post(
     "/ingest",
-    { preHandler: requireAuth() },
+    { preHandler: [requireAuth(), requireNamespaceMember(fastify)] },
     async (req, reply) => {
       try {
 
-        const user = req.user?.user || req.user;
-        const namespace = user.namespace;
+        const identity = identityFrom(req);
+        const namespaceId = identity.namespaceId;
 
         const { text, file_name, filename } = req.body;
 
@@ -132,12 +111,6 @@ async function ingestRoute(fastify, opts) {
           file_name ||
           filename ||
           "Uploaded Document";
-
-        const identity = {
-          userId: user?.userId,
-          role: user?.role,
-          namespace: user?.namespace
-        };
 
         if (!hasPermission(identity, "upload")) {
           return reply.code(403).send({ error: "Forbidden: No permission to upload" });
@@ -158,7 +131,8 @@ async function ingestRoute(fastify, opts) {
             {
               id: documentId,
               file_name: resolvedFileName,
-              namespace: namespace,
+              namespace_id: namespaceId,
+              uploaded_by: identity.userId,
               created_at: new Date().toISOString()
             }
           ]);
@@ -201,7 +175,7 @@ async function ingestRoute(fastify, opts) {
             .insert([
               {
                 document_id: documentId,
-                namespace,
+                namespace_id: namespaceId,
                 chunk_text: chunk,
                 chunk_index: index++,
                 embedding
@@ -222,7 +196,7 @@ async function ingestRoute(fastify, opts) {
           document_id: documentId,
           file_name: resolvedFileName,
           primary_entity: primaryEntity,
-          namespace,
+          namespace_id: namespaceId,
           chunksStored: insertedChunks.length,
           chunkIds: insertedChunks,
           message: "Ingest completed successfully.",

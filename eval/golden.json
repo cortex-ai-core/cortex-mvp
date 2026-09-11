@@ -1,5 +1,6 @@
 {
   "namespace": "core",
+  "namespaceId": "d5068743-69e8-4c1d-af36-151e7afc9fa6",
   "notes": "Golden questions against the Core workspace. expected_documents match on file name substring (case-insensitive). answer_must_include are case-insensitive substrings. kind: lookup | summary | comparison | out_of_scope.",
   "questions": [
     {

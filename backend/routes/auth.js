@@ -62,12 +62,20 @@ export default async function authRoutes(fastify) {
         .filter((item) => item?.organization_id === profile.organization.id);
       const namespaceNames = namespaceRecords.map((item) => slug(item.name));
       const namespaceIds = namespaceRecords.map((item) => item.id);
-      if (!namespaceNames.length) {
+      if (!namespaceIds.length) {
         return reply.code(403).send({ error: "Account has no authorized namespace." });
       }
 
-      const selectedNamespace = slug(body.namespace) || namespaceNames[0];
-      if (!namespaceNames.includes(selectedNamespace)) {
+      // The namespace id is the only key. A caller may pick one by id
+      // (preferred) or, for older clients, by name; otherwise the first
+      // membership is used.
+      const requestedId = typeof body.namespaceId === "string" ? body.namespaceId.trim() : "";
+      const requestedName = slug(body.namespace);
+      let selected = null;
+      if (requestedId) selected = namespaceRecords.find((item) => item.id === requestedId) || null;
+      else if (requestedName) selected = namespaceRecords.find((item) => slug(item.name) === requestedName) || null;
+      else selected = namespaceRecords[0];
+      if (!selected) {
         return reply.code(403).send({ error: "Namespace access denied." });
       }
 
@@ -82,7 +90,8 @@ export default async function authRoutes(fastify) {
         role: profile.role.name,
         organization: profile.organization.name,
         organizationId: profile.organization.id,
-        namespace: selectedNamespace,
+        namespaceId: selected.id,
+        namespace: selected.name,        // display only; never a lookup key
         namespaces: namespaceIds,
         organizations,
       };

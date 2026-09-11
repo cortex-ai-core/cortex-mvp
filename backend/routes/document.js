@@ -5,8 +5,8 @@
 
 import { createHash, randomUUID } from "node:crypto";
 import { extname } from "node:path";
-import { hasPermission, identityFrom } from "../lib/permissions.js";
-import { originalPath, documentPrefix, uploadObject, deletePrefix, signedUrl } from "../ingest/storage.js";
+import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
+import { originalPath, documentPrefix, documentPrefixFor, uploadObject, deletePrefix, signedUrl } from "../ingest/storage.js";
 import { searchTitle } from "../ingest/worker.js";   // pure helper; worker.js has no import-time side effects
 
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 50);
@@ -26,7 +26,7 @@ const MIME_BY_EXT = {
 };
 
 const LIST_FIELDS =
-  "id, file_name, display_name, document_type, description, namespace, status, stage_progress, stage_detail, error, page_count, parser, byte_size, mime_type, storage_path, rendition_path, created_at, updated_at";
+  "id, file_name, display_name, document_type, description, namespace_id, status, stage_progress, stage_detail, error, page_count, parser, byte_size, mime_type, storage_path, rendition_path, created_at, updated_at";
 
 function publicDoc(doc, chunkCount) {
   return {
@@ -36,7 +36,7 @@ function publicDoc(doc, chunkCount) {
     document_type: doc.document_type || null,
     description: doc.description || null,
     has_rendition: Boolean(doc.rendition_path),
-    namespace: doc.namespace,
+    namespace_id: doc.namespace_id,
     status: doc.status,
     stage_progress: doc.stage_progress,
     stage_detail: doc.stage_detail,
@@ -53,17 +53,20 @@ function publicDoc(doc, chunkCount) {
 
 export default async function documentRoutes(fastify) {
 
+  // Every route here reads or writes one namespace: the caller must still be a member.
+  fastify.addHook("preHandler", requireNamespaceMember(fastify));
+
   // ==========================================================
   // GET /api/documents
   // ==========================================================
   fastify.get("/api/documents", async (request, reply) => {
     const identity = identityFrom(request);
-    if (!identity.namespace) return reply.code(401).send({ error: "Unauthorized" });
+    if (!identity.namespaceId) return reply.code(401).send({ error: "Unauthorized" });
 
     const { data: docs, error: docsError } = await fastify.supabase
       .from("documents")
       .select(LIST_FIELDS)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .order("created_at", { ascending: false });
 
     if (docsError) {
@@ -74,7 +77,7 @@ export default async function documentRoutes(fastify) {
     const { data: chunks, error: chunkError } = await fastify.supabase
       .from("document_chunks")
       .select("document_id")
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .not("document_id", "is", null);
 
     if (chunkError) {
@@ -139,7 +142,7 @@ export default async function documentRoutes(fastify) {
     const ext = extname(fileName).toLowerCase();
     const buffer = Buffer.concat(pieces);
     const sha256 = hash.digest("hex");
-    const namespace = identity.namespace;
+    const namespaceId = identity.namespaceId;
     const supabase = fastify.supabase;
 
     const displayName = (fields.display_name || "").slice(0, 160) || null;
@@ -147,7 +150,7 @@ export default async function documentRoutes(fastify) {
     let documentType = (fields.document_type || "").slice(0, 60) || null;
     if (documentType) {
       const { data: t } = await supabase
-        .from("document_types").select("name").eq("namespace", namespace).eq("name", documentType).maybeSingle();
+        .from("document_types").select("name").eq("namespace_id", namespaceId).eq("name", documentType).maybeSingle();
       if (!t) return reply.code(400).send({ error: `"${documentType}" isn't a document type in this workspace.` });
       documentType = t.name;
     }
@@ -156,7 +159,7 @@ export default async function documentRoutes(fastify) {
     const { data: dup } = await supabase
       .from("documents")
       .select("id, file_name, status")
-      .eq("namespace", namespace)
+      .eq("namespace_id", namespaceId)
       .eq("sha256", sha256)
       .maybeSingle();
 
@@ -174,13 +177,13 @@ export default async function documentRoutes(fastify) {
     const { data: legacy } = await supabase
       .from("documents")
       .select("id")
-      .eq("namespace", namespace)
+      .eq("namespace_id", namespaceId)
       .eq("file_name", fileName)
       .eq("parser", "legacy")
       .maybeSingle();
 
     const documentId = legacy?.id || randomUUID();
-    const storagePath = originalPath(namespace, documentId, ext);
+    const storagePath = originalPath(namespaceId, documentId, ext);
 
     try {
       await uploadObject(supabase, storagePath, buffer, part.mimetype || MIME_BY_EXT[ext] || "application/octet-stream");
@@ -196,7 +199,7 @@ export default async function documentRoutes(fastify) {
       document_type: documentType,
       description,
       rendition_path: null,
-      namespace,
+      namespace_id: namespaceId,
       status: "queued",
       stage_progress: 0,
       stage_detail: "Waiting to be read",
@@ -217,7 +220,7 @@ export default async function documentRoutes(fastify) {
     const { error: upsertErr } = await supabase.from("documents").upsert(row, { onConflict: "id" });
     if (upsertErr) {
       fastify.log.error({ err: upsertErr.message }, "documents: row upsert failed");
-      await deletePrefix(supabase, documentPrefix(namespace, documentId)).catch(() => {});
+      await deletePrefix(supabase, documentPrefix(namespaceId, documentId)).catch(() => {});
       return reply.code(500).send({ error: "Couldn't record the upload. Please try again." });
     }
 
@@ -245,7 +248,7 @@ export default async function documentRoutes(fastify) {
       .from("documents")
       .select(LIST_FIELDS)
       .eq("id", document_id)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .maybeSingle();
 
     if (error) return reply.code(500).send({ error: "Failed to read status" });
@@ -273,7 +276,7 @@ export default async function documentRoutes(fastify) {
       .from("documents")
       .select("id, status, attempts, storage_path")
       .eq("id", document_id)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .maybeSingle();
 
     if (!doc) return reply.code(404).send({ error: "Document not found" });
@@ -309,7 +312,7 @@ export default async function documentRoutes(fastify) {
       const name = String(body.document_type || "").trim().slice(0, 60);
       if (name) {
         const { data: t } = await fastify.supabase
-          .from("document_types").select("name").eq("namespace", identity.namespace).eq("name", name).maybeSingle();
+          .from("document_types").select("name").eq("namespace_id", identity.namespaceId).eq("name", name).maybeSingle();
         if (!t) return reply.code(400).send({ error: `"${name}" isn't a document type in this workspace.` });
       }
       patch.document_type = name || null;
@@ -320,7 +323,7 @@ export default async function documentRoutes(fastify) {
       .from("documents")
       .update(patch)
       .eq("id", document_id)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .select(LIST_FIELDS)
       .maybeSingle();
     if (error) return reply.code(500).send({ error: "Couldn't update the document." });
@@ -332,7 +335,7 @@ export default async function documentRoutes(fastify) {
         .from("document_chunks")
         .update({ title: searchTitle(data) })
         .eq("document_id", document_id)
-        .eq("namespace", identity.namespace);
+        .eq("namespace_id", identity.namespaceId);
       if (titleErr) fastify.log.warn({ err: titleErr.message, document_id }, "documents: chunk title update failed");
     }
 
@@ -354,7 +357,7 @@ export default async function documentRoutes(fastify) {
       .from("documents")
       .select("id, file_name, display_name, storage_path, rendition_path, mime_type")
       .eq("id", document_id)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .maybeSingle();
 
     if (!doc) return reply.code(404).send({ error: "Document not found" });
@@ -391,11 +394,19 @@ export default async function documentRoutes(fastify) {
 
     const supabase = fastify.supabase;
 
+    const { data: existing } = await supabase
+      .from("documents")
+      .select("id, namespace_id, storage_path")
+      .eq("id", document_id)
+      .eq("namespace_id", identity.namespaceId)
+      .maybeSingle();
+    if (!existing) return reply.code(404).send({ success: false, error: "Document not found" });
+
     // storage first (best effort), then the row; chunks go by cascade,
     // with an explicit delete as belt-and-braces for older schemas
     let removedObjects = 0;
     try {
-      removedObjects = await deletePrefix(supabase, documentPrefix(identity.namespace, document_id));
+      removedObjects = await deletePrefix(supabase, documentPrefixFor(existing));
     } catch (err) {
       fastify.log.warn({ err: err.message, document_id }, "documents: storage cleanup failed");
     }
@@ -404,14 +415,14 @@ export default async function documentRoutes(fastify) {
       .from("document_chunks")
       .delete()
       .eq("document_id", document_id)
-      .eq("namespace", identity.namespace);
+      .eq("namespace_id", identity.namespaceId);
     if (chunkError) return reply.code(500).send({ success: false, error: "Failed to delete chunks" });
 
     const { data: docData, error: docError } = await supabase
       .from("documents")
       .delete()
       .eq("id", document_id)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .select("id, file_name");
     if (docError) return reply.code(500).send({ success: false, error: "Failed to delete document" });
 

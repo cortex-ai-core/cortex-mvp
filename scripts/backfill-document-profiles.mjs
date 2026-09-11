@@ -2,7 +2,7 @@
 // =============================================================
 //  Backfill document profiles + embeddings (migration 0006)
 //
-//    node scripts/backfill-document-profiles.mjs [--namespace core] [--force] [--dry]
+//    node scripts/backfill-document-profiles.mjs [--namespace-id <uuid>] [--force] [--dry]
 //
 //  For every ready document without an embedding (or all, with --force):
 //    1. reuse metadata.ingest.summary, or write one from the stored chunks
@@ -21,7 +21,7 @@ import { searchTitle } from "../backend/ingest/worker.js";
 
 const args = process.argv.slice(2);
 const opt = (name) => { const i = args.indexOf(name); return i === -1 ? null : args[i + 1] || true; };
-const NAMESPACE = opt("--namespace");
+const NAMESPACE_ID = opt("--namespace-id");
 const FORCE = args.includes("--force");
 const DRY = args.includes("--dry");
 const EMBED_MODEL = process.env.EMBED_MODEL || "text-embedding-3-small";
@@ -30,14 +30,14 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SER
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const log = { info: (o, m) => console.log(m || "", JSON.stringify(o)), warn: (o, m) => console.warn(m || "", JSON.stringify(o)) };
 
-let q = supabase.from("documents").select("id, namespace, file_name, display_name, status, page_count, metadata, embedded_at").eq("status", "ready").order("created_at");
-if (NAMESPACE) q = q.eq("namespace", NAMESPACE);
+let q = supabase.from("documents").select("id, namespace_id, file_name, display_name, status, page_count, metadata, embedded_at").eq("status", "ready").order("created_at");
+if (NAMESPACE_ID) q = q.eq("namespace_id", NAMESPACE_ID);
 const { data: docs, error } = await q;
 if (error) { console.error("documents query failed:", error.message); process.exit(1); }
 
 let done = 0, skipped = 0, failed = 0;
 for (const doc of docs) {
-  const tag = `${doc.namespace} · ${doc.display_name || doc.file_name}`;
+  const tag = `${String(doc.namespace_id).slice(0, 8)} · ${doc.display_name || doc.file_name}`;
   if (doc.embedded_at && !FORCE) { skipped++; continue; }
 
   const { data: chunks, error: cErr } = await supabase

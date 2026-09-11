@@ -1,26 +1,46 @@
 // =============================================================
 //  Supabase Storage helpers for original files and parsed output.
-//  Layout: <bucket>/<namespace>/<document_id>/original.<ext>
-//          <bucket>/<namespace>/<document_id>/parsed.md
+//  Layout: <bucket>/<namespace_id>/<document_id>/original.<ext>
+//          <bucket>/<namespace_id>/<document_id>/parsed.md
+//          <bucket>/<namespace_id>/<document_id>/rendition.pdf
+//
+//  Documents uploaded before migration 0007 live under the old text
+//  namespace ("core/<id>/…"). Their prefix is recovered from the
+//  stored original path, so the *For(doc) helpers work for both.
 // =============================================================
 
 export const BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "documents";
 
-export function documentPrefix(namespace, documentId) {
-  return `${namespace}/${documentId}`;
+export function documentPrefix(namespaceId, documentId) {
+  return `${namespaceId}/${documentId}`;
 }
 
-export function originalPath(namespace, documentId, ext) {
-  return `${documentPrefix(namespace, documentId)}/original${ext}`;
+export function originalPath(namespaceId, documentId, ext) {
+  return `${documentPrefix(namespaceId, documentId)}/original${ext}`;
 }
 
-export function parsedPath(namespace, documentId) {
-  return `${documentPrefix(namespace, documentId)}/parsed.md`;
+export function parsedPath(namespaceId, documentId) {
+  return `${documentPrefix(namespaceId, documentId)}/parsed.md`;
 }
 
 /** PDF rendition of an Office original, used by the in-browser viewer. */
-export function renditionPath(namespace, documentId) {
-  return `${documentPrefix(namespace, documentId)}/rendition.pdf`;
+export function renditionPath(namespaceId, documentId) {
+  return `${documentPrefix(namespaceId, documentId)}/rendition.pdf`;
+}
+
+/** Prefix of an existing row: from its stored original path when there is one. */
+export function documentPrefixFor(doc) {
+  const p = doc?.storage_path;
+  if (typeof p === "string" && p.includes("/")) return p.slice(0, p.lastIndexOf("/"));
+  return documentPrefix(doc.namespace_id, doc.id);
+}
+
+export function parsedPathFor(doc) {
+  return `${documentPrefixFor(doc)}/parsed.md`;
+}
+
+export function renditionPathFor(doc) {
+  return `${documentPrefixFor(doc)}/rendition.pdf`;
 }
 
 export async function uploadObject(supabase, path, body, contentType) {

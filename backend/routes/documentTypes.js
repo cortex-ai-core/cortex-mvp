@@ -2,15 +2,17 @@
 //  DOCUMENT TYPES — one list per workspace, managed in Settings
 // ============================================================
 
-import { hasPermission, identityFrom } from "../lib/permissions.js";
+import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
 
-const FIELDS = "id, namespace, name, description, sort_order, created_at";
+const FIELDS = "id, namespace_id, name, description, sort_order, created_at";
 
 function cleanName(v) {
   return String(v || "").replace(/\s+/g, " ").trim().slice(0, 60);
 }
 
 export default async function documentTypeRoutes(fastify) {
+
+  fastify.addHook("preHandler", requireNamespaceMember(fastify));
 
   // anyone who can chat in the workspace can read its types
   fastify.get("/api/document-types", async (request, reply) => {
@@ -20,7 +22,7 @@ export default async function documentTypeRoutes(fastify) {
     const { data, error } = await fastify.supabase
       .from("document_types")
       .select(FIELDS)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .order("sort_order", { ascending: true })
       .order("name", { ascending: true });
 
@@ -40,7 +42,7 @@ export default async function documentTypeRoutes(fastify) {
 
     const { data, error } = await fastify.supabase
       .from("document_types")
-      .insert([{ namespace: identity.namespace, name, description, sort_order }])
+      .insert([{ namespace_id: identity.namespaceId, name, description, sort_order }])
       .select(FIELDS)
       .single();
 
@@ -67,14 +69,14 @@ export default async function documentTypeRoutes(fastify) {
 
     // keep documents in step when a type is renamed
     const { data: before } = await fastify.supabase
-      .from("document_types").select("name").eq("id", request.params.id).eq("namespace", identity.namespace).maybeSingle();
+      .from("document_types").select("name").eq("id", request.params.id).eq("namespace_id", identity.namespaceId).maybeSingle();
     if (!before) return reply.code(404).send({ error: "Type not found" });
 
     const { data, error } = await fastify.supabase
       .from("document_types")
       .update(patch)
       .eq("id", request.params.id)
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .select(FIELDS)
       .single();
     if (error) {
@@ -85,7 +87,7 @@ export default async function documentTypeRoutes(fastify) {
     if (patch.name && patch.name !== before.name) {
       await fastify.supabase.from("documents")
         .update({ document_type: patch.name })
-        .eq("namespace", identity.namespace)
+        .eq("namespace_id", identity.namespaceId)
         .eq("document_type", before.name);
     }
     return reply.send({ type: data });
@@ -96,17 +98,17 @@ export default async function documentTypeRoutes(fastify) {
     if (!hasPermission(identity, "upload")) return reply.code(403).send({ error: "Forbidden" });
 
     const { data: type } = await fastify.supabase
-      .from("document_types").select("name").eq("id", request.params.id).eq("namespace", identity.namespace).maybeSingle();
+      .from("document_types").select("name").eq("id", request.params.id).eq("namespace_id", identity.namespaceId).maybeSingle();
     if (!type) return reply.code(404).send({ error: "Type not found" });
 
     // documents keep working; they just lose the label
     await fastify.supabase.from("documents")
       .update({ document_type: null })
-      .eq("namespace", identity.namespace)
+      .eq("namespace_id", identity.namespaceId)
       .eq("document_type", type.name);
 
     const { error } = await fastify.supabase
-      .from("document_types").delete().eq("id", request.params.id).eq("namespace", identity.namespace);
+      .from("document_types").delete().eq("id", request.params.id).eq("namespace_id", identity.namespaceId);
     if (error) return reply.code(500).send({ error: "Couldn't delete the type." });
     return reply.send({ deleted: true });
   });

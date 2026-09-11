@@ -11,7 +11,7 @@
 import { EventEmitter } from "node:events";
 import { extname } from "node:path";
 import { parseDocument, renderPdf, RENDERABLE_EXT, ParserError } from "./parserClient.js";
-import { downloadObject, uploadObject, parsedPath, renditionPath } from "./storage.js";
+import { downloadObject, uploadObject, parsedPathFor, renditionPathFor } from "./storage.js";
 import { summarizeDocument, documentProfileText } from "./summarize.js";
 
 const EMBED_MODEL = process.env.EMBED_MODEL || "text-embedding-3-small";
@@ -101,7 +101,7 @@ export function createIngestWorker(fastify) {
   function chunkRow(doc, c) {
     return {
       document_id: doc.id,
-      namespace: doc.namespace,
+      namespace_id: doc.namespace_id,
       // weighted highest in the keyword index (document_chunks.tsv, migration 0005)
       title: searchTitle(doc),
       chunk_index: c.index,
@@ -138,7 +138,7 @@ export function createIngestWorker(fastify) {
     const pageCount = parsed.page_count ?? null;
 
     if (parsed.markdown) {
-      await uploadObject(supabase, parsedPath(doc.namespace, id), parsed.markdown, "text/markdown");
+      await uploadObject(supabase, parsedPathFor(doc), parsed.markdown, "text/markdown");
     }
 
     // ---- PDF rendition for Office files (viewing only, non-fatal) ----
@@ -147,7 +147,7 @@ export function createIngestWorker(fastify) {
       await setStatus(id, { stage_detail: "Preparing a preview" });
       try {
         const r = await renderPdf({ buffer, fileName: doc.file_name });
-        const path = renditionPath(doc.namespace, id);
+        const path = renditionPathFor(doc);
         await uploadObject(supabase, path, r.buffer, "application/pdf");
         rendition = { path, pages: r.pageCount };
         event(id, "rendition", `PDF preview ready (${r.pageCount} pages)`);

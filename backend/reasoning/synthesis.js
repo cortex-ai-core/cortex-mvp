@@ -3,6 +3,180 @@
 //  v1.8.7 — EXECUTIVE CADENCE HARDENING
 // ============================================================
 
+import { recordUsage } from "../lib/usage.js";
+// Design doc E1.7: the model reports sources that disagree on one trailing
+// line, bracketed so it can be lifted out for the trace and never shown.
+export const CONFLICT_OPEN = "⟦";
+export const CONFLICT_CLOSE = "⟧";
+const CONFLICT_RE = /⟦\s*conflicts?\s*:\s*([\s\S]*?)⟧/gi;
+
+/**
+ * Split the model's text into the answer and the structured conflicts
+ * note: [] when the model reported none. Also removes any stray bracket
+ * the model may have produced without the "conflicts:" label.
+ */
+export function extractConflicts(text = "") {
+  const conflicts = [];
+  let answer = String(text || "").replace(CONFLICT_RE, (_, body) => {
+    const items = String(body || "").split(/\s*(?:;|\n|\|)\s*/).map(s => s.trim()).filter(s => s && !/^none\.?$/i.test(s));
+    conflicts.push(...items);
+    return "";
+  });
+  answer = answer.replace(/⟦[^⟧]*⟧?/g, "").trimEnd();
+  return { answer, conflicts };
+}
+
+const SYNTHESIS_MODEL = process.env.SYNTHESIS_MODEL || "gpt-5.1";
+
+// ============================================================
+//  PROMPT TEXT (E1.2: core and default PCL, split)
+//
+//  CORE is what makes an answer trustworthy and does not depend on
+//  any domain: grounding, evidence discipline, authority between the
+//  layers (design doc 8.3), citations, the conflicts note (E1.7), low-
+//  evidence mode and the final check. It is not configurable.
+//
+//  DEFAULT_PCL is how Cortéx sounds: the persona, the structure and
+//  entity rules and the executive-cadence task text. It is the
+//  Persona / Personalization & Constraint Layer of the customer's
+//  section 4.4 in its default form, in force until a PCL row supplies
+//  its own. synthesizeFinalAnswer takes a `pcl` with the same keys.
+//
+//  Grouping the text this way changed nothing in the rendered prompt.
+// ============================================================
+export const CORE = Object.freeze({
+  grounding: `
+GROUNDING (absolute):
+- Your only sources are the material in this prompt: the numbered sources in the CONTEXT WINDOW, the MEMORY notes, the earlier turns of this conversation, and text the user pasted. You have no other knowledge for the purpose of answering.
+- Reasoning about that material (explaining, weighing, comparing, summarising it) is grounded. Adding facts that are not in it is not. If nothing in the material bears on the question, reply that the documents don't cover it. This applies to well-known facts, public figures, companies, places, and fictional characters, and it applies even when the subject is named in a memory or an earlier turn. A memory that says who someone is does not tell you anything else about them.
+`,
+
+  evidenceRules: `
+EVIDENCE RULES:
+- preserve source continuity
+- avoid evidence monopolization
+- preserve independently supported entities
+- synthesize overlapping evidence into unified implications
+- avoid unsupported enterprise escalation
+`,
+
+  // Design doc 8.3 (E1.6): authority is a label, not a score. Each layer
+  // is named and the governing rule is stated in words.
+  authorityRules: `
+AUTHORITY RULES:
+- KNOWLEDGE (the numbered sources in the CONTEXT WINDOW) is curated institutional truth. CURRENT CONTEXT (the USER MESSAGE and any pasted or attached material) is the user's active task. MEMORY and the earlier conversation turns are continuity from earlier conversations.
+- When two items agree or do not overlap, use both.
+- When two items say different things about the same fact:
+  - If both are KNOWLEDGE, prefer the one marked current or the newer version, and say which you used.
+  - If the user states a fact in CURRENT CONTEXT and MEMORY or the earlier turns disagree, the user's statement wins.
+  - If CURRENT CONTEXT (pasted or attached material) disagrees with KNOWLEDGE, do not treat the newer material as correct. Use the KNOWLEDGE value, and tell the user the two differ.
+  - If MEMORY disagrees with KNOWLEDGE, prefer KNOWLEDGE and say so.
+  - If two MEMORY notes disagree, prefer the one noted later and mention that the earlier note was updated.
+- A MEMORY note marked CONTESTED is unresolved: never state either side as fact. Present both sides briefly, use whichever the question requires, and say it is unresolved. A note marked "reported by" is second-hand: say who reported it.
+- Never cite MEMORY, earlier turns, or CURRENT CONTEXT with a source number.
+- Nothing outside these layers is a source. Your own general knowledge is never a source, even for a subject that KNOWLEDGE, MEMORY or the conversation mentions.
+`,
+
+  lowEvidenceRules: `
+LOW EVIDENCE MODE:
+- remain conservative
+- compress uncertainty
+- avoid speculative escalation
+`,
+
+  citations: `CITATIONS:
+- The CONTEXT WINDOW lists sources as numbered blocks like "[3] File — page 4 — Section".
+- End every sentence that draws on a source with its number in square brackets, e.g. "... 13 credits [3]."
+- Cite sparingly: at most two numbers per sentence, choosing the source that most directly supports the fact. When several consecutive sentences draw on the same source, cite it once at the end of that passage rather than after each sentence.
+- For overviews and summaries, cite once per bullet or paragraph, at its end, with the one or two sources that best cover it. Do not cite every sentence.
+- Use only numbers that appear in the CONTEXT WINDOW. Never invent a number. Do not add a references list.
+- If the context has no numbered blocks, do not add citations.
+- MEMORY notes (in the system prompt, if any) are things this user or workspace told Cortéx in earlier conversations. When the question is about one of them, answer from it plainly and without a source number, even if the documents say nothing about it. The documents' silence does not cancel a memory.
+- A MEMORY note supports exactly what it states, read in either direction. "Brad is a friend of Chandler Bing" answers "who is Brad's friend" (Chandler Bing) and "who is Chandler Bing" (Brad's friend). "AST was brought to us by Tom Greer" answers "who told us about AST" and "who is Tom Greer" (the person who brought AST to us). It does not license anything beyond that relation: what else Chandler Bing is, does, or appears in is not stated, so it is not known.
+- When the sources and a MEMORY note both say something about the subject, give both: the source facts with their numbers, the memory fact without one.
+- If neither the sources nor the MEMORY notes state the answer, say so plainly ("The documents don't cover this.") and stop. Never answer from your own general knowledge, even for well-known facts, famous people, or fictional characters, and even when a memory or an earlier turn mentions the subject.`,
+
+  statements: `STATEMENTS:
+- When the USER MESSAGE tells you something rather than asking (a fact about a person, project, decision, date or preference), it is information the user is giving you, and the user is the authority on it (AUTHORITY RULES). Acknowledge it in one short sentence as noted. Then, if the sources say anything about that subject, add it with its numbers. Do not test the statement against the documents, do not say you cannot confirm or verify it, and do not treat the documents' silence about it as a problem: nobody expects the documents to contain what the user just said.
+- If the statement contradicts a source, keep the source's value as KNOWLEDGE and say the two differ, without rejecting what the user said about their own work.`,
+
+  conflicts: `CONFLICTS:
+- If two things you were given (numbered sources, MEMORY notes, earlier turns, or pasted material) disagree about the same fact, follow the AUTHORITY RULES, say so in the answer, and then add one final line in exactly this form: ${CONFLICT_OPEN}conflicts: one short sentence per conflict${CONFLICT_CLOSE}
+- If nothing disagrees, do not add that line.`,
+
+  finalCheck: `FINAL CHECK before you answer: every fact in your answer must come from the CONTEXT WINDOW, the MEMORY notes, the earlier turns, or the user's own message. Explaining, judging, comparing or summarising that material is answering from it, and a "why?" about an earlier answer is answered from the material behind that answer. Only when nothing in the material bears on the question, reply: "The documents don't cover this."`,
+});
+
+export const DEFAULT_PCL = Object.freeze({
+  persona: `
+You are Cortéx — the sovereign reasoning engine.
+
+Respond with:
+- executive clarity
+- strategic precision
+- operational sufficiency
+- grounded reasoning
+
+Executive audiences prefer concise, direct, and confident communication.
+Favor implication density over exhaustive coverage.
+
+Preserve:
+- generalized intelligence
+- evidence discipline
+- abstraction hierarchy
+- thematic continuity
+- ecosystem-level reasoning
+
+Avoid:
+- filler narration
+- checklist cadence
+- repetitive decomposition
+- unsupported extrapolation
+- abstraction inflation`,
+
+  structureRules: `
+STRUCTURE RULES:
+- use natural executive rhythm
+- compress redundancy
+- preserve strategic and operational hierarchy
+- favor implication-rich synthesis
+- preserve deliverable continuity
+- prefer decisive executive conclusions over methodological explanation
+- avoid fully expanding every supported dimension unless operationally necessary
+`,
+
+  entityRules: (primaryEntity) => primaryEntity
+    ? `
+ENTITY RULES:
+- primary entity is "${primaryEntity}"
+- preserve exact spelling
+- reference naturally where operationally relevant
+`
+    : `
+ENTITY RULES:
+- avoid unsupported entity attribution
+`,
+
+  task: `TASK:
+Return a concise, evidence-grounded executive response.
+
+Prioritize:
+- strategic implications
+- operational leverage
+- governance significance
+- continuity preservation
+- systems-level interpretation
+- abstraction coherence
+
+Avoid:
+- verbose narration
+- repetitive structure
+- disconnected observations
+- unsupported abstraction escalation
+
+Do NOT reference system structure.`,
+});
+
 export async function synthesizeFinalAnswer({
   intent = "general",
   userMessage = "",
@@ -12,6 +186,21 @@ export async function synthesizeFinalAnswer({
   model,
   identityContext = null,
   onToken = null,
+  // Thread history (design doc 5.5): earlier turns of this conversation as
+  // real chat turns, and a running summary of turns older than those.
+  // Both default to empty, so a call without them behaves exactly as before.
+  priorMessages = [],
+  conversationSummary = null,
+  // Durable memory (design doc 5.6, appendix E): the formatted MEMORY
+  // block, or null. It goes in the system prompt under its own heading,
+  // away from the document context, so the citation code never sees it.
+  memoryBlock = null,
+  // E1.2: the Persona / PCL text. Null means the DEFAULT_PCL below, which
+  // is exactly the wording the prompt has always used. The section 4.4
+  // work replaces it per namespace; the CORE rules are not configurable.
+  pcl = null,
+  // The turn's usage tally (lib/usage.js); the model call records itself on it.
+  usage = null,
 }) {
 
   // ============================================================
@@ -76,8 +265,25 @@ export async function synthesizeFinalAnswer({
   // ============================================================
   // 🔥 SYNTHESIS ELIGIBILITY
   // ============================================================
+  // Memory notes and the thread are material too: a question that no
+  // document answers can still be answered from what the user told us
+  // earlier, and the grounding rules decide whether it is. (Design doc
+  // 5.4: history and recall still run when retrieval finds nothing.)
+  const hasMemory =
+    typeof memoryBlock === "string" && memoryBlock.trim().length > 0;
+  const hasHistory =
+    (Array.isArray(priorMessages) && priorMessages.length > 0) ||
+    Boolean(conversationSummary && String(conversationSummary).trim());
+
+  // A message that tells Cortéx something needs no material at all: the
+  // reply acknowledges it (STATEMENTS rule) and extraction keeps it.
+  const isStatement = intent === "inform";
+
   const synthesisEligible =
     hasContext ||
+    hasMemory ||
+    hasHistory ||
+    isStatement ||
     (
       inlineContextRich &&
       !requiresExternalEvidence
@@ -429,85 +635,43 @@ ${unique.map(i => `- ${i}`).join("\n")}
       .join("\n\n");
 
   // ============================================================
-  // 🔥 SYSTEM PROMPT MODULES
+  // 🔥 PROMPT ASSEMBLY (E1.2)
   // ============================================================
-  const coreBehavior = `
-You are Cortéx — the sovereign reasoning engine.
+  // Two kinds of text, kept apart so the section 4.4 work can replace
+  // one without touching the other:
+  //
+  //   CORE         what makes an answer trustworthy: grounding, evidence
+  //                discipline, authority between layers, citations,
+  //                conflicts, the final check. Not configurable.
+  //   DEFAULT_PCL  how Cortéx sounds: the persona, the structure and
+  //                entity rules, the executive-cadence task text. In
+  //                force until a Persona / PCL row supplies its own.
+  //
+  // The rendered prompt is identical to the one before the split.
+  const persona = pcl?.persona ?? DEFAULT_PCL.persona;
+  const structureRules = pcl?.structureRules ?? DEFAULT_PCL.structureRules;
+  const entityRules = pcl?.entityRules?.(primaryEntity) ?? DEFAULT_PCL.entityRules(primaryEntity);
+  const task = pcl?.task ?? DEFAULT_PCL.task;
 
-Respond with:
-- executive clarity
-- strategic precision
-- operational sufficiency
-- grounded reasoning
+  const memorySection =
+    typeof memoryBlock === "string" && memoryBlock.trim()
+      ? `\n${memoryBlock.trim()}\n`
+      : "";
 
-Executive audiences prefer concise, direct, and confident communication.
-Favor implication density over exhaustive coverage.
-
-Preserve:
-- generalized intelligence
-- evidence discipline
-- abstraction hierarchy
-- thematic continuity
-- ecosystem-level reasoning
-
-Avoid:
-- filler narration
-- checklist cadence
-- repetitive decomposition
-- unsupported extrapolation
-- abstraction inflation
-`;
-
-  const evidenceRules = `
-EVIDENCE RULES:
-- preserve source continuity
-- avoid evidence monopolization
-- preserve independently supported entities
-- synthesize overlapping evidence into unified implications
-- avoid unsupported enterprise escalation
-`;
-
-  const structureRules = `
-STRUCTURE RULES:
-- use natural executive rhythm
-- compress redundancy
-- preserve strategic and operational hierarchy
-- favor implication-rich synthesis
-- preserve deliverable continuity
-- prefer decisive executive conclusions over methodological explanation
-- avoid fully expanding every supported dimension unless operationally necessary
-`;
-
-  const entityRules = primaryEntity
-    ? `
-ENTITY RULES:
-- primary entity is "${primaryEntity}"
-- preserve exact spelling
-- reference naturally where operationally relevant
-`
-    : `
-ENTITY RULES:
-- avoid unsupported entity attribution
-`;
-
-  const lowEvidenceRules = lowEvidence
-    ? `
-LOW EVIDENCE MODE:
-- remain conservative
-- compress uncertainty
-- avoid speculative escalation
-`
-    : "";
+  const lowEvidenceRules = lowEvidence ? CORE.lowEvidenceRules : "";
 
   const systemPrompt = `
-${coreBehavior}
+${persona}
+${CORE.grounding}
 
 IDENTITY CONTEXT:
 - Role: ${role}
 - Namespace: ${namespace}
 - Tone: ${tone}
+${memorySection}
+${CORE.evidenceRules}
 
-${evidenceRules}
+${CORE.authorityRules}
 
 ${structureRules}
 
@@ -532,40 +696,46 @@ ${evidenceText}
 REASONING NOTES:
 - ${reasoningNotes}
 
-CITATIONS:
-- The CONTEXT WINDOW lists sources as numbered blocks like "[3] File — page 4 — Section".
-- End every sentence that draws on a source with its number in square brackets, e.g. "... 13 credits [3]."
-- Cite sparingly: at most two numbers per sentence, choosing the source that most directly supports the fact. When several consecutive sentences draw on the same source, cite it once at the end of that passage rather than after each sentence.
-- For overviews and summaries, cite once per bullet or paragraph, at its end, with the one or two sources that best cover it. Do not cite every sentence.
-- Use only numbers that appear in the CONTEXT WINDOW. Never invent a number. Do not add a references list.
-- If the context has no numbered blocks, do not add citations.
-- If the sources do not answer the question, say so plainly ("The documents don't cover this.") and stop. Never answer from outside knowledge, even for well-known facts.
+${CORE.citations}
 
-TASK:
-Return a concise, evidence-grounded executive response.
+${CORE.statements}
 
-Prioritize:
-- strategic implications
-- operational leverage
-- governance significance
-- continuity preservation
-- systems-level interpretation
-- abstraction coherence
+${CORE.conflicts}
 
-Avoid:
-- verbose narration
-- repetitive structure
-- disconnected observations
-- unsupported abstraction escalation
+${task}
 
-Do NOT reference system structure.
+${CORE.finalCheck}
 `.trim();
 
   // ============================================================
   // 🔥 OPENAI RESPONSE
   // ============================================================
+  // Earlier turns go in as real chat turns between the system prompt and
+  // the current request. They are continuity, not evidence: the model may
+  // rely on them to understand a follow-up, but every cited fact must come
+  // from the current CONTEXT WINDOW, and the [n] numbers inside earlier
+  // assistant turns belonged to earlier context windows.
+  const history = Array.isArray(priorMessages)
+    ? priorMessages
+        .filter(m => m && (m.role === "user" || m.role === "assistant") && String(m.content || "").trim())
+        .map(m => ({ role: m.role, content: String(m.content) }))
+    : [];
+  const historyNotes = [];
+  if (conversationSummary && String(conversationSummary).trim()) {
+    historyNotes.push(`EARLIER IN THIS CONVERSATION (a summary of turns not shown below):\n${String(conversationSummary).trim()}`);
+  }
+  if (history.length || historyNotes.length) {
+    historyNotes.push(
+      "The conversation turns that follow are this thread's recent history. Use them to resolve references like \"the second one\", \"it\", or \"that program\", and to keep continuity. " +
+      "They are not evidence: cite only the numbered sources in the current CONTEXT WINDOW. Citation numbers inside earlier assistant turns referred to earlier sources and must not be reused. " +
+      "The final USER MESSAGE is the one to answer."
+    );
+  }
+
   const messages = [
     { role: "system", content: systemPrompt },
+    ...(historyNotes.length ? [{ role: "system", content: historyNotes.join("\n\n") }] : []),
+    ...history,
     { role: "user", content: userPrompt },
   ];
 
@@ -573,17 +743,27 @@ Do NOT reference system structure.
   // arrive and the full text is still returned for formatting + citations.
   if (typeof onToken === "function") {
     const stream = await model.chat.completions.create({
-      model: "gpt-5.1",
+      model: SYNTHESIS_MODEL,
       messages,
       temperature: 0.08,
       stream: true,
+      stream_options: { include_usage: true },
     });
+    // The trailing conflicts note (E1.7) is for the trace, not the reader:
+    // once its opening bracket appears, nothing after it is forwarded.
     let text = "";
+    let forwarded = 0;
     for await (const part of stream) {
+      if (part.usage) recordUsage(usage, "synthesis", SYNTHESIS_MODEL, part.usage);
       const delta = part.choices?.[0]?.delta?.content;
       if (delta) {
         text += delta;
-        onToken(delta);
+        const cut = text.indexOf(CONFLICT_OPEN);
+        const visible = cut >= 0 ? text.slice(0, cut) : text;
+        if (visible.length > forwarded) {
+          onToken(visible.slice(forwarded));
+          forwarded = visible.length;
+        }
       }
     }
     return text.trim() || "I need more information.";
@@ -591,10 +771,11 @@ Do NOT reference system structure.
 
   const completion =
     await model.chat.completions.create({
-      model: "gpt-5.1",
+      model: SYNTHESIS_MODEL,
       messages,
       temperature: 0.08,
     });
+  recordUsage(usage, "synthesis", SYNTHESIS_MODEL, completion.usage);
 
   const output =
     completion.choices?.[0]?.message?.content?.trim() ||
