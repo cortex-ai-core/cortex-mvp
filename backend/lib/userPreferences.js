@@ -37,3 +37,20 @@ export async function writePreferences(fastify, userId, patch) {
   if (error) throw new Error("Unable to save preferences.");
   return normalizePreferences(data);
 }
+
+// How a response_style reads in the prompt's identity block (PCL Phase 0).
+// Keys are the stored values; the labels are the words the model sees.
+const styleLabels = {
+  neutral: "neutral",
+  ceo: "CEO",
+  king: "King",
+  advisory: "advisory",
+  recruiting: "recruiting",
+  cybersecurity: "cybersecurity",
+  datamanagement: "data management",
+  ventures: "ventures",
+};
+
+export function styleLabel(style) {
+  return styleLabels[style] || "neutral";
+}

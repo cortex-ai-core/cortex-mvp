@@ -31,8 +31,10 @@ import { synthesizeFinalAnswer, extractConflicts } from "../reasoning/synthesis.
 import { formatOutput } from "../reasoning/outputFormatter.js";
 
 // 🔥 Step 47 Identity Layer
-import { applyIdentityLayer } from "../identity/applyIdentity.js";
-import { resolveToneForNamespace } from "../identity/toneRouter.js";
+// PCL Phase 0 (section 4.4): the user's saved response style and
+// personalization note reach the prompt through user_settings. The
+// identity/ directory is off the chat path; its files stay until Phase 2.
+import { readPreferences, normalizePreferences, styleLabel } from "../lib/userPreferences.js";
 
 // 🔥 Whole-document overview path
 import { downloadObject, parsedPathFor } from "../ingest/storage.js";
@@ -1014,18 +1016,13 @@ export default fp(async function chatRoute(fastify) {
         const normalized =
           sanitizedMessage.toLowerCase();
 
-        const tone =
-          resolveToneForNamespace(
-            namespace
-          );
-
-        const identityContext =
-          applyIdentityLayer({
-            userId,
-            role: identity.role,
-            namespace,
-            tone
-          });
+        // PCL Phase 0: the user's saved preferences (user_settings), read
+        // once per turn beside recall and retrieval. A failed read means
+        // the safe default (neutral style, no note), never an error. The
+        // request's toneMode is not consulted (plan D-4, open).
+        const preferencesPromise =
+          readPreferences(fastify, identity.userId)
+            .catch(err => { fastify.log.warn({ err: err?.message }, "chat: preferences unavailable, using defaults"); return null; });
 
         let ragContext = "";
         let wholeDocument = null;
@@ -1304,6 +1301,23 @@ export default fp(async function chatRoute(fastify) {
 
         // 🧠 H3 (recall part) resolves here: the memory block for the prompt.
         const recall = await recallPromise;
+
+        // PCL Phase 0 resolves here: style and note from user_settings.
+        // `tone` feeds the prompt's identity block; the note goes in as
+        // its own subordinate block (synthesis.js, plan 8.2).
+        const loadedPreferences = await preferencesPromise;
+        const preferences = loadedPreferences || normalizePreferences(null);
+        const tone = preferences.response_style;
+        const personalization = preferences.personalization.trim();
+        const identityContext = { userId, role: identity.role, namespace, tone: styleLabel(tone) };
+        const pcl = personalization ? { personalization } : null;
+        const pclInfo = {
+          style: tone,
+          styleSource: loadedPreferences ? "user" : "default",
+          personalizationChars: personalization.length,
+          source: loadedPreferences ? "user_settings" : "default"
+        };
+
         if (sse) {
           sse.sources(activeSources.map(s => ({
             n: s.n, document_id: s.document_id, file_name: s.file_name, display_name: s.display_name,
@@ -1338,6 +1352,10 @@ export default fp(async function chatRoute(fastify) {
               model: openai,
 
               identityContext,
+
+              // PCL Phase 0: the user's personalization note, or null for
+              // the default prompt.
+              pcl,
 
               usage
 
@@ -1399,6 +1417,9 @@ export default fp(async function chatRoute(fastify) {
           hasSummary: Boolean(thread?.summary),
           memoriesUsed: recall?.memories?.length ?? 0,
           memoryBlockTokens: recall?.tokens ?? 0,
+          style: pclInfo.style,
+          personalizationChars: pclInfo.personalizationChars,
+          pclSource: pclInfo.source,
           conflicts: conflicts.length,
           retrievalPriority,
           retrievedChunks: activeSources.length,
@@ -1501,7 +1522,9 @@ export default fp(async function chatRoute(fastify) {
           memoriesUsed: (recall?.memories || []).map(m => ({ id: m.id, kind: m.kind, scope: m.scope, content: m.content, truth_status: m.truth_status || "accepted", counterpart_id: m.counterpart_id || null })),
           traceId,
           usage: usageSummary(usage, { pending: extractionScheduled ? ["extraction"] : [] }),
-          intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source }
+          intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source },
+          // PCL Phase 0: which style and note shaped this answer.
+          pcl: pclInfo
         }));
 
       } catch (err) {
