@@ -17,7 +17,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * after-reply hooks (extraction, summariser) wait for the row before
  * they add their own usage to it.
  */
-export function finishTrace(supabase, log, { traceId, hadRetrieval, query, namespaceId, userId, conversationId, historyTurns, memoryIds, memoryBlockTokens, answerMode, conflicts, latencyMs }) {
+let pclColumnMissing = false;      // rag_queries.pcl arrives with migration 0011; noticed once
+
+export function finishTrace(supabase, log, { traceId, hadRetrieval, query, namespaceId, userId, conversationId, historyTurns, memoryIds, memoryBlockTokens, answerMode, conflicts, pcl, latencyMs }) {
   if (!ENABLED || !supabase || !UUID.test(String(traceId || ""))) return Promise.resolve(false);
   const patch = {
     memory_ids: Array.isArray(memoryIds) && memoryIds.length ? memoryIds : null,
@@ -25,24 +27,36 @@ export function finishTrace(supabase, log, { traceId, hadRetrieval, query, names
     answer_mode: answerMode || null,
     conflicts: conflicts ?? null,
   };
-  const done = ({ error }) => { if (error) { log?.warn?.({ err: error.message }, "trace finish failed"); return false; } return true; };
-  if (hadRetrieval) {
-    return supabase.from("rag_queries").update(patch).eq("id", traceId).then(done);
-  } else {
-    return supabase.from("rag_queries").insert([{
-      id: traceId,
-      query: String(query || "").slice(0, 2000),
-      namespace_id: namespaceId || null,
-      conversation_id: conversationId || null,
-      history_turns: Number.isFinite(historyTurns) ? historyTurns : null,
-      mode: "none",
-      user_id: userId || null,
-      latency_ms: Number.isFinite(latencyMs) ? Math.round(latencyMs) : null,
-      result_count: 0,
-      results: [],
-      ...patch,
-    }]).then(done);
-  }
+  // Persona provenance (plan 7.3): which persona, version, style and
+  // note shaped the answer. Left out until 0011 has been applied.
+  if (pcl && !pclColumnMissing) patch.pcl = pcl;
+  const write = (p) => hadRetrieval
+    ? supabase.from("rag_queries").update(p).eq("id", traceId)
+    : supabase.from("rag_queries").insert([{
+        id: traceId,
+        query: String(query || "").slice(0, 2000),
+        namespace_id: namespaceId || null,
+        conversation_id: conversationId || null,
+        history_turns: Number.isFinite(historyTurns) ? historyTurns : null,
+        mode: "none",
+        user_id: userId || null,
+        latency_ms: Number.isFinite(latencyMs) ? Math.round(latencyMs) : null,
+        result_count: 0,
+        results: [],
+        ...p,
+      }]);
+  const done = ({ error }) => {
+    if (!error) return true;
+    if ("pcl" in patch && (/column .*pcl.* does not exist|PGRST204/i.test(error.message || "") || error.code === "PGRST204")) {
+      pclColumnMissing = true;
+      log?.info?.("trace: rag_queries.pcl not present yet (migration 0011); persona provenance is not stored");
+      const { pcl: _omit, ...rest } = patch;
+      return write(rest).then(({ error: again }) => { if (again) { log?.warn?.({ err: again.message }, "trace finish failed"); return false; } return true; });
+    }
+    log?.warn?.({ err: error.message }, "trace finish failed");
+    return false;
+  };
+  return write(patch).then(done);
 }
 
 /**

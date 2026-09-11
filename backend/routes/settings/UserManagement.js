@@ -1,4 +1,5 @@
 import { readPreferences, writePreferences, validPreferencesPatch } from "../../lib/userPreferences.js";
+import { invalidatePcl } from "../../pcl/resolve.js";
 import {
   canAccessOrganization,
   findUser,
@@ -116,6 +117,7 @@ export default async function userManagement(fastify) {
           const preferences = method === "GET"
             ? await readPreferences(fastify, target.user.id)
             : await writePreferences(fastify, target.user.id, req.body);
+          if (method === "PATCH") invalidatePcl(target.user.id);   // the next chat turn sees the change
           if (method === "PATCH") req.log.info({
             event: "user_personalization_updated", actorUserId: req.user.userId,
             targetUserId: target.user.id, timestamp: new Date().toISOString(),

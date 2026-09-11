@@ -9,6 +9,7 @@ export function normalizePreferences(data) {
     response_style: responseStyles.has(data?.response_style) ? data.response_style : "neutral",
     personalization: typeof data?.personalization === "string"
       ? data.personalization.slice(0, MAX_PERSONALIZATION) : "",
+    persona_id: typeof data?.persona_id === "string" ? data.persona_id : null,
   };
 }
 
@@ -23,7 +24,7 @@ export function validPreferencesPatch(body, personalizationOnly = false) {
 
 export async function readPreferences(fastify, userId) {
   const { data, error } = await fastify.supabase.from("user_settings")
-    .select("response_style,personalization").eq("user_id", userId).maybeSingle();
+    .select("response_style,personalization,persona_id").eq("user_id", userId).maybeSingle();
   if (error) throw new Error("Unable to load preferences.");
   return normalizePreferences(data);
 }
@@ -33,7 +34,7 @@ export async function writePreferences(fastify, userId, patch) {
   const { data, error } = await fastify.supabase.from("user_settings")
     .upsert({ user_id: userId, ...patch, updated_at: new Date().toISOString() },
       { onConflict: "user_id", defaultToNull: false })
-    .select("response_style,personalization").single();
+    .select("response_style,personalization,persona_id").single();
   if (error) throw new Error("Unable to save preferences.");
   return normalizePreferences(data);
 }

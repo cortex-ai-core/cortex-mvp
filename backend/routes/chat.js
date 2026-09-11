@@ -31,10 +31,12 @@ import { synthesizeFinalAnswer, extractConflicts } from "../reasoning/synthesis.
 import { formatOutput } from "../reasoning/outputFormatter.js";
 
 // 🔥 Step 47 Identity Layer
-// PCL Phase 0 (section 4.4): the user's saved response style and
-// personalization note reach the prompt through user_settings. The
-// identity/ directory is off the chat path; its files stay until Phase 2.
-import { readPreferences, normalizePreferences, styleLabel } from "../lib/userPreferences.js";
+// Persona / PCL (section 4.4): which persona applies, its newest rules,
+// and the user's own style and note, resolved once per turn and
+// rendered into the prompt. Never throws; the built-in default with a
+// reason when anything is unavailable.
+import { styleLabel } from "../lib/userPreferences.js";
+import { resolvePcl } from "../pcl/resolve.js";
 
 // 🔥 Whole-document overview path
 import { downloadObject, parsedPathFor } from "../ingest/storage.js";
@@ -1016,13 +1018,11 @@ export default fp(async function chatRoute(fastify) {
         const normalized =
           sanitizedMessage.toLowerCase();
 
-        // PCL Phase 0: the user's saved preferences (user_settings), read
-        // once per turn beside recall and retrieval. A failed read means
-        // the safe default (neutral style, no note), never an error. The
-        // request's toneMode is not consulted (plan D-4, open).
-        const preferencesPromise =
-          readPreferences(fastify, identity.userId)
-            .catch(err => { fastify.log.warn({ err: err?.message }, "chat: preferences unavailable, using defaults"); return null; });
+        // Persona / PCL, resolved beside recall and retrieval from the
+        // already-authorized identity (plan section 7). The request's
+        // toneMode may only pick a response style, never a persona (D-4).
+        const pclPromise =
+          resolvePcl(fastify.supabase, identity, { requestStyle: req.body?.toneMode || null, log: fastify.log });
 
         let ragContext = "";
         let wholeDocument = null;
@@ -1302,21 +1302,14 @@ export default fp(async function chatRoute(fastify) {
         // 🧠 H3 (recall part) resolves here: the memory block for the prompt.
         const recall = await recallPromise;
 
-        // PCL Phase 0 resolves here: style and note from user_settings.
-        // `tone` feeds the prompt's identity block; the note goes in as
-        // its own subordinate block (synthesis.js, plan 8.2).
-        const loadedPreferences = await preferencesPromise;
-        const preferences = loadedPreferences || normalizePreferences(null);
-        const tone = preferences.response_style;
-        const personalization = preferences.personalization.trim();
-        const identityContext = { userId, role: identity.role, namespace, tone: styleLabel(tone) };
-        const pcl = personalization ? { personalization } : null;
-        const pclInfo = {
-          style: tone,
-          styleSource: loadedPreferences ? "user" : "default",
-          personalizationChars: personalization.length,
-          source: loadedPreferences ? "user_settings" : "default"
-        };
+        // Persona / PCL resolves here. `tone` feeds the prompt's identity
+        // block; `pcl` is the rendered persona text plus the user's note,
+        // or null for the built-in default (synthesis.js, plan 8.2).
+        const resolved = await pclPromise;
+        const tone = resolved.style;
+        const identityContext = { userId, role: identity.role, namespace, tone: styleLabel(tone), personaId: resolved.persona?.id || null };
+        const pcl = resolved.rendered;
+        const pclInfo = resolved.provenance;
 
         if (sse) {
           sse.sources(activeSources.map(s => ({
@@ -1417,9 +1410,14 @@ export default fp(async function chatRoute(fastify) {
           hasSummary: Boolean(thread?.summary),
           memoriesUsed: recall?.memories?.length ?? 0,
           memoryBlockTokens: recall?.tokens ?? 0,
+          personaKey: pclInfo.persona_key,
+          personaSource: pclInfo.persona_source,
+          pclVersion: pclInfo.version,
           style: pclInfo.style,
-          personalizationChars: pclInfo.personalizationChars,
+          styleSource: pclInfo.style_source,
+          personalizationChars: pclInfo.personalization_chars,
           pclSource: pclInfo.source,
+          pclReason: pclInfo.reason,
           conflicts: conflicts.length,
           retrievalPriority,
           retrievedChunks: activeSources.length,
@@ -1465,6 +1463,7 @@ export default fp(async function chatRoute(fastify) {
           query: intent.standaloneQuery || sanitizedMessage, namespaceId, userId: identity.userId,
           conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
           memoryIds, memoryBlockTokens: recall?.tokens ?? 0, answerMode: mode, conflicts: conflicts.length ? conflicts : null,
+          pcl: pclInfo,
           latencyMs: Date.now() - start
         });
 

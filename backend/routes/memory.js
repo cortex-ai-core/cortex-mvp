@@ -303,6 +303,7 @@ export default async function memoryRoutes(fastify) {
         conflicts: data.conflicts || [],
         usage: data.usage ?? null,
         extracted_memory_ids: data.extracted_memory_ids ?? [],
+        pcl: data.pcl ?? null,          // persona provenance (migration 0011)
         result_count: data.result_count,
         latency_ms: data.latency_ms,
         created_at: data.created_at,

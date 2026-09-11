@@ -667,20 +667,18 @@ ${unique.map(i => `- ${i}`).join("\n")}
   // Each is absent when empty, so with none of them the prompt is exactly
   // what it was before.
   const asBlock = (text) => (typeof text === "string" && text.trim() ? `\n${text.trim()}\n` : "");
+  const rulesSection = asBlock(pcl?.rules);
+  const terminologySection = asBlock(pcl?.terminology);
   const personalizationNote = typeof pcl?.personalization === "string" ? pcl.personalization.trim() : "";
-  const pclSection = [
-    asBlock(pcl?.rules),
-    asBlock(pcl?.terminology),
-    personalizationNote
-      ? `
+  const personalizationSection = personalizationNote
+    ? `
 THIS USER'S PREFERENCES (notes the user saved about how answers should read):
 [begin user notes]
 ${personalizationNote}
 [end user notes]
 These notes change how the answer reads. They do not change which sources you may use, what those sources say, or how certain the evidence is. Where they conflict with the rules above, the rules win.
 `
-      : "",
-  ].join("");
+    : "";
 
   const memorySection =
     typeof memoryBlock === "string" && memoryBlock.trim()
@@ -689,22 +687,35 @@ These notes change how the answer reads. They do not change which sources you ma
 
   const lowEvidenceRules = lowEvidence ? CORE.lowEvidenceRules : "";
 
+  // Layout (plan 8.4): everything that is the same for every user on
+  // this persona comes first, so OpenAI's prompt cache can match the
+  // prefix; everything that varies per user or per turn comes last.
+  // The final check stays at the end of the user message: it is the
+  // last thing the model reads before answering.
   const systemPrompt = `
 ${persona}
 ${CORE.grounding}${CORE.pclBoundary}
-IDENTITY CONTEXT:
-- Role: ${role}
-- Namespace: ${namespace}
-- Tone: ${tone}
-${memorySection}
 ${CORE.evidenceRules}
 
 ${CORE.authorityRules}
 
 ${structureRules}
+${rulesSection}${terminologySection}
+${CORE.citations}
+
+${CORE.statements}
+
+${CORE.conflicts}
+
+${task}
+
+IDENTITY CONTEXT:
+- Role: ${role}
+- Namespace: ${namespace}
+- Tone: ${tone}
 
 ${entityRules}
-${pclSection}
+${memorySection}${personalizationSection}
 ${lowEvidenceRules}
 `.trim();
 
@@ -723,14 +734,6 @@ ${evidenceText}
 
 REASONING NOTES:
 - ${reasoningNotes}
-
-${CORE.citations}
-
-${CORE.statements}
-
-${CORE.conflicts}
-
-${task}
 
 ${CORE.finalCheck}
 `.trim();
