@@ -63,7 +63,7 @@ try {
   check("nothing was created", !after.body.personas.some(p => p.key === KEY));
 
   // ---- create
-  const v1 = { schema: 1, identity: { text: "You are Cortéx, reasoning for a smoke-test audience." }, response: { style: "advisory", length: "concise" }, evaluation_rules: ["Separate evidence from inference."], terminology: { protect: ["culture fit"] } };
+  const v1 = { schema: 1, identity: { text: "You are Cortéx, reasoning for a smoke-test audience." }, response: { length: "concise" }, evaluation_rules: ["Separate evidence from inference."], terminology: { protect: ["culture fit"] } };
   const create = await json("/api/settings/personas", { method: "POST", token: admin, body: { key: KEY, name: "Smoke Persona", description: "throwaway", configuration: v1 } });
   check("POST personas creates in the caller's organization at version 1", create.status === 201 && create.body.persona?.organization?.id === me.organizationId && create.body.version?.version === 1, JSON.stringify({ status: create.status, org: create.body.persona?.organization?.id, err: create.body.error }));
   created = create.body.persona;

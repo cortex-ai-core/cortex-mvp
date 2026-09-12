@@ -228,7 +228,6 @@ export async function synthesizeFinalAnswer({
   // ============================================================
   const role = identityContext?.role || "user";
   const namespace = identityContext?.namespace || "general";
-  const tone = identityContext?.tone || "neutral";
 
   const primaryEntity =
     identityContext?.primaryEntity || null;
@@ -712,7 +711,6 @@ ${task}
 IDENTITY CONTEXT:
 - Role: ${role}
 - Namespace: ${namespace}
-- Tone: ${tone}
 
 ${entityRules}
 ${memorySection}${personalizationSection}

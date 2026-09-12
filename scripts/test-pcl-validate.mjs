@@ -30,8 +30,8 @@ check("identity.text over the limit is refused", /longer than/.test(firstError({
 check("empty identity text is dropped, not an error", v({ identity: { text: "   " } }).ok && !v({ identity: { text: "   " } }).normalized.identity);
 
 // --- response
-check("response.style outside the vocabulary is refused", /response\.style/.test(firstError({ response: { style: "pirate" } })));
-check("response.style in the vocabulary is kept", v({ response: { style: "recruiting" } }).normalized.response.style === "recruiting");
+check("response.style is retired: dropped with a warning, not an error", (() => { const r = v({ response: { style: "pirate" } }); return r.ok && r.warnings.length === 1 && !r.normalized.response; })());
+check("response.length is kept", v({ response: { length: "concise" } }).normalized.response.length === "concise");
 check("response.length outside concise/standard/detailed is refused", /response\.length/.test(firstError({ response: { length: "huge" } })));
 check("response with unknown key is refused", /response\.tone/.test(firstError({ response: { tone: "x" } })));
 
@@ -55,9 +55,9 @@ check("protect refuses a pattern over the limit", /longer than/.test(safePattern
 check("protect refuses a pattern that does not compile", /compile/.test(safePattern("[a-")));
 check("terminology with unknown key is refused", /terminology\.avoid/.test(firstError({ terminology: { avoid: ["x"] } })));
 
-// --- lock_style
-check("lock_style must be boolean", /lock_style/.test(firstError({ lock_style: "yes" })));
-check("lock_style false is dropped, true is kept", !("lock_style" in v({ lock_style: false }).normalized) && v({ lock_style: true }).normalized.lock_style === true);
+// --- lock_style (retired)
+check("lock_style is retired: dropped with a warning whatever its value", (() => { const r = v({ lock_style: "yes" }); return r.ok && r.warnings.length === 1 && !("lock_style" in r.normalized); })());
+check("a still-unknown key is refused", /unknown key "tone"/.test(firstError({ tone: "x" })));
 
 // --- boundary phrases
 for (const phrase of BOUNDARY_PHRASES) {
@@ -76,7 +76,7 @@ check("rendered text over 6,000 characters is refused", /rendered text is \d+ ch
 const seed = {
   schema: 1,
   identity: { text: DEFAULT_PCL.persona.trim() },
-  response: { style: "ceo" },
+  response: { length: "standard" },
   output_structure: DEFAULT_PCL.structureRules.trim().split("\n").slice(1).map(s => s.replace(/^- /, "")),
   operating_instructions: ["Return a concise, evidence-grounded executive response.", "Do NOT reference system structure."],
 };

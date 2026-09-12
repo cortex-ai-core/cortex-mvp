@@ -8,7 +8,6 @@
 //  Section names follow the spec's own vocabulary (section 43).
 // =============================================================
 
-import { responseStyles } from "../lib/userPreferences.js";
 import { renderConfiguration } from "./render.js";
 
 export const SCHEMA_VERSION = 1;
@@ -28,8 +27,13 @@ export const LIST_SECTIONS = Object.freeze([
 ]);
 
 export const ALLOWED_KEYS = Object.freeze(new Set([
-  "schema", "identity", "response", "terminology", "lock_style", ...LIST_SECTIONS,
+  "schema", "identity", "response", "terminology", ...LIST_SECTIONS,
 ]));
+
+// Keys from before response style was retired (migration 0012). A stored
+// or pasted configuration that still carries them is accepted with a
+// warning and the key dropped, so an old row never blocks a persona.
+const LEGACY_KEYS = Object.freeze(new Set(["lock_style"]));
 
 export const LENGTHS = Object.freeze(new Set(["concise", "standard", "detailed"]));
 
@@ -95,7 +99,8 @@ export function validateConfiguration(input) {
     return { ok: false, errors: ["configuration must be a JSON object"], warnings, normalized: null };
   }
   for (const key of Object.keys(input)) {
-    if (!ALLOWED_KEYS.has(key)) errors.push(`unknown key "${key}"`);
+    if (LEGACY_KEYS.has(key)) warnings.push(`"${key}" is no longer used and was dropped`);
+    else if (!ALLOWED_KEYS.has(key)) errors.push(`unknown key "${key}"`);
   }
   if (input.schema !== undefined && input.schema !== SCHEMA_VERSION) {
     errors.push(`schema must be ${SCHEMA_VERSION}`);
@@ -127,8 +132,7 @@ export function validateConfiguration(input) {
       const r = {};
       for (const k of Object.keys(input.response)) {
         if (k === "style") {
-          if (!responseStyles.has(input.response.style)) errors.push(`response.style must be one of ${[...responseStyles].join(", ")}`);
-          else r.style = input.response.style;
+          warnings.push(`"response.style" is no longer used and was dropped; the identity text says how the persona sounds`);
         } else if (k === "length") {
           if (!LENGTHS.has(input.response.length)) errors.push(`response.length must be one of ${[...LENGTHS].join(", ")}`);
           else r.length = input.response.length;
@@ -193,12 +197,6 @@ export function validateConfiguration(input) {
       }
       if (Object.keys(term).length) out.terminology = term;
     }
-  }
-
-  // lock_style
-  if (input.lock_style !== undefined) {
-    if (typeof input.lock_style !== "boolean") errors.push("lock_style must be true or false");
-    else if (input.lock_style) out.lock_style = true;
   }
 
   // required repeating prohibited: a warning for the editor, not a failure

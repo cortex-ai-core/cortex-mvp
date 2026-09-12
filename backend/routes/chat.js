@@ -35,7 +35,6 @@ import { formatOutput } from "../reasoning/outputFormatter.js";
 // and the user's own style and note, resolved once per turn and
 // rendered into the prompt. Never throws; the built-in default with a
 // reason when anything is unavailable.
-import { styleLabel } from "../lib/userPreferences.js";
 import { resolvePcl } from "../pcl/resolve.js";
 
 // 🔥 Whole-document overview path
@@ -1019,10 +1018,10 @@ export default fp(async function chatRoute(fastify) {
           sanitizedMessage.toLowerCase();
 
         // Persona / PCL, resolved beside recall and retrieval from the
-        // already-authorized identity (plan section 7). The request's
-        // toneMode may only pick a response style, never a persona (D-4).
+        // already-authorized identity (plan section 7). Nothing in the
+        // request body picks a persona or a style.
         const pclPromise =
-          resolvePcl(fastify.supabase, identity, { requestStyle: req.body?.toneMode || null, log: fastify.log });
+          resolvePcl(fastify.supabase, identity, { log: fastify.log });
 
         let ragContext = "";
         let wholeDocument = null;
@@ -1302,12 +1301,11 @@ export default fp(async function chatRoute(fastify) {
         // 🧠 H3 (recall part) resolves here: the memory block for the prompt.
         const recall = await recallPromise;
 
-        // Persona / PCL resolves here. `tone` feeds the prompt's identity
-        // block; `pcl` is the rendered persona text plus the user's note,
-        // or null for the built-in default (synthesis.js, plan 8.2).
+        // Persona / PCL resolves here. `pcl` is the rendered persona text
+        // plus the user's note and length, or null for the built-in
+        // default (synthesis.js, plan 8.2).
         const resolved = await pclPromise;
-        const tone = resolved.style;
-        const identityContext = { userId, role: identity.role, namespace, tone: styleLabel(tone), personaId: resolved.persona?.id || null };
+        const identityContext = { userId, role: identity.role, namespace, personaId: resolved.persona?.id || null };
         const pcl = resolved.rendered;
         const pclInfo = resolved.provenance;
 
@@ -1386,9 +1384,7 @@ export default fp(async function chatRoute(fastify) {
 
               privateMode,
 
-              namespace,
-
-              tone
+              namespace
             }
           );
 
@@ -1413,8 +1409,8 @@ export default fp(async function chatRoute(fastify) {
           personaKey: pclInfo.persona_key,
           personaSource: pclInfo.persona_source,
           pclVersion: pclInfo.version,
-          style: pclInfo.style,
-          styleSource: pclInfo.style_source,
+          answerLength: pclInfo.length,
+          answerLengthSource: pclInfo.length_source,
           personalizationChars: pclInfo.personalization_chars,
           pclSource: pclInfo.source,
           pclReason: pclInfo.reason,

@@ -35,7 +35,7 @@ export default async function userSettings(fastify) {
     const user = await currentUser(req, reply);
     if (!user) return;
     if (!validPreferencesPatch(req.body)) {
-      return reply.code(400).send({ error: "Provide a valid response_style or personalization (up to 4,000 characters)." });
+      return reply.code(400).send({ error: "Provide personalization (up to 4,000 characters) or response_length (concise, standard, detailed or null)." });
     }
     try {
       const preferences = await writePreferences(fastify, user.id, req.body);

@@ -317,7 +317,7 @@ export default async function personaAdministration(fastify) {
     if (existingError) return reply.code(500).send({ error: "Unable to load user settings." });
     const write = existing
       ? db().from("user_settings").update({ persona_id: persona?.id || null, updated_at: new Date().toISOString() }).eq("user_id", user.id)
-      : db().from("user_settings").insert({ user_id: user.id, response_style: "neutral", persona_id: persona?.id || null });
+      : db().from("user_settings").insert({ user_id: user.id, persona_id: persona?.id || null });
     const { error } = await write;
     if (error) return reply.code(500).send({ error: "Unable to assign persona." });
     invalidatePcl(user.id);
@@ -353,10 +353,10 @@ export default async function personaAdministration(fastify) {
   });
 
   // ---------------------------------------------------------------
-  // GET /api/settings/personas/preview?userId=…[&namespaceId=…][&toneMode=…]
+  // GET /api/settings/personas/preview?userId=…[&namespaceId=…]
   // What this user would get on their next turn: persona, version,
-  // style and the rendered blocks. The debugging surface spec 51 asks
-  // for; the editor's preview uses it.
+  // answer length and the rendered blocks. The debugging surface spec 51
+  // asks for; the editor's preview uses it.
   // ---------------------------------------------------------------
   fastify.get("/api/settings/personas/preview", async (req, reply) => {
     const scope = requirePersonaManager(req, reply, "manage_pcl");
@@ -370,7 +370,7 @@ export default async function personaAdministration(fastify) {
     if (req.query?.namespaceId && !wanted) return reply.code(404).send({ error: "That user is not a member of that namespace." });
     const identity = { userId: user.id, role: user.role?.name || null, organizationId: user.organization?.id || null, namespaceId: wanted?.id || null, namespace: wanted?.name || null };
     invalidatePcl(user.id);   // a preview is always fresh
-    const resolved = await resolvePcl(db(), identity, { requestStyle: req.query?.toneMode || null, log: req.log });
+    const resolved = await resolvePcl(db(), identity, { log: req.log });
     return {
       user: { id: user.id, email: user.email, role: user.role?.name || null, organization: user.organization || null, namespace: wanted || null },
       source: resolved.source,
@@ -378,8 +378,8 @@ export default async function personaAdministration(fastify) {
       persona: resolved.persona ? { id: resolved.persona.id, key: resolved.persona.key, name: resolved.persona.name } : null,
       persona_source: resolved.personaSource,
       version: resolved.version,
-      style: resolved.style,
-      style_source: resolved.styleSource,
+      length: resolved.length,
+      length_source: resolved.lengthSource,
       personalization: resolved.personalization,
       rendered: resolved.rendered,
       provenance: resolved.provenance,

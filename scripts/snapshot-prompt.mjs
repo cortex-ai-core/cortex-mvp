@@ -4,7 +4,7 @@
 //  without calling OpenAI, so a change to synthesis.js or to a persona
 //  can be diffed byte for byte (plan 11.3, Phase 2 gate).
 //
-//    node scripts/snapshot-prompt.mjs [--out file] [--note "text"] [--tone advisory]
+//    node scripts/snapshot-prompt.mjs [--out file] [--note "text"]
 //                                     [--config file.json | --persona core_executive]
 //
 //  --config renders a configuration file through backend/pcl/render.js;
@@ -65,7 +65,7 @@ await synthesizeFinalAnswer({
   userMessage: "What does the LEE 3311 document cover?",
   contextWindow: "[1] LEE 3311 syllabus — page 1 — Overview\nLEE 3311 is a three-credit course on leadership in engineering teams.",
   model: fakeModel,
-  identityContext: { role: "admin", namespace: "core", tone: args.tone || "neutral" },
+  identityContext: { role: "admin", namespace: "core" },
   priorMessages: [],
   conversationSummary: null,
   memoryBlock: null,

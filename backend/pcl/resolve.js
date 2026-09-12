@@ -3,9 +3,10 @@
 //
 //  Given the already-authorized identity, find which persona applies
 //  (the user's assignment, else the namespace default, else none), its
-//  newest version, the user's own style and note, and render the text
-//  the prompt gets. Never throws. Any failure yields the built-in
-//  default with a reason, exactly as chat behaved before personas.
+//  newest version, the user's own note and answer length, and render
+//  the text the prompt gets. Never throws. Any failure yields the
+//  built-in default with a reason, exactly as chat behaved before
+//  personas.
 //
 //  Reads user_settings, namespace.default_persona_id, personas and pcl.
 //  Never reads roles, memberships, documents or memories, and nothing
@@ -14,7 +15,7 @@
 //  invalidatePcl().
 // =============================================================
 
-import { responseStyles } from "../lib/userPreferences.js";
+import { responseLengths } from "../lib/userPreferences.js";
 import { validateConfiguration, LIMITS } from "./validate.js";
 import { renderConfiguration, renderedText } from "./render.js";
 import { sha256Text } from "./integrity.js";
@@ -43,7 +44,10 @@ const missingSchema = (error) =>
   ["42P01", "42703", "PGRST204", "PGRST205"].includes(error?.code);
 
 function defaultLoaded(reason) {
-  return { source: "default", reason, preferences: null, persona: null, personaSource: "none", version: null, configuration: null, rendered: null, hash: null };
+  return {
+    source: "default", reason, preferences: null, persona: null, personaSource: "none", version: null,
+    configuration: null, rendered: null, hash: null, length: null, lengthSource: "none",
+  };
 }
 
 /** The two-to-four queries behind a cache miss. Returns a `loaded` bundle; never throws. */
@@ -55,7 +59,7 @@ async function load(supabase, identity, log) {
 
   const [prefRes, nsRes] = await Promise.all([
     userId
-      ? supabase.from("user_settings").select("response_style, personalization, persona_id").eq("user_id", userId).maybeSingle()
+      ? supabase.from("user_settings").select("response_length, personalization, persona_id").eq("user_id", userId).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
     namespaceId
       ? supabase.from("namespace").select("default_persona_id").eq("id", namespaceId).maybeSingle()
@@ -65,8 +69,8 @@ async function load(supabase, identity, log) {
     if (r.error) {
       if (missingSchema(r.error)) {
         tablesMissing = true;
-        if (!tablesMissingLogged) { tablesMissingLogged = true; log?.info?.("pcl: persona tables not present yet (migration 0011); using the built-in default"); }
-        return defaultLoaded("migration 0011 not applied");
+        if (!tablesMissingLogged) { tablesMissingLogged = true; log?.info?.("pcl: persona tables or columns not present yet (migrations 0011/0012); using the built-in default"); }
+        return defaultLoaded("migration 0011/0012 not applied");
       }
       log?.warn?.({ err: r.error.message }, "pcl: settings lookup failed; using the built-in default");
       return defaultLoaded(`settings lookup failed: ${r.error.message}`);
@@ -76,7 +80,7 @@ async function load(supabase, identity, log) {
   const row = prefRes.data || null;
   const preferences = {
     hasRow: Boolean(row),
-    style: responseStyles.has(row?.response_style) ? row.response_style : "neutral",
+    length: responseLengths.has(row?.response_length) ? row.response_length : null,
     personalization: typeof row?.personalization === "string" ? row.personalization.trim() : "",
     personaId: row?.persona_id || null,
   };
@@ -113,8 +117,19 @@ async function load(supabase, identity, log) {
     }
   }
 
+  // The user's own length wins over the persona's default (the one
+  // preference a user keeps beside the persona).
+  const withLength = (config, length) => length
+    ? { ...config, response: { ...(config.response || {}), length } }
+    : config;
+
   if (!persona) {
-    return { source: "resolved", reason: null, preferences, persona: null, personaSource: "none", version: null, configuration: null, rendered: null, hash: null };
+    const length = preferences.length;
+    const rendered = length ? renderConfiguration(withLength({}, length), { personaName: "built-in default" }) : null;
+    return {
+      source: "resolved", reason: null, preferences, persona: null, personaSource: "none", version: null,
+      configuration: null, rendered, hash: null, length, lengthSource: length ? "user" : "none",
+    };
   }
 
   const { data: ver, error: verError } = await supabase
@@ -139,29 +154,30 @@ async function load(supabase, identity, log) {
     log?.warn?.({ personaKey: persona.key, version, errors: check.errors.slice(0, 3) }, "pcl: stored configuration no longer validates; using the built-in default");
     return { ...defaultLoaded(`stored configuration invalid: ${check.errors[0]}`), preferences };
   }
-  const rendered = renderConfiguration(check.normalized, { personaName: persona.name, version });
+  const length = preferences.length || check.normalized.response?.length || null;
+  const lengthSource = preferences.length ? "user" : (check.normalized.response?.length ? "persona" : "none");
+  const rendered = renderConfiguration(withLength(check.normalized, preferences.length), { personaName: persona.name, version });
   if (rendered.chars > LIMITS.rendered) {
     log?.warn?.({ personaKey: persona.key, version, chars: rendered.chars }, "pcl: rendered text over the size cap; using the built-in default");
     return { ...defaultLoaded(`rendered text over ${LIMITS.rendered} characters`), preferences };
   }
+  // The hash identifies the version's own text, whatever the user's length.
+  const hash = sha256Text(renderedText(renderConfiguration(check.normalized, { personaName: persona.name, version })));
 
   return {
     source: "resolved", reason: null, preferences, persona, personaSource, version,
-    configuration: check.normalized, rendered, hash: sha256Text(renderedText(rendered)),
+    configuration: check.normalized, rendered, hash, length, lengthSource,
   };
 }
 
 /**
  * Resolve the persona, rules and user layer for this turn.
  *
- *   requestStyle   the client's toneMode; may only pick a response style,
- *                  and only when the persona has not locked it (D-4)
- *
  * Returns { source, reason, persona, personaSource, version, configuration,
- * style, styleSource, personalization, rendered, provenance }. `rendered`
+ * length, lengthSource, personalization, rendered, provenance }. `rendered`
  * is what synthesizeFinalAnswer takes as `pcl`, or null for the default.
  */
-export async function resolvePcl(supabase, identity, { requestStyle = null, log = null } = {}) {
+export async function resolvePcl(supabase, identity, { log = null } = {}) {
   let loaded;
   if (!pclEnabled()) {
     loaded = defaultLoaded("PCL_ENABLED=0");
@@ -179,18 +195,7 @@ export async function resolvePcl(supabase, identity, { requestStyle = null, log 
     }
   }
 
-  const prefs = loaded.preferences;
-  const configured = loaded.configuration?.response?.style || null;
-  const locked = Boolean(loaded.configuration?.lock_style);
-  let style = "neutral";
-  let styleSource = "default";
-  if (loaded.source === "resolved") {
-    if (requestStyle && responseStyles.has(requestStyle) && !locked) { style = requestStyle; styleSource = "request"; }
-    else if (prefs?.hasRow && prefs.style !== "neutral") { style = prefs.style; styleSource = "user"; }
-    else if (configured) { style = configured; styleSource = "persona"; }
-  }
-  const personalization = loaded.source === "resolved" ? (prefs?.personalization || "") : "";
-
+  const personalization = loaded.source === "resolved" ? (loaded.preferences?.personalization || "") : "";
   const rendered = loaded.source === "resolved" && (loaded.rendered || personalization)
     ? { ...(loaded.rendered || {}), personalization: personalization || null }
     : null;
@@ -200,8 +205,8 @@ export async function resolvePcl(supabase, identity, { requestStyle = null, log 
     persona_key: loaded.persona?.key || null,
     persona_source: loaded.personaSource || "none",
     version: loaded.version ?? null,
-    style,
-    style_source: styleSource,
+    length: loaded.length || null,
+    length_source: loaded.lengthSource || "none",
     personalization_chars: personalization.length,
     hash: loaded.hash || null,
     source: loaded.source,
@@ -211,6 +216,7 @@ export async function resolvePcl(supabase, identity, { requestStyle = null, log 
   return {
     source: loaded.source, reason: loaded.reason || null,
     persona: loaded.persona, personaSource: loaded.personaSource, version: loaded.version,
-    configuration: loaded.configuration, style, styleSource, personalization, rendered, provenance,
+    configuration: loaded.configuration, length: loaded.length || null, lengthSource: loaded.lengthSource || "none",
+    personalization, rendered, provenance,
   };
 }
