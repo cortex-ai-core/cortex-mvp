@@ -160,7 +160,15 @@ export default async function userManagement(fastify) {
     const { data: memberships, error: membershipError } =
       await membershipsFor(fastify, users.map((user) => user.id));
     if (membershipError) return reply.code(500).send({ error: "Unable to load memberships." });
-    return { users: withNamespaces(users, memberships) };
+    // Each user's assigned persona (section 4.4), for the persona select in
+    // User Management. Absent rows and a database without 0011 both mean null.
+    const personaByUser = new Map();
+    if (users.length) {
+      const { data: settings } = await fastify.supabase.from("user_settings")
+        .select("user_id, persona:persona_id(id,key,name)").in("user_id", users.map((user) => user.id));
+      for (const row of settings || []) if (row.persona) personaByUser.set(row.user_id, row.persona);
+    }
+    return { users: withNamespaces(users, memberships).map((user) => ({ ...user, persona: personaByUser.get(user.id) || null })) };
   });
 
   // Creates Auth, application-user, and membership records. Admin is forced

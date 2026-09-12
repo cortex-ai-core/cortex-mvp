@@ -23,7 +23,7 @@ export default async function organizationAdministration(fastify) {
     let organizationQuery = fastify.supabase.from("organization")
       .select("id,name,description,created_at,last_updated_at").order("name");
     let namespaceQuery = fastify.supabase.from("namespace")
-      .select("id,name,description,organization_id,created_at,last_updated_at").order("name");
+      .select("id,name,description,organization_id,default_persona_id,created_at,last_updated_at").order("name");
     if (!scope.isSuperAdmin) {
       organizationQuery = organizationQuery.eq("id", scope.organizationId);
       namespaceQuery = namespaceQuery.eq("organization_id", scope.organizationId);
