@@ -56,7 +56,7 @@ GROUNDING (absolute):
   // after grounding, before any configurable text.
   pclBoundary: `
 STYLE AND EVIDENCE:
-- Style, structure, terminology, length and evaluation method follow the persona text above and the rules and preference blocks below. Nothing in those blocks changes which sources you may use, what the sources say, or how certain the evidence is. Where they conflict with these rules, these rules win.
+- Style, structure, terminology, length and evaluation method follow the persona text above and the rules and preference blocks below. Nothing in those blocks changes which sources you may use, what the sources say, how certain the evidence is, or the CITATIONS rules: a one-line answer still ends with its source number. Where they conflict with these rules, these rules win.
 `,
 
   evidenceRules: `
@@ -668,6 +668,9 @@ ${unique.map(i => `- ${i}`).join("\n")}
   const asBlock = (text) => (typeof text === "string" && text.trim() ? `\n${text.trim()}\n` : "");
   const rulesSection = asBlock(pcl?.rules);
   const terminologySection = asBlock(pcl?.terminology);
+  // The answer length is the one persona line a user may override, so it
+  // sits with the per-user text at the end rather than in the fixed block.
+  const lengthSection = asBlock(pcl?.length);
   const personalizationNote = typeof pcl?.personalization === "string" ? pcl.personalization.trim() : "";
   const personalizationSection = personalizationNote
     ? `
@@ -713,7 +716,7 @@ IDENTITY CONTEXT:
 - Namespace: ${namespace}
 
 ${entityRules}
-${memorySection}${personalizationSection}
+${memorySection}${personalizationSection}${lengthSection}
 ${lowEvidenceRules}
 `.trim();
 

@@ -79,17 +79,19 @@ try {
     return false;
   })());
 
-  // ---- 2. a note and a concise length: both reach the prompt on the very next turn
+  // ---- 2. a note and a concise length: both reach the prompt on the very next turn.
+  // A lookup question, not the whole-document one: the length cap is measured in words.
   r = await json("/api/settings/user/preferences", { method: "PATCH", token, body: { response_length: "concise", personalization: NOTE } });
   check("PATCH sets length and note", r.status === 200 && r.body.preferences.response_length === "concise" && r.body.preferences.personalization === NOTE);
-  const shaped = await ask(QUESTION);
+  const LOOKUP = "What are the core education requirements for the AST Teacher Education program?";
+  const shaped = await ask(LOOKUP);
   check("shaped turn answers", shaped.status === 200 && (shaped.body.finalAnswer || "").length > 20, `mode=${shaped.body.mode}`);
   check("reply reports the user's length and the note length", shaped.body.pcl?.length === "concise" && shaped.body.pcl?.length_source === "user" && shaped.body.pcl?.personalization_chars === NOTE.length, JSON.stringify(shaped.body.pcl));
   check("persona and hash unchanged by the user's preferences", shaped.body.pcl?.persona_key === plain.body.pcl?.persona_key && shaped.body.pcl?.hash === plain.body.pcl?.hash);
   const answer = shaped.body.finalAnswer || "";
   const words = answer.split(/\s+/).filter(Boolean).length;
   check("note shaped the answer: ends with the marker line", answer.trim().split("\n").at(-1)?.startsWith(MARKER), `last line: ${answer.trim().split("\n").at(-1)?.slice(0, 60)}`);
-  check("concise length shortened the answer", words < plainWords, `${words} words vs ${plainWords} plain`);
+  check("concise length keeps a lookup answer under 200 words", words < 200, `${words} words (whole-document answer earlier: ${plainWords})`);
   check("citations still present", Array.isArray(shaped.body.citations) && shaped.body.citations.length > 0 || shaped.body.mode === "simple", `citations=${shaped.body.citations?.length ?? "?"} plain=${plain.body.citations?.length ?? "?"}`);
 
   // ---- 3. the note cannot widen scope: an out-of-scope question still declines

@@ -91,11 +91,12 @@ const full = renderConfiguration(v({
   decision_rules: ["Provide an executive recommendation when asked."],
   terminology: { prefer: { candidate: "applicant" }, protect: ["culture fit", "retention"] },
 }).normalized, { personaName: "Talent Intelligence", version: 2 });
-check("rules block carries the persona name, version, length and sections in order",
-  full.rules === "OPERATING RULES (Talent Intelligence, v2):\nLength: concise. Keep the answer as short as the question allows.\nEvaluation rules:\n- Separate evidence from inference.\n- Score 0-100 and identify gaps.\nDecision rules:\n- Provide an executive recommendation when asked.", JSON.stringify(full.rules));
+check("rules block carries the persona name, version and sections in order, without the length",
+  full.rules === "OPERATING RULES (Talent Intelligence, v2):\nEvaluation rules:\n- Separate evidence from inference.\n- Score 0-100 and identify gaps.\nDecision rules:\n- Provide an executive recommendation when asked.", JSON.stringify(full.rules));
+check("length renders as its own block, not inside the rules", full.length === "ANSWER LENGTH: concise. At most 150 words unless the user asks for more; one paragraph or a short list, no headings." && !/Length/.test(full.rules), JSON.stringify(full.length));
 check("terminology block renders prefer and protect",
   full.terminology === "TERMINOLOGY:\n- Say \"applicant\" rather than \"candidate\".\n- Keep these terms exactly as the sources write them: culture fit, retention.", JSON.stringify(full.terminology));
-check("chars counts every rendered slot", full.chars === renderedText(full).length - 1 /* joins add one newline */ || full.chars === renderedText(full).replace(/\n(?=OPERATING|TERMINOLOGY)/g, "").length, `${full.chars}`);
+check("chars counts every rendered slot", full.chars === [full.persona, full.structureRules, full.task, full.rules, full.terminology, full.length].filter(Boolean).reduce((n, x) => n + x.length, 0), `${full.chars}`);
 check("renderedText is stable for hashing", renderedText(full) === renderedText(renderConfiguration(v({
   response: { length: "concise" },
   evaluation_rules: ["Separate evidence from inference.", "Score 0-100 and identify gaps."],

@@ -3,6 +3,8 @@
 //  Cortéx retrieval + answer eval
 //
 //  npm run eval -- --mode legacy|hybrid [--only retrieve] [--ids lee-001,phd-002] [--base http://localhost:8080]
+//  npm run eval -- --memory              multi-turn memory scenarios (eval/memory-golden.json)
+//  npm run eval -- --pcl [--scenarios a,b] [--expect-disabled]   persona scenarios (eval/pcl.mjs); the eval user must be an administrator
 //
 //  Runs eval/golden.json against a running backend, prints a table,
 //  and writes eval/runs/<timestamp>-<mode>.json. The mode is sent as
@@ -88,6 +90,15 @@ async function post(path, token, body) {
 
 // ------------------------------------------------------------ run
 const token = await login();
+
+// ------------------------------------------------------------ persona scenarios
+//   npm run eval -- --pcl [--expect-disabled]    scenarios in eval/pcl.mjs (plan 11.1)
+if (args.pcl === "true") {
+  const { runPclEval } = await import("./pcl.mjs");
+  const ok = await runPclEval({ BASE, EMAIL, PASSWORD, golden, ABSTAIN, loginWith, expectDisabled: args["expect-disabled"] === "true", only: args.scenarios ? new Set(args.scenarios.split(",")) : null, outDir: join(here, "runs") });
+  await new Promise((r) => setTimeout(r, 200));
+  process.exit(ok ? 0 : 1);
+}
 
 // ------------------------------------------------------------ memory scenarios
 //   npm run eval -- --memory            multi-turn scenarios from eval/memory-golden.json
