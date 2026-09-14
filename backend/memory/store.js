@@ -27,6 +27,7 @@ import { runDLPScan } from "../lib/dlp.js";
 import { hasPermission } from "../lib/permissions.js";
 import { recordUsage } from "../lib/usage.js";
 import { POLICY, vote, stateFromStances, basisHash, describeVote, sourceKey } from "./policy.js";
+import { retentionSchemaReady } from "../retention/schema.js";
 
 export const MEMORY_KINDS = ["fact", "preference", "decision", "entity", "task", "note"];
 export const MEMORY_SCOPES = ["user", "namespace"];
@@ -648,24 +649,36 @@ export async function listContested(supabase, identity, { limit = 50 } = {}) {
 }
 
 /** One memory the caller may see (any status), or null. */
+/**
+ * The read fields, plus source_purged_at (retention, migration 0013)
+ * once the column exists: a note that outlived its source chat says so.
+ */
+async function readFields(supabase) {
+  return (await retentionSchemaReady(supabase)) ? `${MEMORY_FIELDS}, source_purged_at` : MEMORY_FIELDS;
+}
+
 export async function getMemory(supabase, identity, id) {
   requireIdentity(identity);
   if (!isUuid(id)) return null;
-  const { data, error } = await visible(supabase.from("memories").select(MEMORY_FIELDS).eq("id", id), identity).maybeSingle();
+  const { data, error } = await visible(supabase.from("memories").select(await readFields(supabase)).eq("id", id), identity).maybeSingle();
   if (error) throw new Error(`memory: lookup failed: ${error.message}`);
   return data || null;
 }
 
 /**
  * The caller's memories: own user-scope rows plus the namespace's shared
- * rows. Filters: scope, kind, status (default active), q (keyword search).
+ * rows. Filters: scope, kind, status (default active), q (keyword search),
+ * source ("purged" = notes whose source chat was purged or deleted).
  */
-export async function listMemories(supabase, identity, { scope = null, kind = null, status = "active", q = null, limit = 50, offset = 0 } = {}) {
+export async function listMemories(supabase, identity, { scope = null, kind = null, status = "active", q = null, source = null, limit = 50, offset = 0 } = {}) {
   requireIdentity(identity);
-  let query = visible(supabase.from("memories").select(MEMORY_FIELDS), identity);
+  const fields = await readFields(supabase);
+  let query = visible(supabase.from("memories").select(fields), identity);
   if (scope && MEMORY_SCOPES.includes(scope)) query = query.eq("scope", scope);
   if (kind && MEMORY_KINDS.includes(kind)) query = query.eq("kind", kind);
   if (status && status !== "all") query = query.eq("status", status);
+  if (source === "purged" && fields !== MEMORY_FIELDS) query = query.not("source_purged_at", "is", null);
+  if (source === "linked" && fields !== MEMORY_FIELDS) query = query.is("source_purged_at", null);
   // keyword filter on the tsv column, so archived and superseded rows can be searched too
   if (q && String(q).trim()) query = query.textSearch("tsv", String(q).slice(0, 200), { type: "websearch", config: "english" });
   const { data, error } = await query

@@ -253,3 +253,94 @@ What that user would get on their next chat turn: `{ user, source, reason,
 persona, persona_source, version, length, length_source, personalization,
 rendered, provenance }`. `rendered` holds the prompt blocks (`persona`,
 `structureRules`, `task`, `rules`, `terminology`, `personalization`).
+
+## Chat retention
+
+Requires migration 0013 (routes answer `503` until it is applied) and the
+`manage_retention` permission (admin, super-admin). Admin is limited to their
+JWT organization; super-admin may use any organization. Design:
+`docs/RETENTION.md`.
+
+`GET /api/settings/organizations/:organizationId/retention`
+
+Returns the policy, its effect per namespace, and counts:
+
+```json
+{
+  "organization": { "id": "…", "name": "Sollucio Partners", "chat_retention_days": 30, "retention_hold": false, "retention_hold_reason": null },
+  "default_days": 30,
+  "namespaces": [ { "id": "…", "name": "core", "retention_days": null, "effective_days": 30, "source": "organization" } ],
+  "counts": { "active": 13, "archived": 0, "held": 0, "due": 0 }
+}
+```
+
+`due` is how many active, unheld threads the next sweep would archive.
+
+`PATCH /api/settings/organizations/:organizationId/retention`
+
+```json
+{ "chat_retention_days": 90, "retention_hold": true, "retention_hold_reason": "Litigation hold, matter 2026-014" }
+```
+
+Any subset. `chat_retention_days` is a whole number from `0` (keep forever)
+to `3650`. Placing a hold requires a reason; clearing it clears the reason.
+Returns the same payload as `GET`. A hold change is logged as a
+`legal_hold_set` / `legal_hold_cleared` event with `detail.scope =
+"organization"`.
+
+`GET /api/settings/organizations/:organizationId/holds`
+
+Returns `{ "holds": [ { "conversation_id", "title", "state", "namespace", "owner_email", "legal_hold_reason", "legal_hold_by", "legal_hold_at" } ] }`,
+newest hold first, at most 200.
+
+`POST /api/settings/conversations/:conversationId/hold`
+
+```json
+{ "hold": true, "reason": "Records request 2026-09-14" }
+```
+
+Freezes or releases one thread: the sweep skips it and the owner's delete
+answers `409` while held. A reason is required to place a hold. Returns
+`{ "conversation": { "conversation_id", "title", "state", "legal_hold", "legal_hold_reason", "legal_hold_by", "legal_hold_at" } }`.
+A thread outside the caller's organization is `404`. Logged as
+`legal_hold_set` / `legal_hold_cleared` with `detail.scope = "conversation"`.
+
+`PATCH /api/settings/namespaces/:namespaceId/retention`
+
+```json
+{ "retention_days": 365 }
+```
+
+A per-namespace override of the organization's days; `null` inherits again.
+Stored in `memory_settings.retention_days`. Returns
+`{ "namespace": { "id", "name", "retention_days", "effective_days", "source" } }`.
+There is no page for this in the web app; it is for a customer that asks.
+
+The organization list (`GET /api/settings/organizations`) also carries
+`chat_retention_days`, `retention_hold` and `retention_hold_reason` on each
+organization once 0013 exists.
+
+## Document types
+
+Migration 0014 moves document types from the namespace to the organization:
+one list per organization, managed by its admins on the Organizations page,
+used by every namespace when a document is uploaded or edited. Routes are
+unchanged in shape; scope and rights changed.
+
+`GET /api/document-types[?organizationId=]`
+
+Any member. Returns `{ "types": [ { "id", "organization_id", "name", "description", "sort_order", "created_at" } ], "scope": "organization" }`.
+A super-admin may pass `organizationId` to read another organization's list.
+Before 0014 the same route answers with the caller's namespace list and
+`"scope": "namespace"`.
+
+`POST /api/document-types` · `PATCH /api/document-types/:id` · `DELETE /api/document-types/:id`
+
+Admin and super-admin only (`403` otherwise). Bodies as before (`name`,
+`description`, `sort_order`); a super-admin may add `organizationId`. Names
+are unique within an organization regardless of case (`409`). A rename
+follows onto every document in the organization that carries the old name;
+a delete clears the label on those documents.
+
+Uploads and `PATCH /api/documents/:id` accept a type by name in any case and
+store the list's spelling; an unknown name is `400`.

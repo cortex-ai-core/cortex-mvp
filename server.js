@@ -26,6 +26,7 @@ import authPlugin from "./backend/lib/authMiddleware.js";
 import { createIngestWorker } from "./backend/ingest/worker.js";
 import { parserHealth } from "./backend/ingest/parserClient.js";
 import { describeDefaults } from "./backend/memory/settings.js";
+import { createRetentionWorker } from "./backend/retention/sweep.js";
 
 // ✅ FIX APPLIED — bodyLimit added (NO OTHER CHANGES)
 const fastify = Fastify({
@@ -78,6 +79,13 @@ fastify.decorate("openai", openai);
 // -------------------------------------------------------------
 const ingestWorker = createIngestWorker(fastify);
 fastify.decorate("ingestWorker", ingestWorker);
+
+// Retention sweep (migration 0013): archives threads past their
+// organization's policy. Idle when the schema is absent or
+// RETENTION_SWEEP_MINUTES=0; started after listen, stopped with the server.
+const retentionWorker = createRetentionWorker(fastify);
+fastify.decorate("retentionWorker", retentionWorker);
+fastify.addHook("onClose", async () => { await retentionWorker.stop(); });
 
 // Memory switches at boot (design doc 5.12). Namespace rows override these at runtime.
 fastify.log.info({ memory: describeDefaults() }, "memory: defaults loaded");
@@ -153,6 +161,8 @@ try {
   if (process.env.INGEST_WORKER !== "off") {
     ingestWorker.start();
   }
+
+  retentionWorker.start();
 
 } catch (err) {
   fastify.log.error(err);

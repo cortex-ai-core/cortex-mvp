@@ -1112,7 +1112,8 @@ export default fp(async function chatRoute(fastify) {
           const retrievalQuery =
             intent.standaloneQuery || sanitizedMessage;
           if (retrievalQuery !== sanitizedMessage) {
-            fastify.log.info({ route: "/api/chat", from: sanitizedMessage.slice(0, 80), to: retrievalQuery.slice(0, 120) }, "chat: follow-up rewritten for retrieval");
+            // lengths only: server logs carry no chat text (retention plan section 4)
+            fastify.log.info({ route: "/api/chat", fromChars: sanitizedMessage.length, toChars: retrievalQuery.length }, "chat: follow-up rewritten for retrieval");
           }
 
           const res =

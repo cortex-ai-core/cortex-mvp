@@ -29,7 +29,13 @@ function requireIdentity(identity) {
   }
 }
 
+import { retentionSchemaReady } from "../retention/schema.js";
+
 const CONVERSATION_FIELDS = "id, title, message_count, last_message_at, archived_at, metadata, created_at, updated_at";
+/** Plus the retention columns (migration 0013) once they exist. */
+async function fields(supabase) {
+  return (await retentionSchemaReady(supabase)) ? `${CONVERSATION_FIELDS}, purged_at, legal_hold, legal_hold_reason` : CONVERSATION_FIELDS;
+}
 
 /** A title from the first user message: first line, trimmed, at most 80 chars. */
 export function titleFrom(text = "") {
@@ -43,7 +49,7 @@ export async function getConversation(supabase, identity, conversationId) {
   requireIdentity(identity);
   if (!isUuid(conversationId)) return null;
   const { data, error } = await owned(
-    supabase.from("conversations").select(CONVERSATION_FIELDS).eq("id", conversationId),
+    supabase.from("conversations").select(await fields(supabase)).eq("id", conversationId),
     identity
   ).maybeSingle();
   if (error) throw new Error(`conversations: lookup failed: ${error.message}`);
@@ -61,7 +67,7 @@ export async function createConversation(supabase, identity, { title = null, met
       title,
       metadata: metadata || {},
     }])
-    .select(CONVERSATION_FIELDS)
+    .select(await fields(supabase))
     .single();
   if (error) throw new Error(`conversations: create failed: ${error.message}`);
   return data;
@@ -108,11 +114,13 @@ export async function appendMessage(supabase, identity, conversationId, {
   return data;
 }
 
-/** Newest first. Archived ones only when asked. */
-export async function listConversations(supabase, identity, { includeArchived = false, limit = 50, offset = 0 } = {}) {
+/** Newest first. `state`: active (default), archived, all. `includeArchived` is the older spelling of all. */
+export async function listConversations(supabase, identity, { includeArchived = false, state = null, limit = 50, offset = 0 } = {}) {
   requireIdentity(identity);
-  let q = owned(supabase.from("conversations").select(CONVERSATION_FIELDS), identity);
-  if (!includeArchived) q = q.is("archived_at", null);
+  let q = owned(supabase.from("conversations").select(await fields(supabase)), identity);
+  const want = state || (includeArchived ? "all" : "active");
+  if (want === "active") q = q.is("archived_at", null);
+  else if (want === "archived") q = q.not("archived_at", "is", null);
   const { data, error } = await q
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
@@ -149,7 +157,7 @@ export async function renameConversation(supabase, identity, conversationId, tit
   const { data, error } = await owned(
     supabase.from("conversations").update({ title: title || null }).eq("id", conversationId),
     identity
-  ).select(CONVERSATION_FIELDS).maybeSingle();
+  ).select(await fields(supabase)).maybeSingle();
   if (error) throw new Error(`conversations: rename failed: ${error.message}`);
   return data || null;
 }
@@ -160,7 +168,7 @@ export async function archiveConversation(supabase, identity, conversationId, ar
   const { data, error } = await owned(
     supabase.from("conversations").update({ archived_at: archived ? new Date().toISOString() : null }).eq("id", conversationId),
     identity
-  ).select(CONVERSATION_FIELDS).maybeSingle();
+  ).select(await fields(supabase)).maybeSingle();
   if (error) throw new Error(`conversations: archive failed: ${error.message}`);
   return data || null;
 }

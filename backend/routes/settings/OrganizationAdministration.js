@@ -5,8 +5,14 @@ import {
   requireSuperAdmin,
   withNamespaces,
 } from "./shared.js";
+import { retentionSchemaReady } from "../../retention/schema.js";
 
 const clean = (value) => typeof value === "string" ? value.trim() : "";
+const ORG_FIELDS = "id,name,description,created_at,last_updated_at";
+// The chat retention policy rides along on the list once migration 0013 exists.
+const orgFields = async (fastify) => (await retentionSchemaReady(fastify.supabase, fastify.log))
+  ? `${ORG_FIELDS},chat_retention_days,retention_hold,retention_hold_reason`
+  : ORG_FIELDS;
 
 async function findNamespace(fastify, namespaceId) {
   return fastify.supabase.from("namespace")
@@ -21,7 +27,7 @@ export default async function organizationAdministration(fastify) {
     const scope = requireSettingsManager(req, reply);
     if (!scope) return;
     let organizationQuery = fastify.supabase.from("organization")
-      .select("id,name,description,created_at,last_updated_at").order("name");
+      .select(await orgFields(fastify)).order("name");
     let namespaceQuery = fastify.supabase.from("namespace")
       .select("id,name,description,organization_id,default_persona_id,created_at,last_updated_at").order("name");
     if (!scope.isSuperAdmin) {

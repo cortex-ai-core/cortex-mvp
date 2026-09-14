@@ -84,6 +84,62 @@ export async function recordTurnUsage(supabase, log, { traceId, usage, extracted
   return true;
 }
 
+/**
+ * Retention (plan 5.5 / R-6): the question text and the model's conflicts
+ * note are the only chat content a trace holds. Null them for one
+ * thread; keep latency, mode, result ids, usage and cost for metrics.
+ * Returns how many rows changed. text_purged_at arrives with migration
+ * 0013; without it the text is still nulled, just not stamped.
+ */
+let textPurgedColumnMissing = false;
+const columnMissing = (error, name) =>
+  Boolean(error) && (error.code === "42703" || error.code === "PGRST204" || new RegExp(`column .*${name}.* does not exist`, "i").test(error.message || ""));
+
+export async function scrubTraces(supabase, log, { conversationId }) {
+  if (!supabase || !UUID.test(String(conversationId || ""))) return 0;
+  const run = async (stamp) => {
+    const patch = { query: null, conflicts: null, ...(stamp ? { text_purged_at: new Date().toISOString() } : {}) };
+    let q = supabase.from("rag_queries").update(patch).eq("conversation_id", conversationId);
+    q = stamp ? q.is("text_purged_at", null) : q.not("query", "is", null);
+    return q.select("id");
+  };
+  let { data, error } = await run(!textPurgedColumnMissing);
+  if (error && !textPurgedColumnMissing && columnMissing(error, "text_purged_at")) {
+    textPurgedColumnMissing = true;
+    log?.info?.("trace: rag_queries.text_purged_at not present yet (migration 0013); scrubbing without the stamp");
+    ({ data, error } = await run(false));
+  }
+  if (error) { log?.warn?.({ err: error.message, conversationId }, "trace: scrub failed"); return 0; }
+  return (data || []).length;
+}
+
+/**
+ * Same scrub by age, for trace rows that belong to no thread (memory
+ * off, private mode, retrieval calls) and so are never reached through
+ * a conversation. Rows with a thread are scrubbed when the thread is
+ * archived or deleted. Needs 0013 (the stamp is the idempotency mark).
+ */
+export async function scrubTracesOlderThan(supabase, log, { namespaceId, days, limit = 500 }) {
+  if (!supabase || !UUID.test(String(namespaceId || "")) || !(Number(days) > 0) || textPurgedColumnMissing) return 0;
+  const cutoff = new Date(Date.now() - Number(days) * 86_400_000).toISOString();
+  const { data: rows, error: selErr } = await supabase
+    .from("rag_queries").select("id")
+    .eq("namespace_id", namespaceId).is("conversation_id", null).is("text_purged_at", null)
+    .lt("created_at", cutoff).not("query", "is", null)
+    .limit(limit);
+  if (selErr) {
+    if (columnMissing(selErr, "text_purged_at")) { textPurgedColumnMissing = true; return 0; }
+    log?.warn?.({ err: selErr.message }, "trace: aged scrub lookup failed"); return 0;
+  }
+  const ids = (rows || []).map((r) => r.id);
+  if (!ids.length) return 0;
+  const { error } = await supabase.from("rag_queries")
+    .update({ query: null, conflicts: null, text_purged_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) { log?.warn?.({ err: error.message }, "trace: aged scrub failed"); return 0; }
+  return ids.length;
+}
+
 export function resolveRetrievalMode(req) {
   const override = req?.headers?.["x-retrieval-mode"];
   if (override && process.env.ALLOW_RETRIEVAL_MODE_OVERRIDE === "1") {
