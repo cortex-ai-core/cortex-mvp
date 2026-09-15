@@ -31,8 +31,11 @@ import { synthesizeFinalAnswer, extractConflicts } from "../reasoning/synthesis.
 import { formatOutput } from "../reasoning/outputFormatter.js";
 
 // 🔥 Step 47 Identity Layer
-import { applyIdentityLayer } from "../identity/applyIdentity.js";
-import { resolveToneForNamespace } from "../identity/toneRouter.js";
+// Persona / PCL (section 4.4): which persona applies, its newest rules,
+// and the user's own style and note, resolved once per turn and
+// rendered into the prompt. Never throws; the built-in default with a
+// reason when anything is unavailable.
+import { resolvePcl } from "../pcl/resolve.js";
 
 // 🔥 Whole-document overview path
 import { downloadObject, parsedPathFor } from "../ingest/storage.js";
@@ -1014,18 +1017,11 @@ export default fp(async function chatRoute(fastify) {
         const normalized =
           sanitizedMessage.toLowerCase();
 
-        const tone =
-          resolveToneForNamespace(
-            namespace
-          );
-
-        const identityContext =
-          applyIdentityLayer({
-            userId,
-            role: identity.role,
-            namespace,
-            tone
-          });
+        // Persona / PCL, resolved beside recall and retrieval from the
+        // already-authorized identity (plan section 7). Nothing in the
+        // request body picks a persona or a style.
+        const pclPromise =
+          resolvePcl(fastify.supabase, identity, { log: fastify.log });
 
         let ragContext = "";
         let wholeDocument = null;
@@ -1116,7 +1112,8 @@ export default fp(async function chatRoute(fastify) {
           const retrievalQuery =
             intent.standaloneQuery || sanitizedMessage;
           if (retrievalQuery !== sanitizedMessage) {
-            fastify.log.info({ route: "/api/chat", from: sanitizedMessage.slice(0, 80), to: retrievalQuery.slice(0, 120) }, "chat: follow-up rewritten for retrieval");
+            // lengths only: server logs carry no chat text (retention plan section 4)
+            fastify.log.info({ route: "/api/chat", fromChars: sanitizedMessage.length, toChars: retrievalQuery.length }, "chat: follow-up rewritten for retrieval");
           }
 
           const res =
@@ -1304,6 +1301,15 @@ export default fp(async function chatRoute(fastify) {
 
         // 🧠 H3 (recall part) resolves here: the memory block for the prompt.
         const recall = await recallPromise;
+
+        // Persona / PCL resolves here. `pcl` is the rendered persona text
+        // plus the user's note and length, or null for the built-in
+        // default (synthesis.js, plan 8.2).
+        const resolved = await pclPromise;
+        const identityContext = { userId, role: identity.role, namespace, personaId: resolved.persona?.id || null };
+        const pcl = resolved.rendered;
+        const pclInfo = resolved.provenance;
+
         if (sse) {
           sse.sources(activeSources.map(s => ({
             n: s.n, document_id: s.document_id, file_name: s.file_name, display_name: s.display_name,
@@ -1338,6 +1344,10 @@ export default fp(async function chatRoute(fastify) {
               model: openai,
 
               identityContext,
+
+              // PCL Phase 0: the user's personalization note, or null for
+              // the default prompt.
+              pcl,
 
               usage
 
@@ -1375,9 +1385,7 @@ export default fp(async function chatRoute(fastify) {
 
               privateMode,
 
-              namespace,
-
-              tone
+              namespace
             }
           );
 
@@ -1399,6 +1407,14 @@ export default fp(async function chatRoute(fastify) {
           hasSummary: Boolean(thread?.summary),
           memoriesUsed: recall?.memories?.length ?? 0,
           memoryBlockTokens: recall?.tokens ?? 0,
+          personaKey: pclInfo.persona_key,
+          personaSource: pclInfo.persona_source,
+          pclVersion: pclInfo.version,
+          answerLength: pclInfo.length,
+          answerLengthSource: pclInfo.length_source,
+          personalizationChars: pclInfo.personalization_chars,
+          pclSource: pclInfo.source,
+          pclReason: pclInfo.reason,
           conflicts: conflicts.length,
           retrievalPriority,
           retrievedChunks: activeSources.length,
@@ -1444,6 +1460,7 @@ export default fp(async function chatRoute(fastify) {
           query: intent.standaloneQuery || sanitizedMessage, namespaceId, userId: identity.userId,
           conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
           memoryIds, memoryBlockTokens: recall?.tokens ?? 0, answerMode: mode, conflicts: conflicts.length ? conflicts : null,
+          pcl: pclInfo,
           latencyMs: Date.now() - start
         });
 
@@ -1501,7 +1518,9 @@ export default fp(async function chatRoute(fastify) {
           memoriesUsed: (recall?.memories || []).map(m => ({ id: m.id, kind: m.kind, scope: m.scope, content: m.content, truth_status: m.truth_status || "accepted", counterpart_id: m.counterpart_id || null })),
           traceId,
           usage: usageSummary(usage, { pending: extractionScheduled ? ["extraction"] : [] }),
-          intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source }
+          intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source },
+          // PCL Phase 0: which style and note shaped this answer.
+          pcl: pclInfo
         }));
 
       } catch (err) {

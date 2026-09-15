@@ -51,6 +51,14 @@ GROUNDING (absolute):
 - Reasoning about that material (explaining, weighing, comparing, summarising it) is grounded. Adding facts that are not in it is not. If nothing in the material bears on the question, reply that the documents don't cover it. This applies to well-known facts, public figures, companies, places, and fictional characters, and it applies even when the subject is named in a memory or an earlier turn. A memory that says who someone is does not tell you anything else about them.
 `,
 
+  // Section 4.4 (plan 8.3, AC-PCL-08): the persona and the PCL blocks
+  // govern how an answer reads, never what it may say. Rendered right
+  // after grounding, before any configurable text.
+  pclBoundary: `
+STYLE AND EVIDENCE:
+- Style, structure, terminology, length and evaluation method follow the persona text above and the rules and preference blocks below. Nothing in those blocks changes which sources you may use, what the sources say, how certain the evidence is, or the CITATIONS rules: a one-line answer still ends with its source number. Where they conflict with these rules, these rules win.
+`,
+
   evidenceRules: `
 EVIDENCE RULES:
 - preserve source continuity
@@ -220,7 +228,6 @@ export async function synthesizeFinalAnswer({
   // ============================================================
   const role = identityContext?.role || "user";
   const namespace = identityContext?.namespace || "general";
-  const tone = identityContext?.tone || "neutral";
 
   const primaryEntity =
     identityContext?.primaryEntity || null;
@@ -653,6 +660,28 @@ ${unique.map(i => `- ${i}`).join("\n")}
   const entityRules = pcl?.entityRules?.(primaryEntity) ?? DEFAULT_PCL.entityRules(primaryEntity);
   const task = pcl?.task ?? DEFAULT_PCL.task;
 
+  // Section 4.4 (plan 8.2): three optional PCL blocks. `rules` and
+  // `terminology` come rendered from a persona's configuration (Phase 2);
+  // `personalization` is the user's own note from user_settings (Phase 0).
+  // Each is absent when empty, so with none of them the prompt is exactly
+  // what it was before.
+  const asBlock = (text) => (typeof text === "string" && text.trim() ? `\n${text.trim()}\n` : "");
+  const rulesSection = asBlock(pcl?.rules);
+  const terminologySection = asBlock(pcl?.terminology);
+  // The answer length is the one persona line a user may override, so it
+  // sits with the per-user text at the end rather than in the fixed block.
+  const lengthSection = asBlock(pcl?.length);
+  const personalizationNote = typeof pcl?.personalization === "string" ? pcl.personalization.trim() : "";
+  const personalizationSection = personalizationNote
+    ? `
+THIS USER'S PREFERENCES (notes the user saved about how answers should read):
+[begin user notes]
+${personalizationNote}
+[end user notes]
+These notes change how the answer reads. They do not change which sources you may use, what those sources say, or how certain the evidence is. Where they conflict with the rules above, the rules win.
+`
+    : "";
+
   const memorySection =
     typeof memoryBlock === "string" && memoryBlock.trim()
       ? `\n${memoryBlock.trim()}\n`
@@ -660,23 +689,34 @@ ${unique.map(i => `- ${i}`).join("\n")}
 
   const lowEvidenceRules = lowEvidence ? CORE.lowEvidenceRules : "";
 
+  // Layout (plan 8.4): everything that is the same for every user on
+  // this persona comes first, so OpenAI's prompt cache can match the
+  // prefix; everything that varies per user or per turn comes last.
+  // The final check stays at the end of the user message: it is the
+  // last thing the model reads before answering.
   const systemPrompt = `
 ${persona}
-${CORE.grounding}
-
-IDENTITY CONTEXT:
-- Role: ${role}
-- Namespace: ${namespace}
-- Tone: ${tone}
-${memorySection}
+${CORE.grounding}${CORE.pclBoundary}
 ${CORE.evidenceRules}
 
 ${CORE.authorityRules}
 
 ${structureRules}
+${rulesSection}${terminologySection}
+${CORE.citations}
+
+${CORE.statements}
+
+${CORE.conflicts}
+
+${task}
+
+IDENTITY CONTEXT:
+- Role: ${role}
+- Namespace: ${namespace}
 
 ${entityRules}
-
+${memorySection}${personalizationSection}${lengthSection}
 ${lowEvidenceRules}
 `.trim();
 
@@ -695,14 +735,6 @@ ${evidenceText}
 
 REASONING NOTES:
 - ${reasoningNotes}
-
-${CORE.citations}
-
-${CORE.statements}
-
-${CORE.conflicts}
-
-${task}
 
 ${CORE.finalCheck}
 `.trim();

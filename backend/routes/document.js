@@ -8,6 +8,7 @@ import { extname } from "node:path";
 import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
 import { originalPath, documentPrefix, documentPrefixFor, uploadObject, deletePrefix, signedUrl } from "../ingest/storage.js";
 import { searchTitle } from "../ingest/worker.js";   // pure helper; worker.js has no import-time side effects
+import { findDocumentType } from "../lib/documentTypeScope.js";
 
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 50);
 
@@ -149,9 +150,9 @@ export default async function documentRoutes(fastify) {
     const description = (fields.description || "").slice(0, 1000) || null;
     let documentType = (fields.document_type || "").slice(0, 60) || null;
     if (documentType) {
-      const { data: t } = await supabase
-        .from("document_types").select("name").eq("namespace_id", namespaceId).eq("name", documentType).maybeSingle();
-      if (!t) return reply.code(400).send({ error: `"${documentType}" isn't a document type in this workspace.` });
+      // the organization's list (migration 0014), by name, any case
+      const t = await findDocumentType(supabase, identity, documentType);
+      if (!t) return reply.code(400).send({ error: `"${documentType}" isn't a document type in this organization.` });
       documentType = t.name;
     }
 
@@ -310,12 +311,12 @@ export default async function documentRoutes(fastify) {
     if (body.description !== undefined) patch.description = String(body.description || "").trim().slice(0, 1000) || null;
     if (body.document_type !== undefined) {
       const name = String(body.document_type || "").trim().slice(0, 60);
+      let stored = null;
       if (name) {
-        const { data: t } = await fastify.supabase
-          .from("document_types").select("name").eq("namespace_id", identity.namespaceId).eq("name", name).maybeSingle();
-        if (!t) return reply.code(400).send({ error: `"${name}" isn't a document type in this workspace.` });
+        stored = await findDocumentType(fastify.supabase, identity, name);
+        if (!stored) return reply.code(400).send({ error: `"${name}" isn't a document type in this organization.` });
       }
-      patch.document_type = name || null;
+      patch.document_type = stored ? stored.name : null;
     }
     if (!Object.keys(patch).length) return reply.code(400).send({ error: "Nothing to update." });
 

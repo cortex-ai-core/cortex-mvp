@@ -64,6 +64,8 @@ export function publicMemory(m) {
     confidence: m.confidence,
     source_type: m.source_type,
     source_conversation_id: m.source_conversation_id,
+    // retention: when the chat this note came from was purged or deleted (null = still there, or pre-0013)
+    source_purged_at: m.source_purged_at ?? null,
     supersedes_id: m.supersedes_id,
     suggested_shared: m.suggested_shared,
     status: m.status,
@@ -101,7 +103,8 @@ export default async function memoryRoutes(fastify) {
     return true;
   };
 
-  // GET /api/memory?scope=user|namespace&kind=&status=active|archived|superseded|all&q=&limit=&offset=
+  // GET /api/memory?scope=user|namespace&kind=&status=active|archived|superseded|all&q=&source=purged|linked&limit=&offset=
+  //   source=purged lists notes whose source chat was purged or deleted (retention, R-3)
   fastify.get("/api/memory", async (request, reply) => {
     const identity = identityFrom(request);
     const q = request.query || {};
@@ -111,6 +114,7 @@ export default async function memoryRoutes(fastify) {
         kind: MEMORY_KINDS.includes(q.kind) ? q.kind : null,
         status: q.status || "active",
         q: q.q || null,
+        source: ["purged", "linked"].includes(q.source) ? q.source : null,
         limit: Math.min(Math.max(Number(q.limit) || 50, 1), 200),
         offset: Math.max(Number(q.offset) || 0, 0),
       });
@@ -303,6 +307,7 @@ export default async function memoryRoutes(fastify) {
         conflicts: data.conflicts || [],
         usage: data.usage ?? null,
         extracted_memory_ids: data.extracted_memory_ids ?? [],
+        pcl: data.pcl ?? null,          // persona provenance (migration 0011)
         result_count: data.result_count,
         latency_ms: data.latency_ms,
         created_at: data.created_at,

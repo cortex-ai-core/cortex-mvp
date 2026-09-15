@@ -17,7 +17,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  * after-reply hooks (extraction, summariser) wait for the row before
  * they add their own usage to it.
  */
-export function finishTrace(supabase, log, { traceId, hadRetrieval, query, namespaceId, userId, conversationId, historyTurns, memoryIds, memoryBlockTokens, answerMode, conflicts, latencyMs }) {
+let pclColumnMissing = false;      // rag_queries.pcl arrives with migration 0011; noticed once
+
+export function finishTrace(supabase, log, { traceId, hadRetrieval, query, namespaceId, userId, conversationId, historyTurns, memoryIds, memoryBlockTokens, answerMode, conflicts, pcl, latencyMs }) {
   if (!ENABLED || !supabase || !UUID.test(String(traceId || ""))) return Promise.resolve(false);
   const patch = {
     memory_ids: Array.isArray(memoryIds) && memoryIds.length ? memoryIds : null,
@@ -25,24 +27,36 @@ export function finishTrace(supabase, log, { traceId, hadRetrieval, query, names
     answer_mode: answerMode || null,
     conflicts: conflicts ?? null,
   };
-  const done = ({ error }) => { if (error) { log?.warn?.({ err: error.message }, "trace finish failed"); return false; } return true; };
-  if (hadRetrieval) {
-    return supabase.from("rag_queries").update(patch).eq("id", traceId).then(done);
-  } else {
-    return supabase.from("rag_queries").insert([{
-      id: traceId,
-      query: String(query || "").slice(0, 2000),
-      namespace_id: namespaceId || null,
-      conversation_id: conversationId || null,
-      history_turns: Number.isFinite(historyTurns) ? historyTurns : null,
-      mode: "none",
-      user_id: userId || null,
-      latency_ms: Number.isFinite(latencyMs) ? Math.round(latencyMs) : null,
-      result_count: 0,
-      results: [],
-      ...patch,
-    }]).then(done);
-  }
+  // Persona provenance (plan 7.3): which persona, version, style and
+  // note shaped the answer. Left out until 0011 has been applied.
+  if (pcl && !pclColumnMissing) patch.pcl = pcl;
+  const write = (p) => hadRetrieval
+    ? supabase.from("rag_queries").update(p).eq("id", traceId)
+    : supabase.from("rag_queries").insert([{
+        id: traceId,
+        query: String(query || "").slice(0, 2000),
+        namespace_id: namespaceId || null,
+        conversation_id: conversationId || null,
+        history_turns: Number.isFinite(historyTurns) ? historyTurns : null,
+        mode: "none",
+        user_id: userId || null,
+        latency_ms: Number.isFinite(latencyMs) ? Math.round(latencyMs) : null,
+        result_count: 0,
+        results: [],
+        ...p,
+      }]);
+  const done = ({ error }) => {
+    if (!error) return true;
+    if ("pcl" in patch && (/column .*pcl.* does not exist|PGRST204/i.test(error.message || "") || error.code === "PGRST204")) {
+      pclColumnMissing = true;
+      log?.info?.("trace: rag_queries.pcl not present yet (migration 0011); persona provenance is not stored");
+      const { pcl: _omit, ...rest } = patch;
+      return write(rest).then(({ error: again }) => { if (again) { log?.warn?.({ err: again.message }, "trace finish failed"); return false; } return true; });
+    }
+    log?.warn?.({ err: error.message }, "trace finish failed");
+    return false;
+  };
+  return write(patch).then(done);
 }
 
 /**
@@ -68,6 +82,62 @@ export async function recordTurnUsage(supabase, log, { traceId, usage, extracted
     return false;
   }
   return true;
+}
+
+/**
+ * Retention (plan 5.5 / R-6): the question text and the model's conflicts
+ * note are the only chat content a trace holds. Null them for one
+ * thread; keep latency, mode, result ids, usage and cost for metrics.
+ * Returns how many rows changed. text_purged_at arrives with migration
+ * 0013; without it the text is still nulled, just not stamped.
+ */
+let textPurgedColumnMissing = false;
+const columnMissing = (error, name) =>
+  Boolean(error) && (error.code === "42703" || error.code === "PGRST204" || new RegExp(`column .*${name}.* does not exist`, "i").test(error.message || ""));
+
+export async function scrubTraces(supabase, log, { conversationId }) {
+  if (!supabase || !UUID.test(String(conversationId || ""))) return 0;
+  const run = async (stamp) => {
+    const patch = { query: null, conflicts: null, ...(stamp ? { text_purged_at: new Date().toISOString() } : {}) };
+    let q = supabase.from("rag_queries").update(patch).eq("conversation_id", conversationId);
+    q = stamp ? q.is("text_purged_at", null) : q.not("query", "is", null);
+    return q.select("id");
+  };
+  let { data, error } = await run(!textPurgedColumnMissing);
+  if (error && !textPurgedColumnMissing && columnMissing(error, "text_purged_at")) {
+    textPurgedColumnMissing = true;
+    log?.info?.("trace: rag_queries.text_purged_at not present yet (migration 0013); scrubbing without the stamp");
+    ({ data, error } = await run(false));
+  }
+  if (error) { log?.warn?.({ err: error.message, conversationId }, "trace: scrub failed"); return 0; }
+  return (data || []).length;
+}
+
+/**
+ * Same scrub by age, for trace rows that belong to no thread (memory
+ * off, private mode, retrieval calls) and so are never reached through
+ * a conversation. Rows with a thread are scrubbed when the thread is
+ * archived or deleted. Needs 0013 (the stamp is the idempotency mark).
+ */
+export async function scrubTracesOlderThan(supabase, log, { namespaceId, days, limit = 500 }) {
+  if (!supabase || !UUID.test(String(namespaceId || "")) || !(Number(days) > 0) || textPurgedColumnMissing) return 0;
+  const cutoff = new Date(Date.now() - Number(days) * 86_400_000).toISOString();
+  const { data: rows, error: selErr } = await supabase
+    .from("rag_queries").select("id")
+    .eq("namespace_id", namespaceId).is("conversation_id", null).is("text_purged_at", null)
+    .lt("created_at", cutoff).not("query", "is", null)
+    .limit(limit);
+  if (selErr) {
+    if (columnMissing(selErr, "text_purged_at")) { textPurgedColumnMissing = true; return 0; }
+    log?.warn?.({ err: selErr.message }, "trace: aged scrub lookup failed"); return 0;
+  }
+  const ids = (rows || []).map((r) => r.id);
+  if (!ids.length) return 0;
+  const { error } = await supabase.from("rag_queries")
+    .update({ query: null, conflicts: null, text_purged_at: new Date().toISOString() })
+    .in("id", ids);
+  if (error) { log?.warn?.({ err: error.message }, "trace: aged scrub failed"); return 0; }
+  return ids.length;
 }
 
 export function resolveRetrievalMode(req) {

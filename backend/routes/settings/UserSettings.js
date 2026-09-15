@@ -1,6 +1,7 @@
 import { findUser, membershipsFor, withNamespaces } from "./shared.js";
 
 import { readPreferences, writePreferences, validPreferencesPatch } from "../../lib/userPreferences.js";
+import { invalidatePcl } from "../../pcl/resolve.js";
 
 export default async function userSettings(fastify) {
   async function currentUser(req, reply) {
@@ -34,10 +35,12 @@ export default async function userSettings(fastify) {
     const user = await currentUser(req, reply);
     if (!user) return;
     if (!validPreferencesPatch(req.body)) {
-      return reply.code(400).send({ error: "Provide a valid response_style or personalization (up to 4,000 characters)." });
+      return reply.code(400).send({ error: "Provide personalization (up to 4,000 characters) or response_length (concise, standard, detailed or null)." });
     }
     try {
-      return { preferences: await writePreferences(fastify, user.id, req.body) };
+      const preferences = await writePreferences(fastify, user.id, req.body);
+      invalidatePcl(user.id);   // the next chat turn sees the change
+      return { preferences };
     } catch {
       return reply.code(500).send({ error: "Unable to save preferences." });
     }
