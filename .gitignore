@@ -12,3 +12,4 @@ uploads/
 !parser/samples/*.pdf
 !parser/samples/*.png
 .vs/
+!parser/requirements.txt
