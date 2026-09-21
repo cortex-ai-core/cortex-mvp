@@ -43,7 +43,12 @@ import { renderOverview } from "../ingest/summarize.js";
 
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
-const MAX_EPHEMERAL_CONTEXT = 18000;
+// Attached files, parsed by the same parser as the knowledge base
+// (routes/attachments.js), arrive as one text block that goes whole into
+// the prompt: no chunking, no retrieval. The ceiling is a cost and
+// latency guard, not a correctness one. 400k characters is about 100k
+// tokens, roughly 250 pages of text; set MAX_EPHEMERAL_CONTEXT to change it.
+const MAX_EPHEMERAL_CONTEXT = Number(process.env.MAX_EPHEMERAL_CONTEXT || 400000);
 const MAX_RAG_CONTEXT = 22000;
 // Whole-document path: the full parsed text of one named document (~40k tokens)
 const WHOLE_DOC_MAX_CHARS = Number(process.env.WHOLE_DOC_MAX_CHARS || 160000);
@@ -976,7 +981,7 @@ export default fp(async function chatRoute(fastify) {
           await saveTurn("assistant", reply, { mode: "memory", memoryIds: memorySaved ? [memorySaved.id] : null });
           const rememberTrace = finishTrace(fastify.supabase, fastify.log, {
             traceId, hadRetrieval: false,
-            query: sanitizedMessage, namespaceId, userId: identity.userId,
+            query: privateMode ? null : sanitizedMessage, namespaceId, userId: identity.userId,
             conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
             memoryIds: memorySaved ? [memorySaved.id] : [], memoryBlockTokens: 0, answerMode: "memory", conflicts: null,
             latencyMs: Date.now() - start
@@ -1383,8 +1388,6 @@ export default fp(async function chatRoute(fastify) {
                   ragContext.trim()
                 ),
 
-              privateMode,
-
               namespace
             }
           );
@@ -1455,11 +1458,14 @@ export default fp(async function chatRoute(fastify) {
         }
 
         // Complete the turn's trace row: memories, block size, mode, conflicts.
+        // A private turn keeps its row for usage and latency but carries no
+        // text: the question is never written, and the model's conflicts
+        // note (which quotes the material) is dropped with it.
         const tracePromise = finishTrace(fastify.supabase, fastify.log, {
           traceId, hadRetrieval,
-          query: intent.standaloneQuery || sanitizedMessage, namespaceId, userId: identity.userId,
+          query: privateMode ? null : (intent.standaloneQuery || sanitizedMessage), namespaceId, userId: identity.userId,
           conversationId: memory.conversation?.id || null, historyTurns: thread?.turns ?? 0,
-          memoryIds, memoryBlockTokens: recall?.tokens ?? 0, answerMode: mode, conflicts: conflicts.length ? conflicts : null,
+          memoryIds, memoryBlockTokens: recall?.tokens ?? 0, answerMode: mode, conflicts: conflicts.length && !privateMode ? conflicts : null,
           pcl: pclInfo,
           latencyMs: Date.now() - start
         });

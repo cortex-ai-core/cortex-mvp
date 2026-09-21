@@ -23,7 +23,10 @@ Schema: migration 0013. Code: `backend/retention/`.
   delete is refused with 409.
 
 Persistent memory and the knowledge base are not touched by any of this.
-Private-mode chats never reach the server and have no retention.
+Private-mode chats are answered by the server but never stored: no thread,
+no messages, no memory, and the trace row for the turn carries no question
+text (`rag_queries.query` is null from the start). Attached files are parsed
+by the document parser and discarded with the request.
 
 ## Policy
 
@@ -33,8 +36,9 @@ Days since the last message, resolved in this order:
 2. `organization.chat_retention_days` (30 on every row by default)
 3. `CHAT_RETENTION_DAYS` in the environment (30)
 
-`0` keeps forever. Trace text without a thread (memory off, private mode)
-is nulled after `RETENTION_TRACE_DAYS`, or the same days when blank.
+`0` keeps forever. Trace text without a thread (memory off) is nulled after
+`RETENTION_TRACE_DAYS`, or the same days when blank. Private turns have no
+trace text to null.
 
 ## The sweep
 

@@ -34,7 +34,7 @@ export function finishTrace(supabase, log, { traceId, hadRetrieval, query, names
     ? supabase.from("rag_queries").update(p).eq("id", traceId)
     : supabase.from("rag_queries").insert([{
         id: traceId,
-        query: String(query || "").slice(0, 2000),
+        query: query == null ? null : String(query).slice(0, 2000),   // null: a private turn, never written
         namespace_id: namespaceId || null,
         conversation_id: conversationId || null,
         history_turns: Number.isFinite(historyTurns) ? historyTurns : null,
