@@ -31,7 +31,9 @@ import { createRetentionWorker } from "./backend/retention/sweep.js";
 // ✅ FIX APPLIED — bodyLimit added (NO OTHER CHANGES)
 const fastify = Fastify({
   logger: true,
-  bodyLimit: 1048576 // 1MB
+  // Chat bodies carry parsed attachments (MAX_EPHEMERAL_CONTEXT chars, a
+  // few files at most), so the limit is well above the JSON text limit.
+  bodyLimit: Number(process.env.BODY_LIMIT_MB || 8) * 1024 * 1024
 });
 
 // -------------------------------------------------------------
@@ -113,6 +115,7 @@ const routesDir = path.join(process.cwd(), "backend", "routes");
 
 const allowedRoutes = new Set([
   "auth.js",
+  "attachments.js",
   "chat.js",
   "document.js",
   "documentTypes.js",
