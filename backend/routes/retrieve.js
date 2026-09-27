@@ -10,6 +10,8 @@ import { requireAuth } from "../lib/authMiddleware.js";
 import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
 import { hybridRetrieve } from "../retrieval/hybrid.js";
 import { resolveRetrievalMode, logRetrievalTrace } from "../retrieval/trace.js";
+import { kevNamedDocument } from "../decisions/namedDoc.js";
+import { decisionMode, threshold } from "../decisions/systemone.js";
 
 // ============================================================
 // 🔐 PERMISSIONS — shared map in lib/permissions.js
@@ -68,7 +70,7 @@ const TYPO_MAP = {
   canddate: "candidate"
 };
 
-function normalizeRetrievalQuery(text = "") {
+export function normalizeRetrievalQuery(text = "") {
 
   let cleaned = text.toLowerCase().trim();
 
@@ -611,7 +613,7 @@ async function namespaceDocuments(supabase, namespaceId) {
 //    place in the results and lifted, but other documents are not excluded.
 // Comparison questions, and questions that name more than one document, never
 // filter: excluding the other side of a comparison produced wrong answers.
-function findNamedDocuments(docs, query) {
+export function findNamedDocuments(docs, query) {
   const qTokens = nameTokens(query);
   const q = new Set(qTokens);
   if (!q.size) return [];
@@ -798,13 +800,29 @@ export default fp(async function retrieveRoute(fastify, opts) {
         }
         const lead = docScores[0];
         const runnerUp = docScores[1];
-        if (
+        const leadRule =
           lead &&
           lead.similarity >= DOC_LEAD_MIN &&
-          (!runnerUp || lead.similarity - runnerUp.similarity >= DOC_LEAD_MARGIN) &&
-          !namedDocs.some(d => d.id === lead.id)
-        ) {
-          namedDocs.push({ id: lead.id, file_name: lead.file_name, matched: ["profile"], score: lead.similarity, filter: false, semantic: true });
+          (!runnerUp || lead.similarity - runnerUp.similarity >= DOC_LEAD_MARGIN)
+            ? lead : null;
+        // D2 (docs/KEV_PROTOTYPE.md): the decision model picks the document
+        // instead of the similarity lead rule when DECISIONS_NAMED_DOC=on
+        const namedDocMode = decisionMode("NAMED_DOC");
+        const logKevDoc = (kevDoc) => kevDoc && fastify.log.info({
+          decision: "named_doc", mode: namedDocMode, kev: kevDoc.kind, kevDoc: kevDoc.doc?.id || null, p: kevDoc.p, ms: kevDoc.ms,
+          leadRule: leadRule?.id || null, agree: (kevDoc.kind === "doc" ? kevDoc.doc?.id : null) === (leadRule?.id || null)
+        }, namedDocMode === "shadow" ? "decision: shadow" : "decision: named document");
+        let semanticLead = leadRule;
+        if (namedDocMode === "shadow" && docScores.length) {
+          // not awaited: the lead rule decides and the search goes on
+          kevNamedDocument(query, docScores, { log: fastify.log }).then(logKevDoc).catch(() => {});
+        } else if (namedDocMode === "on" && docScores.length) {
+          const kevDoc = await kevNamedDocument(query, docScores, { log: fastify.log });
+          logKevDoc(kevDoc);
+          if (kevDoc) semanticLead = kevDoc.kind === "doc" && (kevDoc.p ?? 0) >= threshold("DECISIONS_NAMED_DOC_MIN_P", 0.6) ? kevDoc.doc : null;
+        }
+        if (semanticLead && !namedDocs.some(d => d.id === semanticLead.id)) {
+          namedDocs.push({ id: semanticLead.id, file_name: semanticLead.file_name, matched: ["profile"], score: semanticLead.similarity, filter: false, semantic: true });
         }
 
         // ======================================================

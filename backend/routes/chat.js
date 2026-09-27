@@ -616,10 +616,14 @@ function resolveFullNameFromContextByToken(
 // ----------------------------------------------------
 // 🔥 v1.8.7 GENERALIZED RETRIEVAL ARBITRATION
 // ----------------------------------------------------
+// A classification from a model (the chat model, or the decision model of
+// docs/KEV_PROTOTYPE.md) rather than the keyword fallback.
+const fromModel = (intent) => intent?.source === "model" || intent?.source === "decision";
+
 // Priority straight from the intent module. Returns null when the intent
 // came from the rules fallback, so the keyword lists below still decide.
 function priorityFromIntent(intent, hasEphemeralContext) {
-  if (!intent || typeof intent !== "object" || intent.source !== "model") return null;
+  if (!intent || typeof intent !== "object" || !fromModel(intent)) return null;
   if (intent.literal) return "NONE";
   switch (intent.scope) {
     case "knowledge_base":
@@ -790,6 +794,10 @@ export default fp(async function chatRoute(fastify) {
       const traceId = randomUUID();
       let hadRetrieval = false;
 
+      // Where the turn's time went (docs/KEV_PROTOTYPE.md §4.2), sent back
+      // with the answer: ms from the start of the request to each stage.
+      const timings = {};
+
       const userId =
         identity.userId || "unknown";
 
@@ -911,6 +919,7 @@ export default fp(async function chatRoute(fastify) {
         // One classification for the whole turn: what is wanted, from what
         // material, and the message rewritten to stand alone. The scope
         // selects the answer mode below; the standalone form drives retrieval.
+        const intentStart = Date.now();
         const intent =
           await classifyIntent(sanitizedMessage, {
             openai,
@@ -918,7 +927,9 @@ export default fp(async function chatRoute(fastify) {
             context: thread?.context || null,
             log: fastify.log
           });
-        if (intent.usage) recordUsage(usage, "intent", intent.usage.model, intent.usage);
+        timings.intentMs = Date.now() - intentStart;
+        timings.intentSource = intent.source;
+        for (const u of intent.usage || []) recordUsage(usage, u.stage || "intent", u.model, u);
 
         // ------------------------------------------------
         // 🧠 "Remember that …" (design doc 5.7, P3.5). The intent module
@@ -1121,6 +1132,7 @@ export default fp(async function chatRoute(fastify) {
             fastify.log.info({ route: "/api/chat", fromChars: sanitizedMessage.length, toChars: retrievalQuery.length }, "chat: follow-up rewritten for retrieval");
           }
 
+          const retrieveStart = Date.now();
           const res =
             await fastify.inject({
 
@@ -1156,6 +1168,7 @@ export default fp(async function chatRoute(fastify) {
             });
           }
           hadRetrieval = true;   // retrieval wrote the trace row under traceId
+          timings.retrieveMs = Date.now() - retrieveStart;
           let parsed = {};
           try { parsed = JSON.parse(res.body || "{}"); } catch { parsed = {}; }
 
@@ -1172,8 +1185,15 @@ export default fp(async function chatRoute(fastify) {
           const named = Array.isArray(parsed.namedDocuments) ? parsed.namedDocuments : [];
           // the intent says "this one document as a whole"; the phrase test only
           // stands in when the rules fallback classified the message
+          // A summary of a document the question names by its file name is
+          // an overview too, whatever scope came back: the decision model
+          // tends to call "summarize the X document" a topic
+          // (docs/KEV_PROTOTYPE.md §6.4). Only a name match counts, not a
+          // similarity pick, so a summary of a subject stays a search.
+          const summaryOfNamedDocument =
+            intent.type === "summary" && named.length === 1 && !named[0].semantic;
           const wantsWholeDocument =
-            intent.source === "model" ? intent.scope === "document" : isOverviewQuestion(sanitizedMessage);
+            (fromModel(intent) ? intent.scope === "document" : isOverviewQuestion(sanitizedMessage)) || summaryOfNamedDocument;
           if (named.length === 1 && wantsWholeDocument) {
             const whole = await buildWholeDocumentContext(fastify, named[0].id);
             if (whole) {
@@ -1322,12 +1342,13 @@ export default fp(async function chatRoute(fastify) {
           })), answerMode);
         }
 
+        timings.synthesisStartMs = Date.now() - start;
         const rawAnswer =
           await withTimeout(
 
             synthesizeFinalAnswer({
 
-              onToken: sse ? (t) => sse.token(t) : null,
+              onToken: sse ? (t) => { timings.firstTokenMs ??= Date.now() - start; sse.token(t); } : null,
 
               intent: intentLabel(intent),
 
@@ -1524,9 +1545,10 @@ export default fp(async function chatRoute(fastify) {
           memoriesUsed: (recall?.memories || []).map(m => ({ id: m.id, kind: m.kind, scope: m.scope, content: m.content, truth_status: m.truth_status || "accepted", counterpart_id: m.counterpart_id || null })),
           traceId,
           usage: usageSummary(usage, { pending: extractionScheduled ? ["extraction"] : [] }),
-          intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source },
+          intent: { type: intent.type, scope: intent.scope, maturity: intent.maturity, source: intent.source, ...(intent.decision ? { decision: intent.decision } : {}), ...(intent.shadow ? { shadow: intent.shadow } : {}) },
           // PCL Phase 0: which style and note shaped this answer.
-          pcl: pclInfo
+          pcl: pclInfo,
+          timings: { ...timings, totalMs: Date.now() - start }
         }));
 
       } catch (err) {

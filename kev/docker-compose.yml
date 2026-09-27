@@ -1,0 +1,27 @@
+# Cortéx decision sidecar (Kev, System One API).
+#
+#   cd kev
+#   docker compose up -d --build     # first start downloads Kev-4B (~9 GB) into the kev-hf volume
+#   curl http://localhost:8009/v1/models
+#
+# KEV_RUN picks the checkpoint: jaredpalmer/kev-4b (default, ~10 GB GPU),
+# jaredpalmer/kev-0.8b (small, faster), or a fine-tuned run directory
+# mounted under /runs. KEV_API_KEY, when set, must match the backend's.
+services:
+  kev:
+    image: cortex-kev
+    build: .
+    container_name: cortex-kev
+    ports:
+      - "8009:8009"
+    environment:
+      KEV_RUN: ${KEV_RUN:-jaredpalmer/kev-4b}
+      KEV_API_KEY: ${KEV_API_KEY:-}
+    volumes:
+      - kev-hf:/hf
+      - ./runs:/runs
+    gpus: all
+    restart: unless-stopped
+
+volumes:
+  kev-hf:

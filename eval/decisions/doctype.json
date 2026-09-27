@@ -1,0 +1,29 @@
+{
+  "notes": "Document type per document (D5, docs/KEV_PROTOTYPE.md), labelled by hand against the organization's types. The bench reads each document's summary and opening from Cortex-Dev2. \"General\" is the organization's catch-all (\"Uncategorized documents\"), so the model's \"other\" counts as General. The types users set in the database are not used as labels: several are placeholders (a statement of work typed \"Program review\").",
+  "organizationId": "2192f623-4feb-498a-9897-c03f5626541b",
+  "namespaces": ["d5068743-69e8-4c1d-af36-151e7afc9fa6", "f3e2f9e4-30f0-4343-9dec-2c347136c766"],
+  "items": [
+    { "file": "LEEWARD COMMUNITY COLLEGE-OWDBv0.3.docx", "type": "Grant proposal" },
+    { "file": "14688.Patient_IFU_v8_clean.pdf", "type": "General" },
+    { "file": "CORTÉXTalentIntelligence-SOP.docx", "type": "General" },
+    { "file": "SOW-AlwynAswin.docx", "type": "General" },
+    { "file": "SolluCIO Executive Internship Program.docx", "type": "General", "alt": ["Program review"] },
+    { "file": "HHS_Investigation_Cooperation_Record.docx", "type": "General" },
+    { "file": "SECTION 1-StatementofNeed.docx", "type": "Grant proposal" },
+    { "file": "Empowering Foster Youth A Workforce Media Project Proposal (1)[37].docx", "type": "Grant proposal" },
+    { "file": "SolluCIO-ArielWilson-ServiceDesk2.docx", "type": "Resume" },
+    { "file": "Hiyab Mengisteab Resume.docx", "type": "Resume" },
+    { "file": "Operations Playbook.docx", "type": "General" },
+    { "file": "Brad Shimomura Resume.docx", "type": "Resume" },
+    { "file": "Next Scheduled Meeting-recap.docx", "type": "General" },
+    { "file": "OWDB-SOP-GrantStandards.docx", "type": "General" },
+    { "file": "Grant84.336S TQP FY2026 ANI Final 2026_0507 2.docx", "type": "Grant proposal", "namespace": "f3e2f9e4-30f0-4343-9dec-2c347136c766" },
+    { "file": "Sollucio_Professional_Services-Addendum_Package-v1.docx", "type": "General" },
+    { "file": "JD-Internship.docx", "type": "General" },
+    { "file": "2025_LEE_3311_Technical-Teacher-Education_1765784712.pdf", "type": "Program review" },
+    { "file": "PHD_DEVICE DESCRIPTION.docx", "type": "General" },
+    { "file": "PerinHealthPatch-ClinicalOnePager.pdf", "type": "General" },
+    { "file": "INCIDENT-DemoMC.docx", "type": "General" },
+    { "file": "NSF 24-584_ Advanced Technological Education (ATE) _ NSF - U.S. National Science Foundation.pdf", "type": "General", "alt": ["Grant proposal"] }
+  ]
+}

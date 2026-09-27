@@ -27,6 +27,10 @@ const DEFAULT_PRICES = {
   "gpt-4o-mini":            { input: 0.15, cached: 0.075, output: 0.6 },
   "text-embedding-3-small": { input: 0.02, output: 0 },
   "text-embedding-3-large": { input: 0.13, output: 0 },
+  // System One decision models (backend/decisions): output is not billed.
+  // Kev is self-hosted, so its per-call price is zero; the GPU is the cost.
+  "jev-latest":             { input: 0.042, output: 0 },
+  "kev-latest":             { input: 0, output: 0 },
 };
 
 let prices = null;

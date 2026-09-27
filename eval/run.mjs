@@ -3,6 +3,7 @@
 //  Cortéx retrieval + answer eval
 //
 //  npm run eval -- --mode legacy|hybrid [--only retrieve] [--ids lee-001,phd-002] [--base http://localhost:8080]
+//                  [--stream] [--label kev-on]    streaming route (time to first token); label goes in the file name
 //  npm run eval -- --memory              multi-turn memory scenarios (eval/memory-golden.json)
 //  npm run eval -- --pcl [--scenarios a,b] [--expect-disabled]   persona scenarios (eval/pcl.mjs); the eval user must be an administrator
 //
@@ -86,6 +87,37 @@ async function post(path, token, body) {
   });
   const j = await res.json().catch(() => ({}));
   return { status: res.status, body: j, ms: Date.now() - t0 };
+}
+
+// --stream: the chat call goes through /api/chat/stream, as the web app's
+// does, so the eval sees time to first token (docs/KEV_PROTOTYPE.md §4.2).
+// Returns the same shape as post() plus ttftMs; body is the done payload.
+const STREAM = args.stream === "true";
+async function postStream(path, token, body) {
+  const t0 = Date.now();
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "X-Retrieval-Mode": MODE },
+    body: JSON.stringify(body),
+  });
+  let ttftMs = null, sourcesMs = null, done = null, error = null, buf = "";
+  const decoder = new TextDecoder();
+  for await (const chunk of res.body) {
+    buf += decoder.decode(chunk, { stream: true });
+    let i;
+    while ((i = buf.indexOf("\n\n")) >= 0) {
+      const frame = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      const event = (frame.match(/^event: (.*)$/m) || [])[1];
+      const data = (frame.match(/^data: (.*)$/m) || [])[1];
+      if (!event) continue;
+      if (event === "token" && ttftMs == null) ttftMs = Date.now() - t0;
+      if (event === "sources" && sourcesMs == null) sourcesMs = Date.now() - t0;
+      if (event === "done") done = JSON.parse(data || "{}");
+      if (event === "error") error = JSON.parse(data || "{}");
+    }
+  }
+  return { status: error ? error.status || 500 : res.status, body: done || error || {}, ms: Date.now() - t0, ttftMs, sourcesMs };
 }
 
 // ------------------------------------------------------------ run
@@ -326,12 +358,12 @@ for (const q of questions) {
 
   // ---- answer
   if (ONLY !== "retrieve") {
-    const c = await post("/api/chat", token, { message: q.question });
+    const c = STREAM ? await postStream("/api/chat/stream", token, { message: q.question }) : await post("/api/chat", token, { message: q.question });
     // with memory on, every question starts a saved thread; the eval cleans up after itself
     if (c.body?.conversationId) await fetch(`${BASE}/api/conversations/${c.body.conversationId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
     const answer = c.body?.finalAnswer || "";
     const cites = Array.isArray(c.body?.citations) ? c.body.citations : [];
-    row.chat = { ms: c.ms, status: c.status, mode: c.body?.mode || null, chars: answer.length, citations: cites.length, intent: c.body?.intent?.type || null, scope: c.body?.intent?.scope || null, usd: typeof c.body?.usage?.usd === "number" ? c.body.usage.usd : null, cached: typeof c.body?.usage?.cached === "number" ? c.body.usage.cached : null, pcl: c.body?.pcl || null, answer: answer.slice(0, 400) };
+    row.chat = { ms: c.ms, ttftMs: c.ttftMs ?? null, sourcesMs: c.sourcesMs ?? null, timings: c.body?.timings || null, status: c.status, mode: c.body?.mode || null, chars: answer.length, citations: cites.length, intent: c.body?.intent?.type || null, scope: c.body?.intent?.scope || null, intentSource: c.body?.intent?.source || null, decision: c.body?.intent?.decision || null, usd: typeof c.body?.usage?.usd === "number" ? c.body.usage.usd : null, cached: typeof c.body?.usage?.cached === "number" ? c.body.usage.cached : null, pcl: c.body?.pcl || null, answer: answer.slice(0, 400) };
     // E5.5: the intent module's type against the question's kind
     row.intentOk = intentMatches(q.kind, row.chat.intent, row.chat.scope);
     if (q.kind === "out_of_scope") {
@@ -377,6 +409,12 @@ const summary = {
   costPerTurn: ONLY !== "retrieve" && rows.some((r) => r.chat?.usd != null) ? rows.filter((r) => r.chat?.usd != null).reduce((a, r) => a + r.chat.usd, 0) / rows.filter((r) => r.chat?.usd != null).length : null,
   retrieveMs: { p50: quantile(rows.map((r) => r.retrieve?.ms).filter(Boolean), 0.5), p95: quantile(rows.map((r) => r.retrieve?.ms).filter(Boolean), 0.95) },
   chatMs: { p50: quantile(rows.map((r) => r.chat?.ms).filter(Boolean), 0.5), p95: quantile(rows.map((r) => r.chat?.ms).filter(Boolean), 0.95) },
+  // --stream, and the server's own timings (docs/KEV_PROTOTYPE.md §4.2)
+  ttftMs: { p50: quantile(rows.map((r) => r.chat?.ttftMs).filter(Number.isFinite), 0.5), p95: quantile(rows.map((r) => r.chat?.ttftMs).filter(Number.isFinite), 0.95) },
+  intentMs: { p50: quantile(rows.map((r) => r.chat?.timings?.intentMs).filter(Number.isFinite), 0.5), p95: quantile(rows.map((r) => r.chat?.timings?.intentMs).filter(Number.isFinite), 0.95) },
+  synthesisStartMs: { p50: quantile(rows.map((r) => r.chat?.timings?.synthesisStartMs).filter(Number.isFinite), 0.5), p95: quantile(rows.map((r) => r.chat?.timings?.synthesisStartMs).filter(Number.isFinite), 0.95) },
+  intentSources: rows.reduce((a, r) => { const s = r.chat?.intentSource; if (s) a[s] = (a[s] || 0) + 1; return a; }, {}),
+  stream: STREAM,
 };
 
 console.log("\n=== summary ===");
@@ -393,9 +431,14 @@ if (ONLY !== "retrieve") {
 }
 console.log(`retrieve p50/p95     ${summary.retrieveMs.p50 ?? "–"} / ${summary.retrieveMs.p95 ?? "–"} ms`);
 if (ONLY !== "retrieve") console.log(`chat p50/p95         ${summary.chatMs.p50 ?? "–"} / ${summary.chatMs.p95 ?? "–"} ms`);
+if (ONLY !== "retrieve" && STREAM) console.log(`first token p50/p95  ${summary.ttftMs.p50 ?? "–"} / ${summary.ttftMs.p95 ?? "–"} ms`);
+if (ONLY !== "retrieve" && summary.intentMs.p50 != null) {
+  console.log(`intent p50/p95       ${summary.intentMs.p50} / ${summary.intentMs.p95} ms   (sources: ${JSON.stringify(summary.intentSources)})`);
+  console.log(`to synthesis p50/p95 ${summary.synthesisStartMs.p50} / ${summary.synthesisStartMs.p95} ms   (request start to the answer model call)`);
+}
 
 mkdirSync(join(here, "runs"), { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-const out = join(here, "runs", `${stamp}-${MODE}${ONLY !== "all" ? `-${ONLY}` : ""}.json`);
+const out = join(here, "runs", `${stamp}-${MODE}${ONLY !== "all" ? `-${ONLY}` : ""}${args.label ? `-${args.label}` : ""}.json`);
 writeFileSync(out, JSON.stringify({ summary, rows }, null, 2));
 console.log(`\nsaved ${out}`);

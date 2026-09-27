@@ -13,6 +13,8 @@ import { extname } from "node:path";
 import { parseDocument, renderPdf, RENDERABLE_EXT, ParserError } from "./parserClient.js";
 import { downloadObject, uploadObject, parsedPathFor, renditionPathFor } from "./storage.js";
 import { summarizeDocument, documentProfileText } from "./summarize.js";
+import { documentTypesFor, docTypeState, kevDocType } from "../decisions/docType.js";
+import { decisionMode, threshold } from "../decisions/systemone.js";
 
 const EMBED_MODEL = process.env.EMBED_MODEL || "text-embedding-3-small";
 const EMBED_BATCH = Number(process.env.EMBED_BATCH || 64);
@@ -235,6 +237,28 @@ ${c.embed_text || c.text}`));
       log.warn({ id, err: err?.message }, "ingest: document profile embedding failed");
     }
 
+    // ---- document type suggestion (D5, non-fatal) ----------------
+    // docs/KEV_PROTOTYPE.md: shadow stores the suggestion; on also
+    // applies it to a document the user left untyped, when it is sure.
+    let typeSuggestion = null;
+    let appliedType = null;
+    const docTypeMode = decisionMode("DOCTYPE");
+    if (docTypeMode !== "off") {
+      try {
+        const types = await documentTypesFor(supabase, doc);
+        const s = types.length
+          ? await kevDocType(docTypeState({ fileName: doc.file_name, summary: docSummary, markdown: parsed.markdown || "" }), types, { log })
+          : null;
+        if (s) {
+          typeSuggestion = { name: s.name, probability: s.p, confidence: s.confidence, model: s.model, ms: s.ms, at: new Date().toISOString() };
+          if (docTypeMode === "on" && !doc.document_type && s.name && (s.p ?? 0) >= threshold("DECISIONS_DOCTYPE_AUTO_P", 0.85)) appliedType = s.name;
+          event(id, "type", `Suggested type: ${s.name || "other"} (${Math.round((s.p ?? 0) * 100)}%)${appliedType ? ", applied" : ""}`);
+        }
+      } catch (err) {
+        log.warn({ id, err: err?.message }, "ingest: type suggestion failed (non-fatal)");
+      }
+    }
+
     // ---- ready ---------------------------------------------------
     const summary = `${pageCount ? `${pageCount} page${pageCount === 1 ? "" : "s"} · ` : ""}${chunks.length} section${chunks.length === 1 ? "" : "s"}`;
     await setStatus(id, {
@@ -243,6 +267,7 @@ ${c.embed_text || c.text}`));
       stage_detail: summary,
       error: null,
       ...(profile || {}),
+      ...(appliedType ? { document_type: appliedType } : {}),
       metadata: {
         ...(doc.metadata || {}),
         ingest: {
@@ -255,6 +280,7 @@ ${c.embed_text || c.text}`));
           tables,
           completed_at: new Date().toISOString(),
           summary: docSummary,
+          ...(typeSuggestion ? { type_suggestion: typeSuggestion } : {}),
         },
       },
     });

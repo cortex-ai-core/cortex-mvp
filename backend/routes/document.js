@@ -27,7 +27,7 @@ const MIME_BY_EXT = {
 };
 
 const LIST_FIELDS =
-  "id, file_name, display_name, document_type, description, namespace_id, status, stage_progress, stage_detail, error, page_count, parser, byte_size, mime_type, storage_path, rendition_path, created_at, updated_at";
+  "id, file_name, display_name, document_type, description, namespace_id, status, stage_progress, stage_detail, error, page_count, parser, byte_size, mime_type, storage_path, rendition_path, created_at, updated_at, type_suggestion:metadata->ingest->type_suggestion";
 
 function publicDoc(doc, chunkCount) {
   return {
@@ -49,6 +49,8 @@ function publicDoc(doc, chunkCount) {
     created_at: doc.created_at,
     updated_at: doc.updated_at,
     chunk_count: chunkCount ?? undefined,
+    // D5 (docs/KEV_PROTOTYPE.md): the decision model's guess at the type, when it ran
+    type_suggestion: doc.type_suggestion || null,
   };
 }
 

@@ -1,0 +1,37 @@
+{
+  "notes": "Which document is the question about (D2, docs/KEV_PROTOTYPE.md). Core workspace. doc = a file-name substring (case-insensitive) of the one document the question is about; \"none\" = a topic question, not about one document; \"several\" = spans or compares several. Many are worded so the file name is not repeated, which is where the regex matcher has nothing to go on.",
+  "namespaceId": "d5068743-69e8-4c1d-af36-151e7afc9fa6",
+  "items": [
+    { "id": "nd01", "q": "Summarize the Operations Playbook", "doc": "Operations Playbook" },
+    { "id": "nd02", "q": "What does the playbook say about escalation?", "doc": "Operations Playbook" },
+    { "id": "nd03", "q": "Give me an overview of the program review for Leeward's teacher education", "doc": "2025_LEE_3311" },
+    { "id": "nd04", "q": "What years does the comprehensive review cover?", "doc": "2025_LEE_3311" },
+    { "id": "nd05", "q": "What does the patient instructions for use say about showering with the patch?", "doc": "Patient_IFU" },
+    { "id": "nd06", "q": "Summarize the device description for the Perin patch", "doc": "PHD_DEVICE" },
+    { "id": "nd07", "q": "What does the clinical one-pager claim about reimbursement?", "doc": "ClinicalOnePager" },
+    { "id": "nd08", "q": "How do we cooperate with OCR during a HIPAA investigation?", "doc": "HHS_Investigation" },
+    { "id": "nd09", "q": "What were the symptoms of the Epic outage in the incident write-up?", "doc": "INCIDENT-DemoMC" },
+    { "id": "nd10", "q": "What is the rate in Alwyn's statement of work?", "doc": "SOW-AlwynAswin" },
+    { "id": "nd11", "q": "Summarize the job description for the executive assistant intern", "doc": "JD-Internship" },
+    { "id": "nd12", "q": "What are Olga's week one assignments?", "doc": "SolluCIO Executive Internship" },
+    { "id": "nd13", "q": "What is the service desk candidate's most recent job?", "doc": "ArielWilson" },
+    { "id": "nd14", "q": "What does Brad's resume say about team leadership?", "doc": "Brad Shimomura" },
+    { "id": "nd15", "q": "What is Hiyab's background?", "doc": "Hiyab" },
+    { "id": "nd16", "q": "What is the budget in the foster youth media project?", "doc": "Empowering Foster Youth" },
+    { "id": "nd17", "q": "What is the due date in the NSF ATE solicitation?", "doc": "NSF 24-584" },
+    { "id": "nd18", "q": "Summarize our draft ATE proposal for Leeward's AI technician initiative", "doc": "OWDBv0.3" },
+    { "id": "nd19", "q": "What is the candidate submission template for talent intelligence?", "doc": "TalentIntelligence" },
+    { "id": "nd20", "q": "What's in the addendum package with Community Health Plan?", "doc": "none", "note": "the addendum package is in the Hawaii workspace, not Core: the right answer here is none" },
+
+    { "id": "nd21", "q": "How many credits is the AST degree?", "doc": "2025_LEE_3311", "alt": ["none"] },
+    { "id": "nd22", "q": "What experience do our candidates have with Epic?", "doc": "several", "alt": ["none"] },
+    { "id": "nd23", "q": "Compare Brad's resume against the internship job description", "doc": "several" },
+    { "id": "nd24", "q": "How does the one-pager differ from the device description?", "doc": "several" },
+    { "id": "nd25", "q": "What are the common themes across our grant materials?", "doc": "several", "alt": ["none"] },
+    { "id": "nd26", "q": "What is HIPAA?", "doc": "none" },
+    { "id": "nd27", "q": "Draft an email to a client about our services", "doc": "none" },
+    { "id": "nd28", "q": "What are best practices for remote patient monitoring?", "doc": "none", "alt": ["ClinicalOnePager"] },
+    { "id": "nd29", "q": "hello", "doc": "none" },
+    { "id": "nd30", "q": "Who in our documents has worked in healthcare IT?", "doc": "several", "alt": ["none"] }
+  ]
+}

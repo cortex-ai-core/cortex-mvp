@@ -28,6 +28,9 @@ export const INTENT_TYPES = [
 export const INTENT_SCOPES = ["none", "attached", "document", "documents", "topic", "knowledge_base"];
 export const INTENT_MATURITY = ["exploratory", "refinement", "deployable", "general", "locked"];
 
+import { kevIntent } from "../decisions/intent.js";
+import { decisionMode, threshold } from "../decisions/systemone.js";
+
 const INTENT_MODEL = process.env.INTENT_MODEL || "gpt-5-mini";
 const INTENT_MODE = (process.env.INTENT_MODE || "model").toLowerCase();   // model | rules
 const INTENT_TIMEOUT_MS = Number(process.env.INTENT_TIMEOUT_MS || 4000);
@@ -123,15 +126,43 @@ function remember(key, intent) {
  * @param {{ openai?: object, hasAttachment?: boolean, log?: object, context?: {lastUser?: string, lastAssistant?: string, lastAssistantDocs?: string[]} }} opts
  *   context: the previous exchange in this thread, so references in a follow-up can be resolved
  */
-export async function classifyIntent(message = "", { openai = null, hasAttachment = false, log = null, context = null } = {}) {
-  const key = keyFor(message, hasAttachment, context);
+export async function classifyIntent(message = "", { openai = null, hasAttachment = false, log = null, context = null, decisions = decisionMode("INTENT") } = {}) {
+  const key = decisions + "|" + keyFor(message, hasAttachment, context);
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return { ...hit.intent, usage: null, cached: true };
 
   const rules = decodeIntentByRules(message, { hasAttachment });
-  if (INTENT_MODE === "rules" || !openai || !String(message || "").trim()) return remember(key, rules);
+  if (INTENT_MODE === "rules" || !String(message || "").trim()) return remember(key, rules);
   if (rules.literal) return remember(key, rules);       // cheap and certain; no model call
 
+  // D1 (docs/KEV_PROTOTYPE.md): the labels from the decision model, the
+  // chat model only for what Kev cannot write or is unsure of
+  if (decisions === "on") {
+    const decided = await classifyWithDecisionModel(message, { openai, hasAttachment, context, log });
+    if (decided.intent) return remember(key, decided.intent);
+    if (!openai) return rules;
+    const llm = await classifyWithChatModel(message, { openai, hasAttachment, context, log, rules });
+    return withDecision(llm, decided);
+  }
+  if (!openai) return remember(key, rules);
+  if (decisions === "shadow") {
+    // both at once; the chat model's answer is the one used
+    const [llm, shadow] = await Promise.all([
+      classifyWithChatModel(message, { openai, hasAttachment, context, log, rules }),
+      kevIntent(message, { hasAttachment, context, log }),
+    ]);
+    logShadow(log, llm, shadow);
+    return llm.source === "model" ? remember(key, withShadow(llm, shadow)) : llm;
+  }
+  const llm = await classifyWithChatModel(message, { openai, hasAttachment, context, log, rules });
+  return llm.source === "model" ? remember(key, llm) : llm;
+}
+
+/**
+ * The intent from the chat model with the strict schema (the path before
+ * D1). Never throws; a failure answers with the rules, marked uncached.
+ */
+export async function classifyWithChatModel(message, { openai, hasAttachment, context, log, rules }) {
   const t0 = Date.now();
   try {
     const ctxLines = [];
@@ -157,15 +188,109 @@ export async function classifyIntent(message = "", { openai = null, hasAttachmen
     const parsed = JSON.parse(raw);
     const intent = normalize(parsed, "model", Date.now() - t0, message);
     // what the call cost, for the turn's usage tally; absent on a cache hit or the rules path
-    intent.usage = res.usage ? { model: INTENT_MODEL, prompt_tokens: res.usage.prompt_tokens, completion_tokens: res.usage.completion_tokens } : null;
+    intent.usage = res.usage ? [{ stage: "intent", model: INTENT_MODEL, prompt_tokens: res.usage.prompt_tokens, completion_tokens: res.usage.completion_tokens, prompt_tokens_details: res.usage.prompt_tokens_details }] : null;
     log?.info?.({ intent: intent.type, scope: intent.scope, maturity: intent.maturity, evidence: intent.needsEvidence, rewritten: intent.standaloneQuery !== String(message).trim(), ms: intent.ms, model: INTENT_MODEL }, "intent: classified");
-    return remember(key, intent);
+    return intent;
   } catch (err) {
-    // not cached: a timeout under load should not pin the keyword guess on
-    // this message for the next ten minutes
+    // not cached (the caller caches only source "model"): a timeout under
+    // load should not pin the keyword guess on this message for ten minutes
     log?.warn?.({ err: err?.message, ms: Date.now() - t0 }, "intent: model classification failed; using rules");
     return rules;
   }
+}
+
+// ------------------------------------------------------------ D1
+const INTENT_MIN_CONF = () => threshold("DECISIONS_INTENT_MIN_CONF", 0.4);   // Jev; Kev wants 0.2 (docs/KEV_PROTOTYPE.md §6.4)
+const FOLLOW_UP_MIN_P = () => threshold("DECISIONS_INTENT_FOLLOW_UP_P", 0.5);
+
+/**
+ * The intent from the decision model. `intent` is null when the caller
+ * should use the chat model instead: the call failed, type or scope is
+ * below the confidence threshold, or the turn is a "remember" (the note
+ * to keep is text Kev cannot write). `kev` is the raw answer either way.
+ */
+export async function classifyWithDecisionModel(message, { openai = null, hasAttachment = false, context = null, log = null, minConfidence = INTENT_MIN_CONF() } = {}) {
+  const t0 = Date.now();
+  const kev = await kevIntent(message, { hasAttachment, context, log });
+  if (!kev) return { intent: null, kev: null, escalated: "unavailable" };
+  const low = Math.min(kev.confidence.type ?? 0, kev.confidence.scope ?? 0) < minConfidence;
+  const escalated = kev.fields.type === "remember" ? "remember" : low ? "low confidence" : null;
+  if (escalated) {
+    log?.info?.({ intent: kev.fields.type, scope: kev.fields.scope, conf: kev.confidence, escalated, ms: kev.ms }, "intent: decision model escalated");
+    return { intent: null, kev, escalated };
+  }
+  const usage = [{ stage: "intent_kev", model: kev.model, input_tokens: kev.inputTokens, output_tokens: 0 }];
+  // Only a follow-up needs the rewrite; the rest stands alone as typed.
+  let standalone = null;
+  let rewriteMs = null;
+  if (openai && (kev.followUp ?? 0) >= FOLLOW_UP_MIN_P()) {
+    const r0 = Date.now();
+    const rw = await rewriteFollowUp(openai, message, context, { log });
+    rewriteMs = Date.now() - r0;
+    if (rw) { standalone = rw.text; usage.push(rw.usage); }
+  }
+  const intent = normalize({ ...kev.fields, standalone_query: standalone || String(message) }, "decision", Date.now() - t0, message);
+  intent.usage = usage;
+  intent.decision = { model: kev.model, ms: kev.ms, modelMs: kev.modelMs, confidence: kev.confidence, followUp: kev.followUp, rewriteMs };
+  log?.info?.({ intent: intent.type, scope: intent.scope, maturity: intent.maturity, evidence: intent.needsEvidence, rewritten: Boolean(standalone), conf: kev.confidence, ms: intent.ms, kevMs: kev.ms, rewriteMs, model: kev.model }, "intent: classified by decision model");
+  return { intent, kev, escalated: null };
+}
+
+const REWRITE_SYSTEM = `Rewrite the user's MESSAGE so it can be understood with no conversation history: resolve pronouns and references ("it", "its", "that program", "the second one", "why?") using the PREVIOUS TURN and the DOCUMENTS CITED. Name the document when the reference is to one. Keep the user's wording otherwise. Return only the rewritten message.`;
+
+/** The standalone form of a follow-up, from the chat model; null on failure. */
+export async function rewriteFollowUp(openai, message, context, { log = null } = {}) {
+  const lines = [];
+  if (context?.lastUser) lines.push(`PREVIOUS TURN (user): ${String(context.lastUser).slice(0, 600)}`);
+  if (context?.lastAssistant) lines.push(`PREVIOUS ANSWER (assistant, start): ${String(context.lastAssistant).slice(0, 400)}`);
+  if (context?.lastAssistantDocs?.length) lines.push(`DOCUMENTS CITED in the previous answer: ${context.lastAssistantDocs.join(" | ")}`);
+  try {
+    const res = await withTimeout(
+      openai.chat.completions.create({
+        model: INTENT_MODEL,
+        messages: [{ role: "system", content: REWRITE_SYSTEM }, { role: "user", content: `${lines.join("\n")}\n\nMESSAGE:\n${String(message).slice(0, 2000)}` }],
+        ...(/^gpt-5/.test(INTENT_MODEL) ? { reasoning_effort: "minimal", verbosity: "low" } : { temperature: 0 }),
+      }),
+      INTENT_TIMEOUT_MS
+    );
+    const text = String(res.choices?.[0]?.message?.content || "").trim();
+    if (!text) return null;
+    return { text, usage: { stage: "intent_rewrite", model: INTENT_MODEL, prompt_tokens: res.usage?.prompt_tokens, completion_tokens: res.usage?.completion_tokens, prompt_tokens_details: res.usage?.prompt_tokens_details } };
+  } catch (err) {
+    log?.warn?.({ err: err?.message }, "intent: follow-up rewrite failed; the message is used as typed");
+    return null;
+  }
+}
+
+/** The chat model's intent after an escalation, carrying the decision model's call and why it escalated. */
+function withDecision(intent, decided) {
+  if (!decided?.kev) return intent;
+  const kevUsage = { stage: "intent_kev", model: decided.kev.model, input_tokens: decided.kev.inputTokens, output_tokens: 0 };
+  return {
+    ...intent,
+    usage: [kevUsage, ...(intent.usage || [])],
+    decision: { model: decided.kev.model, ms: decided.kev.ms, confidence: decided.kev.confidence, escalated: decided.escalated, kevType: decided.kev.fields.type, kevScope: decided.kev.fields.scope },
+  };
+}
+
+/** The chat model's intent with what the decision model would have said (shadow mode). */
+function withShadow(intent, kev) {
+  if (!kev) return intent;
+  return {
+    ...intent,
+    usage: [...(intent.usage || []), { stage: "intent_kev", model: kev.model, input_tokens: kev.inputTokens, output_tokens: 0 }],
+    shadow: { type: kev.fields.type, scope: kev.fields.scope, needsEvidence: kev.fields.needs_evidence, confidence: kev.confidence, followUp: kev.followUp, ms: kev.ms },
+  };
+}
+
+function logShadow(log, llm, kev) {
+  if (!kev || llm?.source !== "model") return;
+  log?.info?.({
+    decision: "intent",
+    agree: { type: llm.type === kev.fields.type, scope: llm.scope === kev.fields.scope, evidence: llm.needsEvidence === kev.fields.needs_evidence },
+    llm: { type: llm.type, scope: llm.scope, ms: llm.ms },
+    kev: { type: kev.fields.type, scope: kev.fields.scope, conf: kev.confidence, followUp: kev.followUp, ms: kev.ms },
+  }, "decision: shadow");
 }
 
 function normalize(p, source, ms, message = "") {
