@@ -355,3 +355,51 @@ This is the configuration we decided on, 2026-09-27.
 2. Show the document-type suggestion in the upload UI (`cortex-ui-mvp`; the API already returns `type_suggestion`).
 3. Decide on TypeSafe as a data processor before production.
 4. Keep the follow-up rewrite gate under watch. Jev's follow-up detection was 97% in the benchmark, but the golden eval has no follow-ups.
+
+## 7. Prompt caching for the answer model (2026-09-27)
+
+This is a separate change on the same branch. It came out of the pricing question: the answer model (`gpt-5.1`) is most of the cost of a turn, and cached input costs a tenth as much ($0.125 per million tokens instead of $1.25).
+
+**Before.** Caching was already on: OpenAI caches automatically, and the prompt puts its fixed parts first.
+
+- The traces from 2026-09-11 onward show that questions asked for the first time got a cache hit 72% of the time.
+- 24% of their input tokens were served from cache, which cut the answer cost of those turns by 16%.
+
+**Two gaps:**
+
+- The recalled-memory block and the low-evidence rules sat in the system prompt, in front of the thread's history. Recalled memories change every turn, so the cached prefix ended there, and every earlier turn of a thread was paid at full price again.
+- The answer call set no `prompt_cache_key` and no retention. OpenAI keeps a cached prefix for only minutes of quiet.
+
+**Changes** (`backend/reasoning/synthesis.js`):
+
+- The memory block and the low-evidence rules now go in their own system message, after the history and just before the user message. The system prompt is otherwise byte-identical (`scripts/snapshot-prompt.mjs` before and after).
+- `prompt_cache_key` is set to a hash of the system prompt, so requests that share a prefix share a cache.
+- `prompt_cache_retention` comes from `SYNTHESIS_CACHE_RETENTION`, default `24h`. An empty value leaves OpenAI's default.
+
+**Measured with `scripts/bench-cache.mjs`:**
+
+**Conversations** (`--threads`): four scripted five-turn threads, run twice in each order against the previous commit and this one. Turn 2 is left out, because repeating the same opening turns cached it on both sides.
+
+| Turns 3–5 | Before | After |
+|---|---|---|
+| mean cached tokens, turn 3 / 4 / 5 | 1,632 / 1,952 / 1,504 | 1,952 / 2,016 / 2,624 |
+| share of input cached | 19.8% | 25.6% |
+| input cost per answer call | $0.00879 | $0.00827 (−6%) |
+
+Before, the cached part stopped at the fixed prompt (about 1,800 tokens) on every turn. After, it grows with the thread. The saving grows with conversation length, and a single-question turn is unaffected.
+
+**Quiet periods** (`--idle`): the real answer prompt, with 3 prefixes per variant, each warmed and then asked a new question after the gap.
+
+| Gap | Default retention | `24h` |
+|---|---|---|
+| 15 min | 1 of 3 still cached | 3 of 3 |
+| 30 min | 0 of 3 | 0 of 3 |
+
+OpenAI validates the parameter: it rejects invalid values and lists `in_memory` and `24h`. It helped at 15 minutes, but in this test a prefix did not survive 30 minutes with either setting. Treat the 24-hour figure as unproven here; the setting is kept because it did no harm.
+
+**Regression checks:**
+
+- The golden eval is unchanged: recall 93%, must-include 96%, citations 95%, abstain 100%.
+- Memory scenarios are 9 of 11 on both commits, with the same two known failures. One run of the new code also failed `follow-003` once; it passed four reruns across both servers.
+
+**What it is worth:** a few percent off answer-model input cost. It is larger for long threads and for teams with steady traffic, and nothing for one-off questions. Output tokens (about a third of answer spend) are not affected by caching at all.

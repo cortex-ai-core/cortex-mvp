@@ -3,6 +3,7 @@
 //  v1.8.7 — EXECUTIVE CADENCE HARDENING
 // ============================================================
 
+import { createHash } from "node:crypto";
 import { recordUsage } from "../lib/usage.js";
 // Design doc E1.7: the model reports sources that disagree on one trailing
 // line, bracketed so it can be lifted out for the trace and never shown.
@@ -27,6 +28,7 @@ export function extractConflicts(text = "") {
 }
 
 const SYNTHESIS_MODEL = process.env.SYNTHESIS_MODEL || "gpt-5.1";
+const CACHE_RETENTION = process.env.SYNTHESIS_CACHE_RETENTION ?? "24h";
 
 // ============================================================
 //  PROMPT TEXT (E1.2: core and default PCL, split)
@@ -716,9 +718,15 @@ IDENTITY CONTEXT:
 - Namespace: ${namespace}
 
 ${entityRules}
-${memorySection}${personalizationSection}${lengthSection}
-${lowEvidenceRules}
+${personalizationSection}${lengthSection}
 `.trim();
+
+  // What changes from turn to turn (the recalled memories, the low-
+  // evidence rules) goes in its own system message after the thread's
+  // history, not in the system prompt: in front of the history it would
+  // break the cached prefix on every turn, and each earlier turn would be
+  // paid at full price again.
+  const turnNotes = `${memorySection}${lowEvidenceRules ? `\n${lowEvidenceRules}` : ""}`.trim();
 
   // ============================================================
   // 🔥 USER PROMPT
@@ -768,8 +776,17 @@ ${CORE.finalCheck}
     { role: "system", content: systemPrompt },
     ...(historyNotes.length ? [{ role: "system", content: historyNotes.join("\n\n") }] : []),
     ...history,
+    ...(turnNotes ? [{ role: "system", content: turnNotes }] : []),
     { role: "user", content: userPrompt },
   ];
+
+  // OpenAI's prompt cache: the key keeps requests that share this system
+  // prompt on the same cache; the retention keeps the prefix for a day
+  // rather than minutes of quiet (SYNTHESIS_CACHE_RETENTION, "" = default).
+  const cacheOptions = {
+    prompt_cache_key: `cortex-answer-${createHash("sha256").update(systemPrompt).digest("hex").slice(0, 16)}`,
+    ...(CACHE_RETENTION ? { prompt_cache_retention: CACHE_RETENTION } : {}),
+  };
 
   // Streaming: when the caller passes onToken, deltas are forwarded as they
   // arrive and the full text is still returned for formatting + citations.
@@ -778,6 +795,7 @@ ${CORE.finalCheck}
       model: SYNTHESIS_MODEL,
       messages,
       temperature: 0.08,
+      ...cacheOptions,
       stream: true,
       stream_options: { include_usage: true },
     });
@@ -806,6 +824,7 @@ ${CORE.finalCheck}
       model: SYNTHESIS_MODEL,
       messages,
       temperature: 0.08,
+      ...cacheOptions,
     });
   recordUsage(usage, "synthesis", SYNTHESIS_MODEL, completion.usage);
 

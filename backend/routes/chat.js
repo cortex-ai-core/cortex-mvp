@@ -1360,8 +1360,8 @@ export default fp(async function chatRoute(fastify) {
               priorMessages: thread?.messages || [],
               conversationSummary: thread?.summary?.text || null,
 
-              // 🧠 H4 (memory part): the MEMORY block, under its own heading
-              // in the system prompt, away from the document context.
+              // 🧠 H4 (memory part): the MEMORY block, in its own system message
+              // after the thread history, away from the document context.
               memoryBlock: recall?.block || null,
 
               contextWindow:
