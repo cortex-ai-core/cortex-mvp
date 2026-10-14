@@ -204,18 +204,19 @@ export default async function userManagement(fastify) {
     let appUserId = null;
     try {
       const { data: authUser, error: authError } =
-        await fastify.supabase.auth.admin.createUser({ email, password, email_confirm: true });
+        await fastify.authentication.admin.createUser({ email, password, email_confirm: true });
       if (authError || !authUser.user) {
         return reply.code(400).send({ error: authError?.message || "Unable to create user." });
       }
       authUserId = authUser.user.id;
       const { data: user, error: userError } = await fastify.supabase.from("user")
         .insert({
-          auth_user_id: authUserId, email, role_id: role.id,
+          auth_user_id: fastify.authentication.legacyAuthId(authUserId), email, role_id: role.id,
           organization_id: organization.id, active: true,
         }).select("id,auth_user_id,email,active,created_at").single();
       if (userError) throw userError;
       appUserId = user.id;
+      await fastify.authentication.linkUser(authUserId, appUserId);
       const { error: membershipError } = await fastify.supabase.from("namespace_users")
         .insert(namespaceResult.namespaces.map((item) => ({
           user_id: user.id, namespace_id: item.id,
@@ -226,7 +227,10 @@ export default async function userManagement(fastify) {
       });
     } catch (err) {
       if (appUserId) await fastify.supabase.from("user").delete().eq("id", appUserId);
-      if (authUserId) await fastify.supabase.auth.admin.deleteUser(authUserId);
+      if (authUserId) {
+        const { error: cleanupError } = await fastify.authentication.admin.deleteUser(authUserId);
+        if (cleanupError) req.log.error("User provisioning rollback requires manual identity cleanup.");
+      }
       req.log.error({ err }, "User creation failed");
       return reply.code(500).send({ error: "Unable to create user." });
     }

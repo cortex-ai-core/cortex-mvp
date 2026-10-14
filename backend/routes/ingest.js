@@ -5,18 +5,12 @@
 import fp from "fastify-plugin";
 import { requireAuth } from "../lib/authMiddleware.js";
 import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
-import { createClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import { v4 as uuidv4 } from "uuid";
 
 // -------------------------------------------------------------
 // ENV + CLIENTS
 // -------------------------------------------------------------
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
-
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
@@ -95,6 +89,7 @@ function chunkText(text, chunkSize = 500, overlap = 50) {
 // ROUTE
 // -------------------------------------------------------------
 async function ingestRoute(fastify, opts) {
+  const supabase = fastify.supabase;
 
   fastify.post(
     "/ingest",
@@ -116,8 +111,15 @@ async function ingestRoute(fastify, opts) {
           return reply.code(403).send({ error: "Forbidden: No permission to upload" });
         }
 
-        if (!text) {
+        if (typeof text !== "string" || !text.trim()) {
           return reply.code(400).send({ error: "Missing required field: text." });
+        }
+
+        if (/\.doc$/i.test(resolvedFileName)) {
+          return reply.code(415).send({ error: "Save this older Word document as .docx and extract its text before uploading." });
+        }
+        if (text.includes("\u0000")) {
+          return reply.code(415).send({ error: "Binary document data was sent to the text ingest endpoint. Upload extracted document text instead." });
         }
 
         // -----------------------------------------------------

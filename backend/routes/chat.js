@@ -268,11 +268,12 @@ function isOverviewQuestion(text = "") {
 }
 
 // Build context for one named document: stored summary + full text within budget.
-async function buildWholeDocumentContext(fastify, documentId) {
+async function buildWholeDocumentContext(fastify, documentId, namespaceId) {
   const { data: doc } = await fastify.supabase
     .from("documents")
     .select("id, file_name, display_name, namespace_id, storage_path, page_count, status, metadata")
     .eq("id", documentId)
+    .eq("namespace_id", namespaceId)
     .maybeSingle();
   if (!doc || doc.status !== "ready") return null;
 
@@ -284,6 +285,7 @@ async function buildWholeDocumentContext(fastify, documentId) {
     .from("document_chunks")
     .select("id, chunk_index, chunk_text, page_start, page_end, section_label")
     .eq("document_id", doc.id)
+    .eq("namespace_id", namespaceId)
     .order("chunk_index", { ascending: true })
     .limit(WHOLE_DOC_MAX_CHUNKS);
 
@@ -360,6 +362,7 @@ async function buildKnowledgeBaseContext(fastify, namespaceId) {
       .from("document_chunks")
       .select("document_id, chunk_index, chunk_text")
       .in("document_id", missing)
+      .eq("namespace_id", namespaceId)
       .lte("chunk_index", 2)
       .order("chunk_index", { ascending: true });
     for (const c of chunks || []) {
@@ -1170,7 +1173,7 @@ export default fp(async function chatRoute(fastify) {
           const wantsWholeDocument =
             intent.source === "model" ? intent.scope === "document" : isOverviewQuestion(sanitizedMessage);
           if (named.length === 1 && wantsWholeDocument) {
-            const whole = await buildWholeDocumentContext(fastify, named[0].id);
+            const whole = await buildWholeDocumentContext(fastify, named[0].id, namespaceId);
             if (whole) {
               wholeDocument = whole;
               fastify.log.info({

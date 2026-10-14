@@ -8,6 +8,8 @@ import "./backend/lib/env.js";
 // 🔥 NEW — ENV DEBUG (NO DRIFT)
 console.log("ENV CHECK:", {
   JWT_SECRET: process.env.JWT_SECRET ? "SET" : "MISSING",
+  BACKEND_PROVIDER: process.env.BACKEND_PROVIDER || "supabase",
+  AWS_CORTEX_JWT_SECRET: process.env.AWS_CORTEX_JWT_SECRET ? "SET" : "MISSING",
   SUPABASE_URL: process.env.SUPABASE_URL,
   HAS_SUPABASE: !!process.env.SUPABASE_URL,
   OPENAI_KEY: process.env.OPENAI_API_KEY ? "SET" : "MISSING"
@@ -15,7 +17,8 @@ console.log("ENV CHECK:", {
 
 import Fastify from "fastify";
 import cors from "@fastify/cors";
-import { createClient } from "@supabase/supabase-js";
+import { createDatabaseClient } from "./backend/lib/services/database.js";
+import { createAuthenticationService } from "./backend/lib/services/authentication.js";
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
@@ -58,12 +61,10 @@ await fastify.register(authPlugin);
 // -------------------------------------------------------------
 // SUPABASE
 // -------------------------------------------------------------
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY
-);
+const supabase = createDatabaseClient();
 
 fastify.decorate("supabase", supabase);
+fastify.decorate("authentication", createAuthenticationService(supabase));
 
 // -------------------------------------------------------------
 // OPENAI

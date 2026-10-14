@@ -5,7 +5,6 @@
 
 import fp from "fastify-plugin";
 import OpenAI from "openai";
-import { createClient } from "@supabase/supabase-js";
 
 export default fp(async function searchRoute(fastify) {
 
@@ -13,11 +12,7 @@ export default fp(async function searchRoute(fastify) {
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_KEY,
-    { auth: { persistSession: false } }
-  );
+  const supabase = fastify.supabase;
 
   fastify.post(
     "/api/search",

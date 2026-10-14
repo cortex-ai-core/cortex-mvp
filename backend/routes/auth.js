@@ -1,25 +1,14 @@
 import jwt from "jsonwebtoken";
-import { createClient } from "@supabase/supabase-js";
-
-const requiredEnv = (name) => {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error(`${name} is not defined.`);
-  return value;
-};
+import { sessionConfig } from "../lib/services/config.js";
 
 const slug = (value) => typeof value === "string" ? value.trim().toLowerCase() : "";
 
 export default async function authRoutes(fastify) {
-  const anonKey = process.env.SUPABASE_ANON_KEY?.trim() ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!anonKey) throw new Error("SUPABASE_ANON_KEY is not defined.");
-
-  const auth = createClient(requiredEnv("SUPABASE_URL"), anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const auth = fastify.authentication;
+  const session = sessionConfig();
 
   // POST /api/auth/login
-  // Authenticates an email/password with Supabase Auth, loads the matching
+  // Authenticates with the configured provider, loads the matching
   // application role, organization, and namespace memberships, then issues
   // the Cortéx JWT consumed by the frontend and protected API routes.
   fastify.post("/api/auth/login", async (req, reply) => {
@@ -31,9 +20,9 @@ export default async function authRoutes(fastify) {
     }
 
     try {
-      const { data, error } = await auth.auth.signInWithPassword({ email, password });
+      const { data, error } = await auth.signInWithPassword({ email, password });
       if (error || !data.user) {
-        return reply.code(401).send({ error: "Invalid credentials." });
+        return reply.code(error?.status || 401).send({ error: error?.message || "Invalid credentials." });
       }
 
       const { data: profile, error: profileError } = await fastify.supabase
@@ -43,7 +32,7 @@ export default async function authRoutes(fastify) {
           role:role_id(id,name),
           organization:organization_id(id,name)
         `)
-        .eq("auth_user_id", data.user.id)
+        .eq(auth.profileColumn, data.user.id)
         .maybeSingle();
       if (profileError) throw profileError;
       if (!profile?.active || !profile.role || !profile.organization) {
@@ -97,7 +86,7 @@ export default async function authRoutes(fastify) {
       };
 
       return {
-        token: jwt.sign(claims, requiredEnv("JWT_SECRET"), { expiresIn: "7d" }),
+        token: jwt.sign(claims, session.secret, { expiresIn: "7d", ...session.options }),
         user: { ...claims, namespaceNames },
       };
     } catch (err) {

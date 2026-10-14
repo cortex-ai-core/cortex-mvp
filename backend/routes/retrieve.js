@@ -5,7 +5,6 @@
 // ============================================================
 
 import fp from "fastify-plugin";
-import { createClient } from "@supabase/supabase-js";
 import { requireAuth } from "../lib/authMiddleware.js";
 import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/permissions.js";
 import { hybridRetrieve } from "../retrieval/hybrid.js";
@@ -721,12 +720,7 @@ export default fp(async function retrieveRoute(fastify, opts) {
           determineQueryProfile(query);
 
         // One shared client (keep-alive) unless the server did not decorate one.
-        const supabase =
-          fastify.supabase ||
-          createClient(
-            process.env.SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_KEY
-          );
+        const supabase = fastify.supabase;
 
         const normalizedQuery =
           normalizeRetrievalQuery(query);

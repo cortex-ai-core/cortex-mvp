@@ -9,7 +9,11 @@ uploads/
 *.png
 *.docx
 *.txt
+.vs/
+scripts/migration/
+scripts/aws/.local/
+tests/aws/
+!.env.aws.example
 !parser/samples/*.pdf
 !parser/samples/*.png
-.vs/
 !parser/requirements.txt

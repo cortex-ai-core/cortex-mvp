@@ -9,7 +9,11 @@
 
 import dotenv from "dotenv";
 
-const file = process.env.CORTEX_ENV === "production" ? "./.env.production" : "./.env";
+const file = process.env.CORTEX_ENV === "aws" ? "./.env.aws" :
+  process.env.CORTEX_ENV === "production" ? "./.env.production" : "./.env";
 dotenv.config({ path: file });
+if (process.env.CORTEX_ENV === "aws" && process.env.BACKEND_PROVIDER !== "aws") {
+  throw new Error("CORTEX_ENV=aws requires BACKEND_PROVIDER=aws in .env.aws.");
+}
 
 export const ENV_FILE = file;
