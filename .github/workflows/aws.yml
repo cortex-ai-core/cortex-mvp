@@ -32,6 +32,8 @@ jobs:
         env:
           CDK_DEFAULT_ACCOUNT: '909762691423'
           CDK_DEFAULT_REGION: us-west-2
+          AWS_REGION: us-west-2
+          AWS_DEFAULT_REGION: us-west-2
           AWS_EC2_METADATA_DISABLED: 'true'
       - uses: actions/upload-artifact@v4
         with:
