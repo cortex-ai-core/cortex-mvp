@@ -1,0 +1,80 @@
+name: AWS Oregon backend
+on:
+  push:
+    branches: [aws-migration]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [dev, test, prod]
+        default: dev
+        description: Target account (test/prod require their own bootstrap and environment approval)
+permissions:
+  contents: read
+concurrency:
+  group: cortex-backend-${{ github.event.inputs.environment || 'dev' }}
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:migration
+      - run: npm ci --prefix infra
+      - run: npm run build --prefix infra && npm test --prefix infra
+      - run: npm run synth --prefix infra -- -c environment=dev -c includeData=true -c includeRuntime=true --quiet
+        env:
+          CDK_DEFAULT_ACCOUNT: '909762691423'
+          CDK_DEFAULT_REGION: us-west-2
+          AWS_EC2_METADATA_DISABLED: 'true'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: reviewed-cloudformation
+          path: infra/cdk.out/*.template.json
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: verify
+    runs-on: ubuntu-24.04-arm
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: us-west-2
+      CORTEX_ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - id: target
+        run: |
+          node --input-type=module -e 'import fs from "node:fs";const c=JSON.parse(fs.readFileSync(`infra/environments/${process.env.CORTEX_ENVIRONMENT}.json`));fs.appendFileSync(process.env.GITHUB_OUTPUT,`account=${c.account}\n`);'
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ steps.target.outputs.account }}:role/cortex-${{ env.CORTEX_ENVIRONMENT }}-github-cortex-mvp
+          aws-region: us-west-2
+          allowed-account-ids: ${{ steps.target.outputs.account }}
+      - run: npm ci && npm ci --prefix infra
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and publish immutable API image
+        env:
+          REGISTRY: ${{ steps.target.outputs.account }}.dkr.ecr.us-west-2.amazonaws.com
+        run: |
+          TAG="git-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker build --platform linux/arm64 -t "$REGISTRY/cortex-$CORTEX_ENVIRONMENT-api:$TAG" .
+          docker push "$REGISTRY/cortex-$CORTEX_ENVIRONMENT-api:$TAG"
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+      - name: Apply reviewed changes and run private database migrations
+        run: node scripts/deploy/release.mjs "$CORTEX_ENVIRONMENT" "$RELEASE_TAG"
+      - name: Check public API
+        run: |
+          URL=$(aws cloudformation describe-stacks --stack-name "cortex-$CORTEX_ENVIRONMENT-delivery" --query 'Stacks[0].Outputs[?OutputKey==`Url`].OutputValue | [0]' --output text)
+          curl --fail --retry 6 --retry-delay 10 "$URL/api/health"

@@ -116,6 +116,8 @@ const allowedRoutes = new Set([
   "auth.js",
   "chat.js",
   "document.js",
+  "presignedUpload.js",
+  "localFiles.js",
   "documentTypes.js",
   "ingest.js",
   "retrieve.js",
@@ -154,7 +156,7 @@ try {
 
   await fastify.listen({
     port: PORT,
-    host: "0.0.0.0"
+    host: process.env.CORTEX_ENV === 'local' ? '127.0.0.1' : "0.0.0.0"
   });
 
   console.log(`🔥 CORTÉX SERVER RUNNING — PORT ${PORT} [STAGE-46 + 47.6G]`);

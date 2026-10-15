@@ -1,0 +1,8 @@
+{
+  "account": "909762691423",
+  "region": "us-west-2",
+  "snapshot": "arn:aws:rds:us-west-2:909762691423:snapshot:cortex-dev-oregon-20261015",
+  "image": "migration-20261015-5",
+  "parserImage": "migration-20261015-1",
+  "postgrestImage": "migration-20261015-1"
+}

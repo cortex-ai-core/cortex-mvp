@@ -10,7 +10,11 @@
     "test:aws:integration": "node tests/aws/integration.mjs",
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "node --watch server.js",
-    "eval": "node eval/run.mjs"
+    "eval": "node eval/run.mjs",
+    "setup:local": "node scripts/dev/setup.mjs",
+    "dev:local": "node scripts/dev/start.mjs",
+    "stop:local": "docker compose --profile documents down",
+    "test:migration": "node --test tests/migration/*.test.mjs"
   },
   "keywords": [],
   "author": "",
@@ -18,7 +22,11 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.1151.0",
+    "@aws-sdk/client-lambda": "^3.1152.0",
     "@aws-sdk/client-s3": "^3.1151.0",
+    "@aws-sdk/client-secrets-manager": "^3.1152.0",
+    "@aws-sdk/client-sqs": "^3.1152.0",
+    "@aws-sdk/client-sts": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1151.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/express": "^4.0.4",
@@ -36,11 +44,13 @@
     "openai": "^6.17.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse-fixed": "^1.1.1",
+    "pg": "^8.23.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.23.1",
     "@types/react": "19.2.14",
     "typescript": "^5.9.3"
   }

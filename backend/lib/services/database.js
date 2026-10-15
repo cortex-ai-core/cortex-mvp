@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import jwt from "jsonwebtoken";
 import { backendProvider, required } from "./config.js";
 import { createS3Storage } from "./storage.js";
+import { createLocalStorage } from "./localStorage.js";
 
 // Retain the existing Supabase/PostgREST query API, including joins and RPCs.
 // AWS uses a private PostgREST process pointed at RDS, not Supabase's servers.
@@ -43,6 +44,6 @@ export function createDatabaseClient(env = process.env, fetchImpl = globalThis.f
   });
   return {
     from: client.from.bind(client), rpc: client.rpc.bind(client),
-    storage: createS3Storage(env),
+    storage: env.CORTEX_ENV === 'local' ? createLocalStorage(env) : createS3Storage(env),
   };
 }

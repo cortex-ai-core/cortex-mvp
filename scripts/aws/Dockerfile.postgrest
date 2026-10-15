@@ -1,0 +1,9 @@
+FROM postgrest/postgrest:v16.4 AS postgrest
+FROM busybox:1.37-musl AS shell
+FROM curlimages/curl:8.16.0 AS certificates
+RUN curl --fail --silent --show-error https://truststore.pki.rds.amazonaws.com/us-west-2/us-west-2-bundle.pem -o /tmp/rds-ca.pem
+FROM postgrest
+COPY --from=shell /bin/busybox /bin/busybox
+COPY --from=certificates /tmp/rds-ca.pem /rds-ca.pem
+COPY --chmod=755 scripts/aws/start-postgrest.sh /start-postgrest.sh
+ENTRYPOINT ["/bin/busybox", "sh", "/start-postgrest.sh"]

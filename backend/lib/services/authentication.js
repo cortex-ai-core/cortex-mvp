@@ -37,18 +37,29 @@ export function createAuthenticationService(database, env = process.env, depende
   const accessVerifier = dependencies.accessVerifier || CognitoJwtVerifier.create({ userPoolId, clientId, tokenUse: "access" });
   const adminClient = dependencies.adminClient || new CognitoIdentityProviderClient({ region });
   const invalid = () => ({ data: { user: null }, error: { message: "Invalid credentials.", status: 401 } });
+  async function passwordOperation(operation, email, extra = {}) {
+    const body = { ClientId: clientId, Username: email, ...extra };
+    if (env.COGNITO_CLIENT_SECRET) body.SecretHash = createHmac('sha256',env.COGNITO_CLIENT_SECRET).update(email+clientId).digest('base64');
+    const response = await fetchImpl(endpoint, { method:'POST', signal:AbortSignal.timeout(15000), headers:{'Content-Type':'application/x-amz-json-1.1','X-Amz-Target':`AWSCognitoIdentityProviderService.${operation}`}, body:JSON.stringify(body) });
+    const result = await response.json();
+    if (!response.ok && !(operation === 'ForgotPassword' && String(result.__type||'').includes('UserNotFoundException'))) {
+      throw new Error(operation === 'ForgotPassword' ? 'Unable to request a reset. Try again later.' : 'The code or password was not accepted. Check the code and password policy.');
+    }
+  }
 
   return {
     profileColumn: "id", legacyAuthId: () => null,
-    async signInWithPassword({ email, password }) {
-      const parameters = { USERNAME: email, PASSWORD: password };
+    requestPasswordReset: (email) => passwordOperation('ForgotPassword',email),
+    confirmPasswordReset: (email,code,password) => passwordOperation('ConfirmForgotPassword',email,{ConfirmationCode:code,Password:password}),
+    async signInWithPassword({ email, password, newPassword, challengeSession, challengeUsername }) {
+      const parameters = challengeSession ? { USERNAME: challengeUsername||email, NEW_PASSWORD: newPassword } : { USERNAME: email, PASSWORD: password };
       if (env.COGNITO_CLIENT_SECRET) parameters.SECRET_HASH = createHmac("sha256", env.COGNITO_CLIENT_SECRET)
-        .update(email + clientId).digest("base64");
+        .update((challengeSession?challengeUsername||email:email) + clientId).digest("base64");
       // InitiateAuth does not require IAM credentials; the client secret stays on the backend.
       const response = await fetchImpl(endpoint, {
         method: "POST", signal: AbortSignal.timeout(15000),
-        headers: { "Content-Type": "application/x-amz-json-1.1", "X-Amz-Target": "AWSCognitoIdentityProviderService.InitiateAuth" },
-        body: JSON.stringify({ AuthFlow: "USER_PASSWORD_AUTH", ClientId: clientId, AuthParameters: parameters }),
+        headers: { "Content-Type": "application/x-amz-json-1.1", "X-Amz-Target": `AWSCognitoIdentityProviderService.${challengeSession?"RespondToAuthChallenge":"InitiateAuth"}` },
+        body: JSON.stringify(challengeSession?{ChallengeName:"NEW_PASSWORD_REQUIRED",ClientId:clientId,Session:challengeSession,ChallengeResponses:parameters}:{ AuthFlow: "USER_PASSWORD_AUTH", ClientId: clientId, AuthParameters: parameters }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -56,6 +67,7 @@ export function createAuthenticationService(database, env = process.env, depende
         if (["NotAuthorizedException", "UserNotFoundException", "UserNotConfirmedException", "PasswordResetRequiredException"].includes(name)) return invalid();
         throw new Error("Cognito sign-in service is unavailable or misconfigured.");
       }
+      if(result.ChallengeName==='NEW_PASSWORD_REQUIRED'&&result.Session)return {data:{user:null,challenge:{session:result.Session,username:result.ChallengeParameters?.USER_ID_FOR_SRP||email}},error:null};
       if (result.ChallengeName) return {
         data: { user: null }, error: { status: 403, message: "Complete the required Cognito password change or sign-in challenge before using this login." },
       };
@@ -66,9 +78,24 @@ export function createAuthenticationService(database, env = process.env, depende
         [id, access] = await Promise.all([idVerifier.verify(tokens.IdToken), accessVerifier.verify(tokens.AccessToken)]);
       } catch { return invalid(); }
       if (id.sub !== access.sub || id.email_verified !== true || id.email?.toLowerCase() !== email.toLowerCase()) return invalid();
-      const { data: link, error } = await database.from("auth_identities").select("user_id")
+      let { data: link, error } = await database.from("auth_identities").select("user_id")
         .eq("provider", "cognito").eq("issuer", issuer).eq("subject", id.sub).maybeSingle();
       if (error) throw new Error("Unable to resolve the Cognito identity link.");
+      if (!link && env.COGNITO_LEGACY_ISSUER && id['custom:legacy_issuer'] === env.COGNITO_LEGACY_ISSUER && id['custom:legacy_subject']) {
+        // Only immutable claims issued by this pool's migration trigger can bridge identities.
+        // Never link accounts merely because their email addresses match.
+        const legacy = await database.from('auth_identities').select('user_id')
+          .eq('provider','cognito').eq('issuer',env.COGNITO_LEGACY_ISSUER).eq('subject',id['custom:legacy_subject']).maybeSingle();
+        if (legacy.error) throw new Error('Unable to resolve the migrated identity.');
+        if (legacy.data) {
+          const inserted = await database.from('auth_identities').insert({provider:'cognito',issuer,subject:id.sub,user_id:legacy.data.user_id});
+          if (inserted.error) {
+            const concurrent = await database.from('auth_identities').select('user_id').eq('provider','cognito').eq('issuer',issuer).eq('subject',id.sub).maybeSingle();
+            if (concurrent.error || concurrent.data?.user_id !== legacy.data.user_id) throw new Error('Unable to link the migrated identity.');
+          }
+          link = legacy.data;
+        }
+      }
       if (!link) return { data: { user: null }, error: { status: 403, message: "Account is not linked to a Cortéx profile." } };
       return { data: { user: { id: link.user_id } }, error: null };
     },
