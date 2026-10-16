@@ -33,6 +33,7 @@ test('complete deployment graph synthesizes without a stack cycle and isolates o
   assert.doesNotThrow(()=>app.synth());
   const rt=Template.fromStack(runtime);
   rt.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer',{Scheme:'internal'});
+  rt.hasResourceProperties('AWS::EC2::SecurityGroupIngress',{FromPort:80,ToPort:80,IpProtocol:'tcp',SourcePrefixListId:'pl-82a045eb'});
   rt.resourceCountIs('AWS::ECS::Service',3);
   for(const service of Object.values(rt.findResources('AWS::ECS::Service')) as any[])assert.equal(service.Properties.NetworkConfiguration.AwsvpcConfiguration.AssignPublicIp,'DISABLED');
   const dt=Template.fromStack(delivery);

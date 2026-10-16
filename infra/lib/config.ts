@@ -9,6 +9,7 @@ export function configuration(name: string, account?: string, region = 'us-west-
   const config = environments[name as EnvironmentName];
   if (account && config.account !== account) throw new Error(`Refusing account ${account}; ${name} requires ${config.account}.`);
   if (region !== 'us-west-2') throw new Error('Cortex regional workloads must use us-west-2.');
-  return { ...config, name: name as EnvironmentName, region };
+  // AWS-owned com.amazonaws.global.cloudfront.origin-facing in Oregon.
+  return { ...config, name: name as EnvironmentName, region, cloudFrontOriginFacingPrefixListId: 'pl-82a045eb' };
 }
 export type Configuration = ReturnType<typeof configuration>;

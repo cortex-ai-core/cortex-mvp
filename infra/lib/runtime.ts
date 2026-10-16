@@ -72,7 +72,7 @@ export class Runtime extends Stack {
     const worker=createTask('worker',['node','scripts/aws/start-worker.mjs']);
     new ecs.FargateService(this,'Worker',{serviceName:`${prefix}-worker`,cluster:operations.cluster,taskDefinition:worker.task,securityGroups:[taskGroup],vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},desiredCount:1,minHealthyPercent:100,maxHealthyPercent:200,circuitBreaker:{rollback:true}});
     const albGroup=new ec2.SecurityGroup(this,'OriginAccess',{vpc:foundation.vpc,allowAllOutbound:false});
-    albGroup.addIngressRule(ec2.Peer.ipv4(config.cidr),ec2.Port.tcp(80),'CloudFront VPC origin private interfaces');
+    albGroup.addIngressRule(ec2.Peer.prefixList(config.cloudFrontOriginFacingPrefixListId),ec2.Port.tcp(80),'CloudFront origin-facing service only');
     albGroup.addEgressRule(taskGroup,ec2.Port.tcp(8081),'API tasks');
     taskGroup.addIngressRule(albGroup,ec2.Port.tcp(8081),'Private ALB only');
     this.alb=new elb.ApplicationLoadBalancer(this,'LoadBalancer',{vpc:foundation.vpc,internetFacing:false,securityGroup:albGroup,vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},idleTimeout:Duration.seconds(120)});
