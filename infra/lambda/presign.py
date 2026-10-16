@@ -2,8 +2,9 @@ import base64
 import os
 import re
 import boto3
+from botocore.config import Config
 
-s3 = boto3.client('s3', region_name='us-west-2')
+s3 = boto3.client('s3', region_name='us-west-2', config=Config(signature_version='s3v4'))
 
 def handler(event, context):
     # Only the authenticated API task role may invoke this function.

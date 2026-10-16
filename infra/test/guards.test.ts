@@ -38,3 +38,23 @@ test('complete deployment graph synthesizes without a stack cycle and isolates o
   const dt=Template.fromStack(delivery);
   dt.hasResourceProperties('AWS::CloudFront::Distribution',{DistributionConfig:Match.objectLike({CacheBehaviors:Match.arrayWith([Match.objectLike({PathPattern:'api/*',CachePolicyId:'4135ea2d-6df8-44a3-9df3-4b5a84be39ad'})])})});
 });
+
+test('signer uses private application subnets and default group stays a named-control resource',()=>{
+ const app=new App(),config=configuration('dev'),env={account:config.account,region:config.region};
+ const foundation=new Foundation(app,'sf',config,{env});
+ const data=new Data(app,'sd',config,foundation,'fixed-snapshot',undefined,{env});
+ const template=Template.fromStack(data);
+ template.hasResourceProperties('AWS::Lambda::Function',{FunctionName:'cortex-dev-upload-signer',VpcConfig:Match.objectLike({SubnetIds:data.resolve(foundation.vpc.privateSubnets.map(s=>s.subnetId)),SecurityGroupIds:Match.anyValue()})});
+ const ft=Template.fromStack(foundation);
+ ft.hasResourceProperties('AWS::EC2::FlowLog',{LogDestination:'arn:aws:s3:::sollucio-vpc-flowlogs-747301449112-us-west-2/vpc-flowlogs',LogDestinationType:'s3',TrafficType:'ALL',DestinationOptions:{FileFormat:'parquet',HiveCompatiblePartitions:false,PerHourPartition:true}});
+ ft.hasResourceProperties('Custom::RestrictDefaultGroup',{GroupId:Match.anyValue()});
+});
+
+test('central archive rejects wrong account and scopes delivery to the approved workload',async()=>{
+ const {LogArchive}=await import('../lib/log-archive.js');
+ assert.throws(()=>new LogArchive(new App(),'wrong',{env:{account:'909762691423',region:'us-west-2'}}));
+ const stack=new LogArchive(new App(),'central',{env:{account:'747301449112',region:'us-west-2'}});
+ const template=Template.fromStack(stack);
+ template.hasResource('AWS::S3::Bucket',{DeletionPolicy:'Retain',UpdateReplacePolicy:'Retain',Properties:Match.objectLike({BucketName:'sollucio-vpc-flowlogs-747301449112-us-west-2',BucketEncryption:Match.anyValue()})});
+ template.hasResourceProperties('AWS::S3::BucketPolicy',{PolicyDocument:Match.objectLike({Statement:Match.arrayWith([Match.objectLike({Principal:{Service:'delivery.logs.amazonaws.com'},Action:'s3:PutObject',Condition:Match.objectLike({StringEquals:{'aws:SourceAccount':'909762691423','s3:x-amz-acl':'bucket-owner-full-control'}})})])})});
+});

@@ -2,6 +2,10 @@
   "app": "npx tsx bin/cortex.ts",
   "context": {
     "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": true,
-    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+    "@aws-cdk/core:defaultCrossStackReferences": "strong",
+    "availability-zones:account=909762691423:region=us-west-2": [
+      "us-west-2a",
+      "us-west-2b"
+    ]
   }
 }

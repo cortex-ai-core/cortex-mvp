@@ -80,7 +80,15 @@ export class Data extends Stack {
     });
     this.client = this.pool.addClient('Backend', { generateSecret: true, authFlows: { userPassword: true }, preventUserExistenceErrors: true });
     const uploadRole = new iam.Role(this,'UploadRole',{roleName:`${prefix}-upload-signer`,assumedBy:new iam.ServicePrincipal('lambda.amazonaws.com'),managedPolicies:[iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')]});
-    this.uploadSigner = new lambda.Function(this,'UploadSigner',{functionName:`${prefix}-upload-signer`,runtime:lambda.Runtime.PYTHON_3_13,handler:'index.handler',role:uploadRole,code:lambda.Code.fromInline(readFileSync(new URL('../lambda/presign.py',import.meta.url),'utf8')),timeout:Duration.seconds(10),environment:{DOCUMENTS_BUCKET:this.documents.bucketName}});
+    const signerGroup=new ec2.SecurityGroup(this,'UploadSignerAccess',{vpc:foundation.vpc,allowAllOutbound:false,description:'Private upload signer HTTPS egress only'});
+    signerGroup.addEgressRule(ec2.Peer.anyIpv4(),ec2.Port.tcp(443),'S3 and approved AWS HTTPS');
+    uploadRole.addManagedPolicy(iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaVPCAccessExecutionRole'));
+    this.uploadSigner = new lambda.Function(this,'UploadSigner',{
+      functionName:`${prefix}-upload-signer`,runtime:lambda.Runtime.PYTHON_3_13,handler:'index.handler',role:uploadRole,
+      code:lambda.Code.fromInline(readFileSync(new URL('../lambda/presign.py',import.meta.url),'utf8')),timeout:Duration.seconds(10),
+      environment:{DOCUMENTS_BUCKET:this.documents.bucketName},vpc:foundation.vpc,
+      vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},securityGroups:[signerGroup],
+    });
     this.documents.grantPut(uploadRole,'*/original.*');
     for (const [key, value] of Object.entries({ DatabaseHost: this.database.attrEndpointAddress, DatabaseAdminSecret: this.database.attrMasterUserSecretSecretArn, DatabaseSecret: this.databaseSecret.secretArn, RuntimeSecret: this.runtimeSecret.secretArn, OpenAiSecret: this.openaiSecret.secretArn, LegacySecret: this.legacySecret.secretArn, MigrationBucket: this.archives.bucketName, DocumentsBucket: this.documents.bucketName, WebBucket: this.web.bucketName, UserPoolId: this.pool.userPoolId, UserPoolClientId: this.client.userPoolClientId })) new CfnOutput(this, key, { value });
   }

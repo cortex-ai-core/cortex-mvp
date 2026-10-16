@@ -22,3 +22,5 @@ tests/aws/
 infra/cdk.out/
 infra/cdk.context.json
 .local/
+
+infra/cdk.out-logs/

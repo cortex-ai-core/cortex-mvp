@@ -6,6 +6,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import { centralLogs } from './log-archive.js';
 import type { Configuration } from './config.js';
 
 export class Foundation extends Stack {
@@ -45,6 +46,12 @@ def handler(event,context):
     const flowLog = new logs.LogGroup(this, 'FlowLogs', { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: RemovalPolicy.RETAIN });
     this.vpc.addFlowLog('Traffic', { destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLog) });
     this.vpc.addGatewayEndpoint('S3Endpoint', { service: ec2.GatewayVpcEndpointAwsService.S3 });
+    if(config.name==='dev')new ec2.CfnFlowLog(this,'CentralFlowLogs',{
+      resourceId:this.vpc.vpcId,resourceType:'VPC',trafficType:'ALL',maxAggregationInterval:60,
+      logDestinationType:'s3',logDestination:`arn:aws:s3:::${centralLogs.bucket}/${centralLogs.prefix}`,
+      // CfnFlowLog types this as a raw object, so CloudFormation property casing is required.
+      destinationOptions:{FileFormat:'parquet',HiveCompatiblePartitions:false,PerHourPartition:true},
+    });
     this.key = new kms.Key(this, 'DataKey', { alias: `alias/${prefix}-data`, enableKeyRotation: true, removalPolicy: RemovalPolicy.RETAIN });
     for (const name of ['api', 'parser', 'postgrest']) {
       this.repositories[name] = new ecr.Repository(this, `${name}Repository`, {
