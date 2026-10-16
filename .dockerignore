@@ -1,0 +1,14 @@
+**/node_modules
+.git
+.env*
+**/.local
+.local
+infra
+tests
+eval
+uploads
+*.pem
+*.pdf
+*.docx
+*.bak
+*.bak2

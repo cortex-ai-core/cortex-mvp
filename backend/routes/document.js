@@ -9,6 +9,7 @@ import { hasPermission, identityFrom, requireNamespaceMember } from "../lib/perm
 import { originalPath, documentPrefix, documentPrefixFor, uploadObject, deletePrefix, signedUrl } from "../ingest/storage.js";
 import { searchTitle } from "../ingest/worker.js";   // pure helper; worker.js has no import-time side effects
 import { findDocumentType } from "../lib/documentTypeScope.js";
+import { enqueueDocument } from "../ingest/queue.js";
 
 const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB || 50);
 
@@ -227,6 +228,7 @@ export default async function documentRoutes(fastify) {
 
     supabase.from("ingest_events").insert([{ document_id: documentId, stage: "queued", message: `Uploaded by ${identity.userId} (${Math.round(size / 1024)} KB)` }]).then(() => {});
     fastify.ingestWorker?.nudge();
+    await enqueueDocument(documentId, storagePath).catch(err => fastify.log.warn({ err: err.message }, 'Upload recorded; waiting for storage event delivery'));
 
     return reply.code(202).send({
       document_id: documentId,
@@ -294,6 +296,7 @@ export default async function documentRoutes(fastify) {
 
     fastify.supabase.from("ingest_events").insert([{ document_id, stage: "queued", message: `Retry requested by ${identity.userId}` }]).then(() => {});
     fastify.ingestWorker?.nudge();
+    await enqueueDocument(document_id, doc.storage_path);
     return reply.send({ document_id, status: "queued" });
   });
 

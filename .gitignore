@@ -9,7 +9,19 @@ uploads/
 *.png
 *.docx
 *.txt
+.vs/
+scripts/migration/
+scripts/aws/.local/
+tests/aws/
+!.env.aws.example
 !parser/samples/*.pdf
 !parser/samples/*.png
-.vs/
 !parser/requirements.txt
+
+# Synthesized infrastructure and local migration evidence
+infra/cdk.out/
+infra/cdk.context.json
+.local/
+
+infra/cdk.out-logs/
+infra/cdk.out-certificates/

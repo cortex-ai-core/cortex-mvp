@@ -38,7 +38,7 @@ export default async function attachmentRoutes(fastify) {
   // ==========================================================
   fastify.post("/api/attachments/parse", async (request, reply) => {
     const identity = identityFrom(request);
-    if (!hasPermission(identity, "chat")) {
+    if (!hasPermission(identity, "upload_ephemeral")) {
       return reply.code(403).send({ error: "Your role can't attach files." });
     }
 
@@ -91,7 +91,7 @@ export default async function attachmentRoutes(fastify) {
       } catch (err) {
         if (err instanceof ParserError) {
           // lengths and timings only: server logs carry no attachment text
-          fastify.log.warn({ ext, bytes: size, status: err.status, err: err.message }, "attachments: parse failed");
+          fastify.log.warn({ ext, bytes: size, status: err.status }, "attachments: parse failed");
           const status = err.status === 503 || err.status === 504 ? err.status : 422;
           return reply.code(status).send({
             error: err.status === 503
@@ -101,7 +101,7 @@ export default async function attachmentRoutes(fastify) {
                 : `Couldn't read "${fileName}": ${err.message}`,
           });
         }
-        fastify.log.error({ err: err?.message }, "attachments: parse crashed");
+        fastify.log.error({ ext, bytes: size }, "attachments: parse crashed");
         return reply.code(500).send({ error: "Couldn't read that file. Please try again." });
       }
       fastify.log.info({ ext, bytes: size, pages: pageCount, chars: text.length, ms: Date.now() - started }, "attachments: parsed");

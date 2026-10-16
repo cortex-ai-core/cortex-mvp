@@ -43,11 +43,7 @@ import { renderOverview } from "../ingest/summarize.js";
 
 // ----------------------------------------------------
 const MAX_INPUT = 10000;
-// Attached files, parsed by the same parser as the knowledge base
-// (routes/attachments.js), arrive as one text block that goes whole into
-// the prompt: no chunking, no retrieval. The ceiling is a cost and
-// latency guard, not a correctness one. 400k characters is about 100k
-// tokens, roughly 250 pages of text; set MAX_EPHEMERAL_CONTEXT to change it.
+// Match the parser response ceiling so attached document text reaches chat.
 const MAX_EPHEMERAL_CONTEXT = Number(process.env.MAX_EPHEMERAL_CONTEXT || 400000);
 const MAX_RAG_CONTEXT = 22000;
 // Whole-document path: the full parsed text of one named document (~40k tokens)
@@ -273,11 +269,12 @@ function isOverviewQuestion(text = "") {
 }
 
 // Build context for one named document: stored summary + full text within budget.
-async function buildWholeDocumentContext(fastify, documentId) {
+async function buildWholeDocumentContext(fastify, documentId, namespaceId) {
   const { data: doc } = await fastify.supabase
     .from("documents")
     .select("id, file_name, display_name, namespace_id, storage_path, page_count, status, metadata")
     .eq("id", documentId)
+    .eq("namespace_id", namespaceId)
     .maybeSingle();
   if (!doc || doc.status !== "ready") return null;
 
@@ -289,6 +286,7 @@ async function buildWholeDocumentContext(fastify, documentId) {
     .from("document_chunks")
     .select("id, chunk_index, chunk_text, page_start, page_end, section_label")
     .eq("document_id", doc.id)
+    .eq("namespace_id", namespaceId)
     .order("chunk_index", { ascending: true })
     .limit(WHOLE_DOC_MAX_CHUNKS);
 
@@ -365,6 +363,7 @@ async function buildKnowledgeBaseContext(fastify, namespaceId) {
       .from("document_chunks")
       .select("document_id, chunk_index, chunk_text")
       .in("document_id", missing)
+      .eq("namespace_id", namespaceId)
       .lte("chunk_index", 2)
       .order("chunk_index", { ascending: true });
     for (const c of chunks || []) {
@@ -1175,7 +1174,7 @@ export default fp(async function chatRoute(fastify) {
           const wantsWholeDocument =
             intent.source === "model" ? intent.scope === "document" : isOverviewQuestion(sanitizedMessage);
           if (named.length === 1 && wantsWholeDocument) {
-            const whole = await buildWholeDocumentContext(fastify, named[0].id);
+            const whole = await buildWholeDocumentContext(fastify, named[0].id, namespaceId);
             if (whole) {
               wholeDocument = whole;
               fastify.log.info({
@@ -1388,6 +1387,8 @@ export default fp(async function chatRoute(fastify) {
                   ragContext.trim()
                 ),
 
+              privateMode,
+
               namespace
             }
           );
@@ -1458,9 +1459,6 @@ export default fp(async function chatRoute(fastify) {
         }
 
         // Complete the turn's trace row: memories, block size, mode, conflicts.
-        // A private turn keeps its row for usage and latency but carries no
-        // text: the question is never written, and the model's conflicts
-        // note (which quotes the material) is dropped with it.
         const tracePromise = finishTrace(fastify.supabase, fastify.log, {
           traceId, hadRetrieval,
           query: privateMode ? null : (intent.standaloneQuery || sanitizedMessage), namespaceId, userId: identity.userId,
