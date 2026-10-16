@@ -1,4 +1,4 @@
-import { Stack, Duration, RemovalPolicy, CfnOutput, type StackProps } from 'aws-cdk-lib';
+import { Stack, Duration, RemovalPolicy, CfnOutput, SecretValue, type StackProps } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -16,11 +16,13 @@ import type { Configuration } from './config.js';
 import type { Foundation } from './foundation.js';
 import type { Data } from './data.js';
 import type { Operations } from './operations.js';
+import { originHeader, type PublicEdge } from './edge.js';
 
 export class Runtime extends Stack {
   readonly alb: elb.ApplicationLoadBalancer;
+  readonly publicAlb?: elb.ApplicationLoadBalancer;
   readonly queue: sqs.Queue;
-  constructor(scope: Construct, id: string, config: Configuration, foundation: Foundation, data: Data, operations: Operations, image: string, parserImage: string, postgrestImage: string, props: StackProps) {
+  constructor(scope: Construct, id: string, config: Configuration, foundation: Foundation, data: Data, operations: Operations, image: string, parserImage: string, postgrestImage: string, props: StackProps & { edge?: PublicEdge }) {
     super(scope, id, props);
     const prefix=`cortex-${config.name}`;
     const taskGroup=new ec2.SecurityGroup(this,'ApplicationAccess',{vpc:foundation.vpc,allowAllOutbound:false});
@@ -77,6 +79,19 @@ export class Runtime extends Stack {
     taskGroup.addIngressRule(albGroup,ec2.Port.tcp(8081),'Private ALB only');
     this.alb=new elb.ApplicationLoadBalancer(this,'LoadBalancer',{vpc:foundation.vpc,internetFacing:false,securityGroup:albGroup,vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},idleTimeout:Duration.seconds(120)});
     this.alb.addListener('Http',{port:80,open:false}).addTargets('Api',{port:8081,protocol:elb.ApplicationProtocol.HTTP,targets:[service],healthCheck:{path:'/api/health',healthyHttpCodes:'200'},deregistrationDelay:Duration.seconds(30)});
+    if(props.edge){
+      // Public HTTPS origin for CloudFront (docs/custom-domain.md). Only CloudFront's origin-facing
+      // ranges reach port 443, and only requests carrying the origin secret are forwarded to the API.
+      const publicGroup=new ec2.SecurityGroup(this,'PublicOriginAccess',{vpc:foundation.vpc,allowAllOutbound:false});
+      publicGroup.addIngressRule(ec2.Peer.prefixList(config.cloudFrontOriginFacingPrefixListId),ec2.Port.tcp(443),'CloudFront origin-facing service only');
+      publicGroup.addEgressRule(taskGroup,ec2.Port.tcp(8081),'API tasks');
+      taskGroup.addIngressRule(publicGroup,ec2.Port.tcp(8081),'Public origin ALB only');
+      this.publicAlb=new elb.ApplicationLoadBalancer(this,'PublicLoadBalancer',{vpc:foundation.vpc,internetFacing:true,securityGroup:publicGroup,vpcSubnets:{subnetType:ec2.SubnetType.PUBLIC},idleTimeout:Duration.seconds(120),dropInvalidHeaderFields:true});
+      const https=this.publicAlb.addListener('Https',{port:443,protocol:elb.ApplicationProtocol.HTTPS,open:false,sslPolicy:elb.SslPolicy.RECOMMENDED_TLS,certificates:[elb.ListenerCertificate.fromArn(props.edge.originCertificateArn)],defaultAction:elb.ListenerAction.fixedResponse(403,{contentType:'text/plain',messageBody:'Forbidden'})});
+      https.addTargets('PublicApi',{priority:1,conditions:[elb.ListenerCondition.httpHeader(originHeader,[SecretValue.secretsManager(props.edge.originSecretName).unsafeUnwrap()])],port:8081,protocol:elb.ApplicationProtocol.HTTP,targets:[service],healthCheck:{path:'/api/health',healthyHttpCodes:'200'},deregistrationDelay:Duration.seconds(30)});
+      // GoDaddy CNAME target for props.edge.originDomain.
+      new CfnOutput(this,'PublicOriginDns',{value:this.publicAlb.loadBalancerDnsName});
+    }
     for(const [key,value] of Object.entries({IngestionQueue:this.queue.queueUrl,IngestionQueueArn:this.queue.queueArn,DeadLetterQueue:dead.queueUrl,AlertsTopic:topic.topicArn,ApiService:service.serviceName,ApiTask:api.task.taskDefinitionArn})) new CfnOutput(this,key,{value});
   }
 }
