@@ -1,6 +1,6 @@
 # Guidebook compliance and deployment plan
 
-Updated October 16, 2026 following Sanjay's request for the AWS Build Book v1.3 network pattern, pages 9–11. This is the implementation plan; planned controls below must not be reported as deployed. Target workload is Cortex-Dev **909762691423**, Oregon **us-west-2**. Log Archive is **747301449112** (guidebook page 2). Ohio retirement remains exclusively Sanjay's later manual action.
+Updated October 16, 2026 following Sanjay's request for the AWS Build Book v1.3 network pattern, pages 9–11. This records deployed controls and remaining acceptance; pending controls must not be reported as deployed. Target workload is Cortex-Dev **909762691423**, Oregon **us-west-2**. Log Archive is **747301449112** (guidebook page 2). Ohio retirement remains exclusively Sanjay's later manual action.
 
 ## Verified live baseline
 
@@ -11,7 +11,7 @@ Read-only inspection with an STS-verified Cortex-Dev temporary session confirmed
 - NAT nat-08d93899d70a6186a is available in public subnet subnet-0aa0343c49e52743c. Both application route tables send0.0.0.0/0 to it. Both data route tables have no internet/NAT default route. S3 gateway endpoint routes exist.
 - Default security group sg-0439c52bbae3c561b has zero inbound and outbound rules. Named database group accepts5432 from operations and application groups; operations egress allows private database 5432 and internet HTTPS 443.
 - RDS cortex-dev-oregon is available, encrypted, publiclyAccessible=false, in isolated data subnets, deletion-protected, with seven-day automated backups. Dev is single-AZ as configured.
-- Application stack is CREATE_COMPLETE. API, parser and ingestion worker each have one running task and zero pending tasks. Live ENIs are in application subnets with no public IP associations. Delivery is provisioning its CloudFront VPC origin.
+- Application stack is healthy. API, parser and ingestion worker each have one running task and zero pending tasks. Live ENIs are in application subnets with no public IP associations. The existing CloudFront distribution now uses the corrected HTTP-only private origin; the obsolete Oregon origin has been removed and Delivery is UPDATE_COMPLETE.
 - Flow Logs are ACTIVE/SUCCESS to both the new central Log Archive S3 destination and the retained local Dev CloudWatch copy. Nonempty central Parquet objects have been read with the Log Archive identity.
 - Oregon Cognito has 15 enabled users, all FORCE_CHANGE_PASSWORD, and no migration Lambda trigger. No Ohio authentication bridge is present.
 
@@ -57,7 +57,7 @@ RequireHTTPS from CloudFront to the ALB using an ACM certificate inus-west-2 and
 
 Acceptance: live ALB Scheme=internet-facing and its subnets are public; HTTPS listener/certificate are valid; ingress is restricted to the CloudFront managed prefix list; direct untrusted ALB requests cannot reach the application, and requests lacking the origin header receive the configured rejection. CloudFront/API health and streaming chat work over the public origin with caching disabled for authenticatedAPI. ECS ENIs have no public IPs and live service subnet IDs are application-tier only. Verify RDS remains private and unchanged.
 
-Sanjay explicitly deferred this change until he supplies the origin domain/DNS details. The interim deployment will retain the existing private ALB and CloudFront VPC origin; record this as an open guidebook deviation. Dependency: approved origin hostname/DNS zone and certificate validation access. Do not claim this control is implemented before that input exists. The signer change is deployed and verified. The public ALB remains pending; current code retains the private ALB/VPC origin. The interim private hop explicitly uses HTTP port80 to match its listener; the viewer connection remains HTTPS. Changing to a public origin requires validated HTTPS first.
+Sanjay explicitly deferred this change until he supplies the origin domain/DNS details. The interim deployment will retain the existing private ALB and CloudFront VPC origin; record this as an open guidebook deviation. Dependency: approved origin hostname/DNS zone and certificate validation access. Do not claim this control is implemented before that input exists. The signer change is deployed and verified. The public ALB remains pending; current code retains the private ALB/VPC origin. The interim private hop explicitly uses HTTP port80 to match its listener, and the ALB ingress uses the AWS-owned CloudFront origin-facing prefix list; the viewer connection remains HTTPS. Changing to a public origin requires validated HTTPS first.
 
 ## 5. Release order and remaining acceptance
 
