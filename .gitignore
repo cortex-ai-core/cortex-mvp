@@ -17,3 +17,10 @@ tests/aws/
 !parser/samples/*.pdf
 !parser/samples/*.png
 !parser/requirements.txt
+
+# Synthesized infrastructure and local migration evidence
+infra/cdk.out/
+infra/cdk.context.json
+.local/
+
+infra/cdk.out-logs/

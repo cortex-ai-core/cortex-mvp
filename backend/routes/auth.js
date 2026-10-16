@@ -6,6 +6,20 @@ const slug = (value) => typeof value === "string" ? value.trim().toLowerCase() :
 export default async function authRoutes(fastify) {
   const auth = fastify.authentication;
   const session = sessionConfig();
+  fastify.post('/api/auth/password-reset/request', async (req,reply) => {
+    const email=slug(req.body?.email);
+    if(!email||email.length>320||!email.includes('@'))return reply.code(400).send({error:'Enter a valid email address.'});
+    if(!auth.requestPasswordReset)return reply.code(501).send({error:'Contact your administrator to reset your password.'});
+    try{await auth.requestPasswordReset(email);return {message:'If your account is eligible, a reset code will be sent to your email.'};}
+    catch{return reply.code(503).send({error:'Unable to request a reset. Try again later.'});}
+  });
+  fastify.post('/api/auth/password-reset/confirm', async (req,reply) => {
+    const email=slug(req.body?.email),code=String(req.body?.code||'').trim(),password=req.body?.password;
+    if(!email||email.length>320||!/^\d{6}$/.test(code)||typeof password!=='string'||password.length<12||password.length>256)return reply.code(400).send({error:'Enter your email, six-digit code, and a password of at least 12 characters.'});
+    if(!auth.confirmPasswordReset)return reply.code(501).send({error:'Contact your administrator.'});
+    try{await auth.confirmPasswordReset(email,code,password);return {message:'Password updated. You can sign in now.'};}
+    catch{return reply.code(400).send({error:'The code or password was not accepted. Check the code and password policy.'});}
+  });
 
   // POST /api/auth/login
   // Authenticates with the configured provider, loads the matching
@@ -13,14 +27,24 @@ export default async function authRoutes(fastify) {
   // the Cortéx JWT consumed by the frontend and protected API routes.
   fastify.post("/api/auth/login", async (req, reply) => {
     const body = req.body || {};
-    const email = slug(body.email || body.username);
+    let email = slug(body.email || body.username);
+    let challengeSession,challengeUsername;
+    if(body.challengeToken){
+      try{const challenge=jwt.verify(body.challengeToken,session.secret,{issuer:"cortex:password-change",audience:"cortex:password-change"});email=challenge.email;challengeSession=challenge.session;challengeUsername=challenge.username;}
+      catch{return reply.code(401).send({error:"Your password-change session expired. Sign in again."});}
+      if(typeof body.newPassword!=="string"||body.newPassword.length<12||body.newPassword.length>256)return reply.code(400).send({error:"Choose a password of at least 12 characters."});
+    }
     const password = typeof body.password === "string" ? body.password : "";
-    if (!email || !password) {
+    if (!email || (!password&&!challengeSession)) {
       return reply.code(400).send({ error: "Email and password are required." });
     }
 
     try {
-      const { data, error } = await auth.signInWithPassword({ email, password });
+      const { data, error } = await auth.signInWithPassword({ email, password,challengeSession,challengeUsername,newPassword:body.newPassword });
+      if(data?.challenge){
+        const challengeToken=jwt.sign({email,session:data.challenge.session,username:data.challenge.username},session.secret,{issuer:'cortex:password-change',audience:'cortex:password-change',expiresIn:'5m'});
+        return {challenge:'NEW_PASSWORD_REQUIRED',challengeToken};
+      }
       if (error || !data.user) {
         return reply.code(error?.status || 401).send({ error: error?.message || "Invalid credentials." });
       }

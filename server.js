@@ -34,7 +34,7 @@ import { createRetentionWorker } from "./backend/retention/sweep.js";
 // ✅ FIX APPLIED — bodyLimit added (NO OTHER CHANGES)
 const fastify = Fastify({
   logger: true,
-  bodyLimit: 1048576 // 1MB
+  bodyLimit: Number(process.env.BODY_LIMIT_MB || 8) * 1024 * 1024
 });
 
 // -------------------------------------------------------------
@@ -114,8 +114,11 @@ const routesDir = path.join(process.cwd(), "backend", "routes");
 
 const allowedRoutes = new Set([
   "auth.js",
+  "attachments.js",
   "chat.js",
   "document.js",
+  "presignedUpload.js",
+  "localFiles.js",
   "documentTypes.js",
   "ingest.js",
   "retrieve.js",
@@ -154,7 +157,7 @@ try {
 
   await fastify.listen({
     port: PORT,
-    host: "0.0.0.0"
+    host: process.env.CORTEX_ENV === 'local' ? '127.0.0.1' : "0.0.0.0"
   });
 
   console.log(`🔥 CORTÉX SERVER RUNNING — PORT ${PORT} [STAGE-46 + 47.6G]`);

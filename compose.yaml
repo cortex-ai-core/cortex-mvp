@@ -1,0 +1,33 @@
+name: cortex-local
+services:
+  postgres:
+    image: pgvector/pgvector:pg18
+    env_file: .local/dev/database.env
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: ["postgres-data:/var/lib/postgresql"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cortex"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  postgrest:
+    image: postgrest/postgrest:v16.4
+    env_file: .local/dev/postgrest.env
+    ports: ["127.0.0.1:3004:3000"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  parser:
+    profiles: [documents]
+    image: ${CORTEX_PARSER_IMAGE:-cortex-parser:aws-local}
+    env_file: .local/dev/parser.env
+    ports: ["127.0.0.1:8091:8090"]
+    mem_limit: 4g
+    cpus: 2
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+volumes:
+  postgres-data:

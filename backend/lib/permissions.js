@@ -14,9 +14,9 @@
 // =============================================================
 
 export const PERMISSION_MAP = {
-  super_admin: ["chat", "upload", "delete", "admin", "memory_read", "memory_write", "manage_personas", "manage_pcl", "manage_retention"],
-  admin:       ["chat", "upload", "delete", "admin", "memory_read", "memory_write", "manage_personas", "manage_pcl", "manage_retention"],
-  operator:    ["chat", "upload", "delete", "memory_read", "memory_write"],
+  super_admin: ["chat", "upload", "upload_ephemeral", "delete", "admin", "memory_read", "memory_write", "manage_personas", "manage_pcl", "manage_retention"],
+  admin:       ["chat", "upload", "upload_ephemeral", "delete", "admin", "memory_read", "memory_write", "manage_personas", "manage_pcl", "manage_retention"],
+  operator:    ["chat", "upload", "upload_ephemeral", "delete", "memory_read", "memory_write"],
   client:      ["chat", "upload", "memory_read", "memory_write"],
   viewer:      ["chat", "memory_read"],
 };

@@ -73,6 +73,7 @@ async function authPlugin(fastify) {
       req.method === "OPTIONS" ||
       req.url === "/health" ||
       req.url === "/api/health"
+      || (process.env.CORTEX_ENV === 'local' && process.env.NODE_ENV !== 'production' && req.url.startsWith('/api/local-files/'))
     ) {
       return;
     }

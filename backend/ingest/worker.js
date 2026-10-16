@@ -365,6 +365,24 @@ ${c.embed_text || c.text}`));
   }
 
   return {
+    sweepStale,
+    async processQueuedDocument(documentId, storagePath) {
+      const { data: current, error: readError } = await supabase.from('documents')
+        .select('id,status,storage_path').eq('id', documentId).maybeSingle();
+      if (readError) throw new Error('Could not read queued document.');
+      if (!current) throw new Error('Upload metadata is not available yet.');
+      if (storagePath && current.storage_path !== storagePath) throw new Error('Queued object does not match the document.');
+      if (current.status === 'ready') return { status: 'ready', duplicate: true };
+      if (current.status !== 'queued') throw new Error(`Document is ${current.status}; not claimed.`);
+      const { data, error } = await supabase.rpc('claim_document', { p_document_id: documentId });
+      if (error) throw new Error('Document claim failed.');
+      const doc = Array.isArray(data) ? data[0] : data;
+      if (!doc?.id) throw new Error('Document is already claimed.');
+      const stopHeartbeat = startHeartbeat(doc.id);
+      try { await processDocument(doc); return { status: 'ready', duplicate: false }; }
+      catch (error) { await failDocument(doc, error); throw error; }
+      finally { stopHeartbeat(); }
+    },
     start() {
       if (running) return;
       running = true;
