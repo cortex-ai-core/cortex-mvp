@@ -10,6 +10,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import { readFileSync } from 'node:fs';
 import type { Configuration } from './config.js';
 import type { Foundation } from './foundation.js';
+import { originSecretName } from './edge.js';
 
 export class Data extends Stack {
   readonly database: rds.CfnDBInstance;
@@ -25,8 +26,9 @@ export class Data extends Stack {
   readonly openaiSecret: secrets.Secret;
   readonly archives: s3.Bucket;
   readonly legacySecret: secrets.Secret;
+  readonly originSecret: secrets.Secret;
   readonly uploadSigner: lambda.Function;
-  constructor(scope: Construct, id: string, config: Configuration, foundation: Foundation, snapshot: string | undefined, publicOrigin: string | undefined, props: StackProps) {
+  constructor(scope: Construct, id: string, config: Configuration, foundation: Foundation, snapshot: string | undefined, publicOrigins: string[] = [], props: StackProps) {
     super(scope, id, props);
     const prefix = `cortex-${config.name}`;
     this.databaseGroup = new ec2.SecurityGroup(this, 'DatabaseAccess', { vpc: foundation.vpc, description: 'Only approved Cortex tasks can reach PostgreSQL', allowAllOutbound: false });
@@ -50,7 +52,10 @@ export class Data extends Stack {
     this.parserSecret = new secrets.Secret(this, 'ParserSigning', { secretName: `${prefix}/parser-signing`, generateSecretString: { passwordLength: 64, excludePunctuation: true } });
     this.openaiSecret = new secrets.Secret(this, 'OpenAi', { secretName: `${prefix}/openai` });
     this.legacySecret = new secrets.Secret(this, 'LegacyCognito', { secretName: `${prefix}/legacy-cognito` });
-    for (const secret of [this.databaseSecret, this.runtimeSecret, this.restSecret, this.parserSecret, this.openaiSecret, this.legacySecret]) secret.applyRemovalPolicy(RemovalPolicy.RETAIN);
+    // Shared by CloudFront and the public origin ALB through CloudFormation dynamic references.
+    // Do not enable automatic rotation: both resources must be redeployed together with a new value.
+    this.originSecret = new secrets.Secret(this, 'CloudFrontOrigin', { secretName: originSecretName(config.name), generateSecretString: { passwordLength: 64, excludePunctuation: true } });
+    for (const secret of [this.databaseSecret, this.runtimeSecret, this.restSecret, this.parserSecret, this.openaiSecret, this.legacySecret, this.originSecret]) secret.applyRemovalPolicy(RemovalPolicy.RETAIN);
     this.archives = new s3.Bucket(this, 'MigrationArchive', {
       bucketName: `cortex-migration-${config.name}-${this.account}-${config.region}`,
       versioned: true, encryption: s3.BucketEncryption.KMS, encryptionKey: foundation.key,
@@ -61,7 +66,7 @@ export class Data extends Stack {
       versioned: true, encryption: s3.BucketEncryption.S3_MANAGED, enforceSSL: true, eventBridgeEnabled: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL, objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
       removalPolicy: RemovalPolicy.RETAIN, lifecycleRules: [{ abortIncompleteMultipartUploadAfter: Duration.days(7) }],
-      cors: [{ allowedOrigins: ['http://localhost:3002', ...(publicOrigin ? [publicOrigin] : [])], allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD, s3.HttpMethods.PUT], allowedHeaders: ['*'], exposedHeaders: ['ETag'], maxAge: 3600 }],
+      cors: [{ allowedOrigins: ['http://localhost:3002', ...publicOrigins], allowedMethods: [s3.HttpMethods.GET, s3.HttpMethods.HEAD, s3.HttpMethods.PUT], allowedHeaders: ['*'], exposedHeaders: ['ETag'], maxAge: 3600 }],
     });
     this.web = new s3.Bucket(this, 'Web', {
       bucketName: `cortex-web-${config.name}-${this.account}-${config.region}`,

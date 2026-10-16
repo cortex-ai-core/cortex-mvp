@@ -72,6 +72,8 @@ def handler(event,context):
       resources: ['*'], conditions: { StringEquals: { 'aws:RequestedRegion': config.region } },
     }));
     execution.addToPolicy(new iam.PolicyStatement({ actions: ['cloudfront:*'], resources: ['*'] }));
+    // Attaching issued ACM certificates: CloudFront's viewer certificate lives in us-east-1, the ALB's in Oregon.
+    execution.addToPolicy(new iam.PolicyStatement({ actions: ['acm:DescribeCertificate'], resources: [`arn:aws:acm:us-east-1:${this.account}:certificate/*`, `arn:aws:acm:${config.region}:${this.account}:certificate/*`] }));
     execution.addToPolicy(new iam.PolicyStatement({actions:['route53:CreateHostedZone','route53:DeleteHostedZone','route53:GetHostedZone','route53:ListHostedZonesByName','route53:AssociateVPCWithHostedZone','route53:DisassociateVPCFromHostedZone','route53:ChangeResourceRecordSets'],resources:['*']}));
     execution.addToPolicy(new iam.PolicyStatement({
       actions: ['iam:CreateRole', 'iam:GetRole', 'iam:DeleteRole', 'iam:TagRole', 'iam:UntagRole', 'iam:UpdateAssumeRolePolicy', 'iam:PutRolePolicy', 'iam:GetRolePolicy', 'iam:DeleteRolePolicy', 'iam:AttachRolePolicy', 'iam:DetachRolePolicy', 'iam:PassRole'],

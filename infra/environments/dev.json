@@ -8,6 +8,11 @@
   "publicOrigin": "https://d3ni3zlrnsq9j7.cloudfront.net",
   "dns": {
     "viewerDomain": "cortex-dev.solluciopartners.com",
-    "originDomain": "cortex-dev-origin.solluciopartners.com"
+    "originDomain": "cortex-dev-origin.solluciopartners.com",
+    "apiOrigin": "private"
+  },
+  "certificates": {
+    "viewer": "arn:aws:acm:us-east-1:909762691423:certificate/c9db0a37-ed55-4cb5-ba07-8cd9cd0f2527",
+    "origin": "arn:aws:acm:us-west-2:909762691423:certificate/6c8b5b53-2147-41df-abcd-746267735a46"
   }
 }
