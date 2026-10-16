@@ -6,6 +6,8 @@ This repository contains the Fastify API, document ingestion code, Docling parse
 
 This README describes the **`feature/aws-conversion` source branch**, promoted through a pull request into **`dev`**: Francis's AWS backend conversion combined with the companion UI's `ian` lineage and the Oregon migration work. Existing Supabase/Vercel-era files remain in the tree; their presence does not describe the active AWS runtime.
 
+**Open the Oregon Dev frontend:** [Cortex Dev](https://d3ni3zlrnsq9j7.cloudfront.net/) — sign in with your Cortex email and password. The frontend files are hosted in private S3 in Oregon and delivered globally through CloudFront. API, worker and parser containers run on ECS/Fargate. The [custom hostname](docs/custom-domain.md) has a separate staged certificate/DNS setup; do not assume a new alias is active before its acceptance checks pass.
+
 ## Contents
 
 - [Start locally](#start-locally)
@@ -13,6 +15,7 @@ This README describes the **`feature/aws-conversion` source branch**, promoted t
 - [Code map](#code-map)
 - [Configuration and secrets](#configuration-and-secrets)
 - [AWS architecture and network](#aws-architecture-and-network)
+- [AWS Console walkthrough](#aws-console-walkthrough)
 - [Infrastructure and deployment](#infrastructure-and-deployment)
 - [Verification](#verification)
 - [Troubleshooting](#troubleshooting)
@@ -311,6 +314,152 @@ Arrows show logical requests/data flow; the network controls below determine con
 The guidebook describes a public load-balancer tier. The current Dev design deliberately retains a **private ALB behind a CloudFront VPC origin**, while the confirmed GoDaddy hostnames await certificate validation and staged public-origin deployment (see [custom-domain setup](docs/custom-domain.md)). Viewer access uses HTTPS; the private origin hop is explicitly HTTP port 80. ALB ingress permits AWS's Oregon CloudFront origin-facing managed prefix list.
 
 This is not full end-to-end origin TLS or a completed public-tier guidebook implementation. Changing the protocol of an attached CloudFront VPC origin requires a versioned new origin and distribution switch; an in-place update fails. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for the outstanding decision and acceptance criteria.
+
+## AWS Console walkthrough
+
+Choose **Cortex-Dev account `909762691423`** and **Oregon (`us-west-2`)** for regional services. CloudFront is global; the frontend's S3 origin is in Oregon. These steps inspect the running application; make configuration changes through the reviewed CDK/release path to avoid drift.
+
+### 1. Find the services and understand ECS/Fargate
+
+Open the [ECS Console](https://console.aws.amazon.com/ecs/), then **Clusters → `cortex-dev` → Services**. The cluster is defined in [operations.ts](infra/lib/operations.ts); service/task definitions are in [runtime.ts](infra/lib/runtime.ts).
+
+| Term | Meaning in Cortex |
+|---|---|
+| Image | Packaged code/dependencies stored in ECR; an image is not a running service |
+| Container | Running process created from an image |
+| Task definition | Versioned recipe specifying containers, image versions, commands, CPU, memory, configuration, roles and logs |
+| Task | Running instance of a task definition, containing one or more containers |
+| Service | Maintains the desired number of tasks and manages their deployment/replacement |
+| Cluster | Logical group containing the services and tasks |
+| Fargate | AWS-managed compute on which ECS runs these tasks; no application-managed EC2 hosts are required |
+
+ECS coordinates scheduling and services; Fargate supplies the compute. A service replaces failed/stopped tasks to maintain its desired count, subject to deployment/health settings. This does not mean unlimited capacity or automatic application scaling: the Dev desired counts are explicitly configured. See [AWS ECS services](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/ecs_services.html).
+
+The normal Dev configuration is **three service tasks containing five containers**:
+
+```text
+cortex-dev cluster
+├── cortex-dev-api service: one task
+│   ├── api: Fastify/Node.js, port 8081
+│   └── postgrest: database HTTP interface, loopback port 3001
+├── cortex-dev-parser service: one task
+│   └── parser: Python/FastAPI/Docling, port 8090
+└── cortex-dev-worker service: one task
+    ├── worker: Node.js SQS consumer, no public HTTP listener
+    └── postgrest: database HTTP interface, loopback port 3001
+```
+
+| Service | CPU and memory for the whole task | Image relationship |
+|---|---|---|
+| `cortex-dev-api` | 0.5 vCPU / 1 GB | Application image plus PostgREST image |
+| `cortex-dev-parser` | 2 vCPU / 4 GB | Separate parser image with extraction/OCR dependencies |
+| `cortex-dev-worker` | 0.5 vCPU / 1 GB | Same application image as API, different startup command, plus its own PostgREST sidecar |
+
+The two containers in an API/worker task share that task's resource allocation; the table is not a per-container allocation. Rolling deployments can temporarily run more tasks. Controlled database migration tasks are additional short-lived tasks, not a fourth always-running service. Revision numbers change with releases; inspect the service's active task definition instead of relying on a fixed revision from an earlier walkthrough.
+
+### 2. Inspect the API and PostgREST sidecar
+
+Select **`cortex-dev-api` → Tasks → a running task**. Inspect its containers, networking, task-definition revision, image tag, health and logs. In networking, confirm private subnet placement and no public IP. Follow the task-definition link to inspect CPU/memory, command, environment, secret references and IAM roles. Environment metadata is visible there; secret values should not be copied into diagnostics.
+
+The API image's [Dockerfile](Dockerfile) starts:
+
+```dockerfile
+CMD ["node", "scripts/aws/start-cloud.mjs"]
+```
+
+[start-cloud.mjs](scripts/aws/start-cloud.mjs) checks the account/region, obtains Cognito client configuration and imports [server.js](server.js). The server registers the allowed authentication, chat, attachment, document, retrieval, conversation, memory and settings routes. [chat.js](backend/routes/chat.js) coordinates retrieval and synthesis; [auth.js](backend/routes/auth.js) handles the login/password endpoints.
+
+In AWS, the API listens on **8081**. The local combined launcher uses **8082**. The API's database adapter talks to its own PostgREST sidecar at:
+
+```dotenv
+RDS_REST_URL=http://127.0.0.1:3001
+```
+
+PostgREST turns database HTTP requests into PostgreSQL queries and connects to the private RDS database using TLS. It is not the database itself. [database.js](backend/lib/services/database.js) preserves the existing query-builder interface while directing AWS requests to this sidecar; [start-postgrest.sh](scripts/aws/start-postgrest.sh) configures the RDS connection.
+
+Containers in the **same Fargate task** can use `localhost`. The API and worker each have their own sidecar; `localhost` does not reach a container in another task. The separate parser is reached through private DNS. See [AWS Fargate task networking](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-task-networking.html).
+
+### 3. Inspect the parser and its private connection
+
+Return to **Services → `cortex-dev-parser` → Tasks → a running task**. This task runs one Python container with FastAPI/Uvicorn, Docling, OCR and Office-rendering dependencies. Its larger memory allocation supports extraction/layout processing. [parser/Dockerfile](parser/Dockerfile) packages the tools/models, and [parser/app.py](parser/app.py) implements the endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /health` | Parser health |
+| `POST /parse` | File text, chunks, page/section information and extraction metadata |
+| `POST /render` | PDF rendition of supported Office documents |
+
+The API and worker use this private address, configured by `runtime.ts`:
+
+```dotenv
+PARSER_URL=http://parser.cortex-dev.internal:8090
+```
+
+Inspect **AWS Cloud Map → Namespaces → `cortex-dev.internal` → `parser`** to see service discovery. Cloud Map/private DNS lets callers find the parser without hard-coding its task IP. Security groups permit the API/worker-to-parser path; the parser has no public application URL.
+
+The actual request in [parserClient.js](backend/ingest/parserClient.js), inside `parseDocument()`, is:
+
+```javascript
+res = await fetch(`${PARSER_URL}/parse`, {
+  method: "POST",
+  headers: PARSER_SECRET ? { "X-Parser-Secret": PARSER_SECRET } : {},
+  body: form,
+  signal: controller.signal,
+});
+```
+
+Docling extracts document content. OpenAI handles the separate embedding and answer-generation calls. Temporary chat attachments call this client from [attachments.js](backend/routes/attachments.js); persistent document ingestion calls it from [worker.js](backend/ingest/worker.js).
+
+### 4. Inspect the background worker and document flow
+
+Open **ECS → `cortex-dev` → Services → `cortex-dev-worker`**. It uses the same application image as the API, but a different startup command. These excerpts from `runtime.ts` select the two processes:
+
+```javascript
+const api = createTask('api');
+const worker = createTask('worker', ['node','scripts/aws/start-worker.mjs']);
+```
+
+[start-worker.mjs](scripts/aws/start-worker.mjs) polls SQS and calls `processQueuedDocument()`. After successful processing it acknowledges the delivery with `DeleteMessageCommand`; failed processing is retried or can reach the dead-letter queue.
+
+For a **persistent library upload**, the browser sends the signed original to S3; **S3 → EventBridge → SQS → worker → Docling** drives processing. The worker generates embeddings and writes document/chunk metadata to RDS. Inspect **SQS → `cortex-dev-ingestion`** for backlog/age and **`cortex-dev-ingestion-dead`** for exhausted deliveries.
+
+For a **temporary chat attachment**, the API calls Docling and returns extracted text for the chat request. That path does not enqueue a knowledge-base document or persist the original to S3. This distinction explains why the two upload controls must be verified separately.
+
+### 5. Find the frontend in S3 and CloudFront
+
+Open the [S3 Console](https://console.aws.amazon.com/s3/) and choose **`cortex-web-dev-909762691423-us-west-2`**. It contains the exported frontend HTML, JavaScript, CSS and `_next` assets.
+
+The companion frontend's [next.config.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/next.config.ts) sets `output: "export"`. GitHub Actions builds the static files, then [publish.mjs](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/scripts/deploy/publish.mjs) uploads them to S3 and invalidates CloudFront. React runs in the browser; the frontend does not have a Fargate task or an AWS-hosted Next server.
+
+Open the [CloudFront Console](https://console.aws.amazon.com/cloudfront/v4/home), select Dev distribution **`EKXLLAE6FU3HV`**, and inspect **Origins** and **Behaviors**. The generated frontend address is:
+
+**[Open Cortex Dev](https://d3ni3zlrnsq9j7.cloudfront.net/)**
+
+| Viewer request | Current destination |
+|---|---|
+| Pages, JavaScript, CSS and images | Private S3 web bucket using origin access control |
+| `/api/*` | VPC origin → internal ALB → API task on port 8081 |
+
+This routing is defined in [delivery.ts](infra/lib/delivery.ts). The S3 files reside in Oregon; CloudFront caches/delivers them globally. CloudFront/API behavior changes for the new custom hostname/public HTTPS origin remain a separate staged operation in [custom-domain.md](docs/custom-domain.md). Use the Delivery stack outputs if a future environment/distribution has a different ID or URL. See [AWS CloudFront origins](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html).
+
+### 6. Locate supporting components and deployment artifacts
+
+| Console path | Resource / what to inspect | Source owner |
+|---|---|---|
+| ECR → Private repositories | `cortex-dev-api`, `cortex-dev-parser`, `cortex-dev-postgrest`: image tags/digests; worker reuses the API image | [foundation.ts](infra/lib/foundation.ts), [Dockerfile](Dockerfile), [PostgREST Dockerfile](scripts/aws/Dockerfile.postgrest) |
+| EC2 → Load Balancers → Cortex internal ALB → Target groups | API target health and forwarding to port8081; this is the current private origin | [runtime.ts](infra/lib/runtime.ts) |
+| RDS → Databases → `cortex-dev-oregon` | Private database status, TLS, backup/deletion settings and subnet group | [data.ts](infra/lib/data.ts) |
+| S3 → `cortex-documents-dev-909762691423-us-west-2` | Persistent originals and derived document files | [data.ts](infra/lib/data.ts), [storage.js](backend/lib/services/storage.js) |
+| Cognito → User pools → `cortex-dev` | Oregon identities/app client; Dev pool ID `us-west-2_zA5ZapHS6` | [data.ts](infra/lib/data.ts), [authentication.js](backend/lib/services/authentication.js) |
+| Lambda → Functions → `cortex-dev-upload-signer` | Private-subnet upload-signing function, configuration and logs | [data.ts](infra/lib/data.ts), [presign.py](infra/lambda/presign.py) |
+| CloudWatch → Logs → Log groups | `/cortex/dev/api`, `/cortex/dev/parser`, `/cortex/dev/worker`; sidecars use `api-postgrest`/`worker-postgrest` under the same prefix; controlled tasks use `/cortex/dev/database` | [runtime.ts](infra/lib/runtime.ts), [operations.ts](infra/lib/operations.ts) |
+| VPC → Your VPCs → Cortex `10.10.0.0/16` | Six Dev subnets, route tables, public NAT, S3 endpoint, security groups and Flow Logs | [foundation.ts](infra/lib/foundation.ts) |
+| Secrets Manager / IAM | Runtime secret references and task/execution roles; execution role supports image/secret retrieval and logs, while task roles authorize application AWS calls | [data.ts](infra/lib/data.ts), [runtime.ts](infra/lib/runtime.ts) |
+| CloudFormation → Stacks | `cortex-dev-foundation`, `cortex-dev-data`, `cortex-dev-operations`, `cortex-dev-application`, `cortex-dev-delivery`; inspect Resources, Outputs and Events | [infra/bin/cortex.ts](infra/bin/cortex.ts) |
+
+The parser/API/worker tasks and upload signer use private application subnets. RDS uses isolated data subnets. NAT resides in the public tier and enables permitted outbound calls. To inspect central Flow Log objects, switch to the separately authorized **Log Archive** account; their destination bucket is not owned by Cortex-Dev.
+
+A useful first tour is **API task → its two containers → parser task → CloudWatch logs → CloudFront origins/behaviors → frontend S3 bucket**. For a deployment, also inspect the ECS service events/task-definition revision and the exact ECR image tag recorded by the corresponding GitHub Actions run.
 
 ## Infrastructure and deployment
 
