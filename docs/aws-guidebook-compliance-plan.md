@@ -9,10 +9,10 @@ Read-only inspection with an STS-verified Cortex-Dev temporary session confirmed
 - Foundation, Data and Operations stacks are UPDATE_COMPLETE. The overnight Foundation correction succeeded.
 - VPC vpc-04f119534267186ac is10.10.0.0/16 with six subnets across us-west-2a/b: public10.10.0.0/24 and10.10.1.0/24; application10.10.2.0/24 and10.10.3.0/24; isolated data10.10.4.0/24 and10.10.5.0/24.
 - NAT nat-08d93899d70a6186a is available in public subnet subnet-0aa0343c49e52743c. Both application route tables send0.0.0.0/0 to it. Both data route tables have no internet/NAT default route. S3 gateway endpoint routes exist.
-- Default security group sg-0439c52bbae3c561b has zero inbound and outbound rules. Named database group accepts5432 only from the operations group at present; operations egress allows private database 5432 and internet HTTPS 443.
+- Default security group sg-0439c52bbae3c561b has zero inbound and outbound rules. Named database group accepts5432 from operations and application groups; operations egress allows private database 5432 and internet HTTPS 443.
 - RDS cortex-dev-oregon is available, encrypted, publiclyAccessible=false, in isolated data subnets, deletion-protected, with seven-day automated backups. Dev is single-AZ as configured.
-- ECS cluster cortex-dev is ACTIVE with zero services, zero running tasks and zero pending tasks. The failed initial Application stack has been removed; Delivery has not been deployed. Application service placement remains a template property until actual deployment is checked.
-- Flow Logs are ACTIVE and delivering successfully to Dev CloudWatch; central Log Archive delivery is not configured yet.
+- Application stack is CREATE_COMPLETE. API, parser and ingestion worker each have one running task and zero pending tasks. Live ENIs are in application subnets with no public IP associations. Delivery is provisioning its CloudFront VPC origin.
+- Flow Logs are ACTIVE/SUCCESS to both the new central Log Archive S3 destination and the retained local Dev CloudWatch copy. Nonempty central Parquet objects have been read with the Log Archive identity.
 - Oregon Cognito has 15 enabled users, all FORCE_CHANGE_PASSWORD, and no migration Lambda trigger. No Ohio authentication bridge is present.
 
 The private inspection snapshot is in ignored.local/migration/inspection-20261016.json; it contains configuration evidence, not session credentials. Previously archived database/file comparisons remain unchanged. The cloud continuation and executor were archived after preserving their handoff and offline CDK context fix locally.
@@ -29,7 +29,7 @@ The source stack accepts a reviewed destination ARN/prefix as configuration, val
 
 Acceptance: live source FlowLog ACTIVE and DeliverLogsStatus SUCCESS; generate known Dev network traffic, then verify fresh account/Region-tagged log objects in the central bucket and read them with an authorized Log Archive identity. A source-side green status alone is insufficient evidence. Preserve policy/change-set review and delivery evidence.
 
-Access resolved: a separate STS-verified Log Archive session was supplied. A dedicated retained, encrypted, private bucket has been provisioned by the new cortex-central-flowlogs stack in account747301449112. Control Tower-owned resources were not modified. Dev central FlowLog fl-0110297a2ed5a0a17 is ACTIVE/SUCCESS and a nonempty Parquet object has arrived in the correct source-account/Region prefix. The first inspected Parquet file contains17 records for the correct Dev account, including6 accepted traffic records with statusOK. Two initial records reportSKIPDATA; inspect later batches for continuing delivery health.
+Access resolved: a separate STS-verified Log Archive session was supplied. A dedicated retained, encrypted, private bucket has been provisioned by the new cortex-central-flowlogs stack in account747301449112. Control Tower-owned resources were not modified. Dev central FlowLog fl-0110297a2ed5a0a17 is ACTIVE/SUCCESS and a nonempty Parquet object has arrived in the correct source-account/Region prefix. The first inspected Parquet file contains17 records for the correct Dev account, including6 accepted traffic records with statusOK. Two initial records reportSKIPDATA. A later batch contains70 records, including30OK,37NODATA and3SKIPDATA. Delivery is working, but Flow Logs must not be represented as lossless; continue monitoring skipped-record rates.
 
 ## 2. Upload-signing Lambda in private application subnets
 
@@ -49,7 +49,7 @@ Acceptance: EC2 DescribeSecurityGroups still reports both rule arrays empty afte
 
 ## 4. Public-tier ALB with private applications — deferred by Sanjay
 
-Revise the not-yet-deployed Application/Delivery design to match the guidebook: internet-facing ALB across both public subnets, API/worker/parser Fargate tasks in private application subnets with assignPublicIp=DISABLED, and RDS remaining isolated. Public subnet placement is for the load balancer/NAT; it does not make the API tasks or database public.
+Revise the interim Application/Delivery design to match the guidebook: internet-facing ALB across both public subnets, API/worker/parser Fargate tasks in private application subnets with assignPublicIp=DISABLED, and RDS remaining isolated. Public subnet placement is for the load balancer/NAT; it does not make the API tasks or database public.
 
 CloudFront remains the user entry point. Replace the private VPC-origin configuration with the reviewed public-ALB origin. Restrict ALB security-group ingress to HTTPS 443 from the AWS-managed CloudFront origin-facing prefix list. Configure the listener to forward only requests with a deployment-generated secret origin header; default action rejects other requests. Store/generate the header secret through AWS secret references, never source control or user-visible config. Allow ALB-to-API 8081 through named groups. Do not open the API or PostgREST directly to the internet.
 
@@ -57,7 +57,7 @@ RequireHTTPS from CloudFront to the ALB using an ACM certificate inus-west-2 and
 
 Acceptance: live ALB Scheme=internet-facing and its subnets are public; HTTPS listener/certificate are valid; ingress is restricted to the CloudFront managed prefix list; direct untrusted ALB requests cannot reach the application, and requests lacking the origin header receive the configured rejection. CloudFront/API health and streaming chat work over the public origin with caching disabled for authenticatedAPI. ECS ENIs have no public IPs and live service subnet IDs are application-tier only. Verify RDS remains private and unchanged.
 
-Sanjay explicitly deferred this change until he supplies the origin domain/DNS details. The interim deployment will retain the existing private ALB and CloudFront VPC origin; record this as an open guidebook deviation. Dependency: approved origin hostname/DNS zone and certificate validation access. Do not claim this control is implemented before that input exists. The public ALB and signer changes are planned updates; current code still contains the original private ALB/VPC origin until this plan is implemented.
+Sanjay explicitly deferred this change until he supplies the origin domain/DNS details. The interim deployment will retain the existing private ALB and CloudFront VPC origin; record this as an open guidebook deviation. Dependency: approved origin hostname/DNS zone and certificate validation access. Do not claim this control is implemented before that input exists. The signer change is deployed and verified. The public ALB remains pending; current code retains the private ALB/VPC origin. The interim private hop explicitly uses HTTP port80 to match its listener; the viewer connection remains HTTPS. Changing to a public origin requires validated HTTPS first.
 
 ## 5. Release order and remaining acceptance
 

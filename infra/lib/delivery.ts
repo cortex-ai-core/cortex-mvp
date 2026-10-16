@@ -14,7 +14,9 @@ export class Delivery extends Stack {
     const distribution=new cloudfront.Distribution(this,'Distribution',{
       comment:id,defaultRootObject:'index.html',minimumProtocolVersion:cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       defaultBehavior:{origin:origins.S3BucketOrigin.withOriginAccessControl(web),viewerProtocolPolicy:cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,cachePolicy:cloudfront.CachePolicy.CACHING_OPTIMIZED,responseHeadersPolicy:cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS,functionAssociations:[{function:route,eventType:cloudfront.FunctionEventType.VIEWER_REQUEST}]},
-      additionalBehaviors:{'api/*':{origin:origins.VpcOrigin.withApplicationLoadBalancer(runtime.alb,{readTimeout:Duration.seconds(120)}),viewerProtocolPolicy:cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,allowedMethods:cloudfront.AllowedMethods.ALLOW_ALL,cachePolicy:cloudfront.CachePolicy.CACHING_DISABLED,originRequestPolicy:cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,responseHeadersPolicy:cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS}},
+      // The interim private ALB listens on HTTP. Keep viewer HTTPS and make this
+      // private hop explicit; MATCH_VIEWER would select its absent HTTPS listener.
+      additionalBehaviors:{'api/*':{origin:origins.VpcOrigin.withApplicationLoadBalancer(runtime.alb,{readTimeout:Duration.seconds(120),protocolPolicy:cloudfront.OriginProtocolPolicy.HTTP_ONLY,httpPort:80}),viewerProtocolPolicy:cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,allowedMethods:cloudfront.AllowedMethods.ALLOW_ALL,cachePolicy:cloudfront.CachePolicy.CACHING_DISABLED,originRequestPolicy:cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,responseHeadersPolicy:cloudfront.ResponseHeadersPolicy.SECURITY_HEADERS}},
     });
     new CfnOutput(this,'Url',{value:`https://${distribution.distributionDomainName}`});
     new CfnOutput(this,'DistributionId',{value:distribution.distributionId});

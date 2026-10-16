@@ -36,6 +36,8 @@ test('complete deployment graph synthesizes without a stack cycle and isolates o
   rt.resourceCountIs('AWS::ECS::Service',3);
   for(const service of Object.values(rt.findResources('AWS::ECS::Service')) as any[])assert.equal(service.Properties.NetworkConfiguration.AwsvpcConfiguration.AssignPublicIp,'DISABLED');
   const dt=Template.fromStack(delivery);
+  rt.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener',{Port:80,Protocol:'HTTP'});
+  dt.hasResourceProperties('AWS::CloudFront::VpcOrigin',{VpcOriginEndpointConfig:Match.objectLike({HTTPPort:80,OriginProtocolPolicy:'http-only'})});
   dt.hasResourceProperties('AWS::CloudFront::Distribution',{DistributionConfig:Match.objectLike({CacheBehaviors:Match.arrayWith([Match.objectLike({PathPattern:'api/*',CachePolicyId:'4135ea2d-6df8-44a3-9df3-4b5a84be39ad'})])})});
 });
 
