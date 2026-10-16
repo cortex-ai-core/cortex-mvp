@@ -84,7 +84,7 @@ def handler(event,context):
         assumedBy: new iam.FederatedPrincipal(provider.oidcProviderArn, {
           StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
           StringLike: { 'token.actions.githubusercontent.com:sub': [
-            `repo:cortex-ai-core/${repository}:ref:refs/heads/aws-migration`,
+            `repo:cortex-ai-core/${repository}:ref:refs/heads/dev`,
             `repo:cortex-ai-core/${repository}:environment:${config.name}`,
           ] },
         }, 'sts:AssumeRoleWithWebIdentity'),

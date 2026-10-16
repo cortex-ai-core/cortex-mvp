@@ -1,7 +1,7 @@
 name: AWS Oregon backend
 on:
   push:
-    branches: [aws-migration]
+    branches: [dev]
   pull_request:
   workflow_dispatch:
     inputs:

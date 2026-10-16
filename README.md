@@ -4,7 +4,7 @@ Cortéx is a document-grounded chat application for SolluCIO. Users sign in to a
 
 This repository contains the Fastify API, document ingestion code, Docling parser service, database migrations, local development launcher, and AWS CDK infrastructure. The browser application lives in [cortex-ui-mvp](https://github.com/cortex-ai-core/cortex-ui-mvp).
 
-This README describes the **`aws-migration` branch**: Francis's AWS backend conversion combined with the companion UI's `ian` lineage and the Oregon migration work. Existing Supabase/Vercel-era files remain in the tree; their presence does not describe the active AWS runtime.
+This README describes the **`feature/aws-conversion` source branch**, promoted through a pull request into **`dev`**: Francis's AWS backend conversion combined with the companion UI's `ian` lineage and the Oregon migration work. Existing Supabase/Vercel-era files remain in the tree; their presence does not describe the active AWS runtime.
 
 ## Contents
 
@@ -28,7 +28,7 @@ This README describes the **`aws-migration` branch**: Francis's AWS backend conv
 - AWS CLI v2 and a dedicated **SolluCIO Cortex-Dev** login/profile for account **909762691423**, region **us-west-2**.
 - An enabled, email-verified user already present in the **Oregon Dev Cognito pool**. Setup links that identity to a synthetic local workspace; it does not create a Cognito user or copy the Ohio dataset.
 - Permission to read the Dev Data stack outputs, the Cognito user/app-client configuration, and the OpenAI secret used by local setup.
-- Both repositories checked out as sibling folders on `aws-migration`:
+- Both repositories checked out as sibling folders on `feature/aws-conversion` while the Dev promotion PRs are under review. After merging them, use `dev` for the shared development baseline:
 
 ```text
 repositories/
@@ -39,8 +39,8 @@ repositories/
 For a fresh checkout, from your chosen parent directory:
 
 ```bash
-git clone --branch aws-migration https://github.com/cortex-ai-core/cortex-mvp.git
-git clone --branch aws-migration https://github.com/cortex-ai-core/cortex-ui-mvp.git
+git clone --branch feature/aws-conversion https://github.com/cortex-ai-core/cortex-mvp.git
+git clone --branch feature/aws-conversion https://github.com/cortex-ai-core/cortex-ui-mvp.git
 cd cortex-mvp
 npm ci
 npm --prefix ../cortex-ui-mvp ci
@@ -200,18 +200,18 @@ The database adapter still uses the Supabase JavaScript client's query-builder i
 
 ### Companion frontend
 
-These links refer to the [UI repository's `aws-migration` branch](https://github.com/cortex-ai-core/cortex-ui-mvp/tree/aws-migration):
+These links refer to the [UI repository's `feature/aws-conversion` branch](https://github.com/cortex-ai-core/cortex-ui-mvp/tree/feature/aws-conversion):
 
 | File | Responsibility |
 |---|---|
-| [app/ChatClient.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/app/ChatClient.tsx) | Main chat screen, attachment chips, private mode and conversation state |
-| [app/login/page.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/app/login/page.tsx) | Login and first-password-change flow |
-| [app/reset-password/page.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/app/reset-password/page.tsx) | Password reset screen |
-| [app/document/page.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/app/document/page.tsx) | Document-library screen |
-| [lib/sendChat.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/lib/sendChat.ts) | Chat requests, streaming and source metadata |
-| [lib/attachmentsApi.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/lib/attachmentsApi.ts), [lib/documentsApi.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/lib/documentsApi.ts) | Temporary attachment and persistent document API clients |
-| [lib/backend.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/lib/backend.ts) | Backend base URL; an explicit empty value selects same-origin API requests |
-| [next.config.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/aws-migration/next.config.ts) | Static export, build directory and static image behavior |
+| [app/ChatClient.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/app/ChatClient.tsx) | Main chat screen, attachment chips, private mode and conversation state |
+| [app/login/page.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/app/login/page.tsx) | Login and first-password-change flow |
+| [app/reset-password/page.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/app/reset-password/page.tsx) | Password reset screen |
+| [app/document/page.tsx](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/app/document/page.tsx) | Document-library screen |
+| [lib/sendChat.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/lib/sendChat.ts) | Chat requests, streaming and source metadata |
+| [lib/attachmentsApi.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/lib/attachmentsApi.ts), [lib/documentsApi.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/lib/documentsApi.ts) | Temporary attachment and persistent document API clients |
+| [lib/backend.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/lib/backend.ts) | Backend base URL; an explicit empty value selects same-origin API requests |
+| [next.config.ts](https://github.com/cortex-ai-core/cortex-ui-mvp/blob/feature/aws-conversion/next.config.ts) | Static export, build directory and static image behavior |
 
 The AWS UI is a Next.js/React **static export**, not a Next server on Fargate. Adding SSR, server actions, middleware or Next API endpoints requires revisiting hosting. Browser variables prefixed `NEXT_PUBLIC_` are public build-time values, never a place for secrets.
 
@@ -336,10 +336,12 @@ Backend workflow: [.github/workflows/aws.yml](.github/workflows/aws.yml). The co
 | Trigger | Backend | Frontend |
 |---|---|---|
 | Pull request | Regression tests, infrastructure type/tests and synthesis; no deployment | Static build; no deployment |
-| Push to `aws-migration` | Verify, then deploy Dev | Build, then publish Dev |
+| Push to `dev` | Verify, then deploy Dev | Build, then publish Dev |
 | Manual dispatch | Select Dev/Test/Prod after matching account bootstrap and workflow availability | Select an already-provisioned environment |
 
-The current workflow deploys on every push to `aws-migration`, including documentation changes. Deployment jobs are serialized per environment. GitHub obtains temporary role credentials through OIDC with account restrictions; it does not need long-lived AWS keys.
+After these promotion PRs merge, the workflow deploys on every push to `dev`, including documentation changes. Pushes to `feature/aws-conversion` do not deploy; its PRs run verification only. Deployment jobs are serialized per environment. GitHub obtains temporary role credentials through OIDC with account restrictions; it does not need long-lived AWS keys.
+
+The Foundation templates trust the `dev` branch and the selected GitHub environment. Existing live roles already trust the named environment used by deployment jobs, so this workflow transition does not require an IAM change to run. Removing the old direct `aws-migration` trust subject from live IAM still requires the separate reviewed Foundation update; normal releases do not apply Foundation.
 
 Backend release sequence:
 
@@ -422,7 +424,7 @@ Use Cortex-Dev **909762691423**, **Oregon**, and the [Dev application](https://d
 | S3 / Cognito | Private/versioned objects and correct Oregon identities; avoid exposing object bodies or credentials |
 | GitHub Actions | Both repositories' actual push deployment results, not just PR verification |
 
-Test existing documents, a new persistent upload, chat attachments, cited answers, private mode, role/workspace isolation and reload behavior through the deployed UI. Successful API health does not establish these flows. Snapshot migration verification and prior functional smoke results are point-in-time evidence recorded in the operating/handoff guides; repeat relevant checks after changes. The attachment route restoration passed isolated regression and deployment checks; post-deployment Safari composer acceptance remains pending in the current handoff.
+Test existing documents, a new persistent upload, chat attachments, cited answers, private mode, role/workspace isolation and reload behavior through the deployed UI. Successful API health does not establish these flows. Snapshot migration verification and prior functional smoke results are point-in-time evidence recorded in the operating/handoff guides; repeat relevant checks after changes. The attachment route restoration passed isolated regression and deployment checks; live normal-mode Safari acceptance subsequently returned the expected synthetic PDF code. Private-mode browser acceptance remains a separate check.
 
 ## Troubleshooting
 
