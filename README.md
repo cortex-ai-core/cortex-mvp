@@ -308,7 +308,7 @@ Arrows show logical requests/data flow; the network controls below determine con
 
 ### Current load-balancer variation
 
-The guidebook describes a public load-balancer tier. The current Dev design deliberately retains a **private ALB behind a CloudFront VPC origin**, pending an approved domain/DNS input. Viewer access uses HTTPS; the private origin hop is explicitly HTTP port 80. ALB ingress permits AWS's Oregon CloudFront origin-facing managed prefix list.
+The guidebook describes a public load-balancer tier. The current Dev design deliberately retains a **private ALB behind a CloudFront VPC origin**, while the confirmed GoDaddy hostnames await certificate validation and staged public-origin deployment (see [custom-domain setup](docs/custom-domain.md)). Viewer access uses HTTPS; the private origin hop is explicitly HTTP port 80. ALB ingress permits AWS's Oregon CloudFront origin-facing managed prefix list.
 
 This is not full end-to-end origin TLS or a completed public-tier guidebook implementation. Changing the protocol of an attached CloudFront VPC origin requires a versioned new origin and distribution switch; an in-place update fails. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for the outstanding decision and acceptance criteria.
 
@@ -460,6 +460,7 @@ Continuously running Fargate, RDS, NAT and the ALB incur ongoing costs, along wi
 
 ## Further documentation
 
+- [New custom hostname and GoDaddy DNS](docs/custom-domain.md): separate ACM stacks, external validation and staged public HTTPS-origin acceptance.
 - [AWS migration and operations](docs/aws-migration.md): release details, verified migration evidence and local setup.
 - [Guidebook compliance plan](docs/aws-guidebook-compliance-plan.md): network/logging requirements, exceptions and remaining acceptance.
 - [Ohio retirement](docs/ohio-retirement.md): gated manual retirement instructions.

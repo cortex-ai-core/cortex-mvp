@@ -35,10 +35,17 @@ jobs:
           AWS_REGION: us-west-2
           AWS_DEFAULT_REGION: us-west-2
           AWS_EC2_METADATA_DISABLED: 'true'
+      - name: Synthesize DNS certificate requests without AWS lookups
+        run: npm run synth:certificates --prefix infra -- -c environment=dev --no-lookups --quiet
+        env:
+          CDK_DEFAULT_ACCOUNT: '909762691423'
+          AWS_EC2_METADATA_DISABLED: 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: reviewed-cloudformation
-          path: infra/cdk.out/*.template.json
+          path: |
+            infra/cdk.out/*.template.json
+            infra/cdk.out-certificates/*.template.json
   deploy:
     concurrency:
       group: cortex-backend-deployment-${{ github.event.inputs.environment || 'dev' }}

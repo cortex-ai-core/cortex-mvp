@@ -5,5 +5,9 @@
   "image": "migration-20261015-5",
   "parserImage": "migration-20261015-1",
   "postgrestImage": "migration-20261015-1",
-  "publicOrigin": "https://d3ni3zlrnsq9j7.cloudfront.net"
+  "publicOrigin": "https://d3ni3zlrnsq9j7.cloudfront.net",
+  "dns": {
+    "viewerDomain": "cortex-dev.solluciopartners.com",
+    "originDomain": "cortex-dev-origin.solluciopartners.com"
+  }
 }

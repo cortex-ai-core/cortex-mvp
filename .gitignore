@@ -24,3 +24,4 @@ infra/cdk.context.json
 .local/
 
 infra/cdk.out-logs/
+infra/cdk.out-certificates/

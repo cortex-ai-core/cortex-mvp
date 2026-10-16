@@ -9,7 +9,8 @@
     "diff": "cdk diff",
     "deploy": "cdk deploy",
     "test": "tsx --test test/*.test.ts",
-    "synth:logs": "cdk synth --app \"npx tsx bin/log-archive.ts\" --output cdk.out-logs"
+    "synth:logs": "cdk synth --app \"npx tsx bin/log-archive.ts\" --output cdk.out-logs",
+    "synth:certificates": "cdk synth --app \"npx tsx bin/certificates.ts\" --output cdk.out-certificates"
   },
   "dependencies": {
     "aws-cdk-lib": "2.272.0",
