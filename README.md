@@ -601,9 +601,9 @@ The Ohio RDS snapshot was independently copied/restored into Oregon. Before appl
 
 This was a **point-in-time copy, not continuous replication**. Later Ohio writes do not automatically appear in Oregon. Agree a write cutoff and reconcile both sides before retirement; never restore an old snapshot over a now-active Oregon database. Verification reports and source identity metadata are retained in the private encrypted/versioned Oregon migration archive, not in Git.
 
-**Ohio retirement completed on October16 after Sanjay explicitly authorized it; a fresh October19 inventory confirmed cleanup.** Recovery snapshots, archived files and verification evidence remain encrypted in Oregon. The independent restore matched all25 original tables /8,404 rows. See the [retirement record and recovery locations](docs/ohio-retirement.md). Nothing in the local launcher or normal release performs retirement; the old Ohio connection scripts are obsolete.
+**Ohio retirement completed on October 16 after Sanjay explicitly authorized it; a fresh October 19 inventory confirmed cleanup.** Recovery snapshots, archived files and verification evidence remain encrypted in Oregon. The independent restore matched all 25 original tables / 8,404 rows. See the [retirement record and recovery locations](docs/ohio-retirement.md). Nothing in the local launcher or normal release performs retirement; the old Ohio connection scripts are obsolete.
 
-**Prod CloudWatch retention:** the CDK environment policy sets all seven managed Prod log groups to365days, including the Foundation VPC flow logs. Dev/Test retain30days; service-created Lambda/RDS groups currently never expire. See [log retention and rollout verification](docs/log-retention.md). These source settings require the corresponding Prod stack deployments, including the separately reviewed Foundation operation.
+**Prod CloudWatch retention:** the CDK environment policy sets all seven managed Prod log groups to 365 days, including the Foundation VPC flow logs. Dev/Test retain 30 days; service-created Lambda/RDS groups currently never expire. See [log retention and rollout verification](docs/log-retention.md). These source settings require the corresponding Prod stack deployments, including the separately reviewed Foundation operation.
 
 Dev application deployment is not a claim of complete guidebook or production readiness. Remaining acceptance includes public-ALB/DNS/origin TLS alignment, confirmed operational alert subscribers, Audit-owned GuardDuty Fargate runtime monitoring, AWS Backup planning and restore exercises, production WAF/TLS readiness, and GitHub environment protection/admin settings. RDS native backups currently retain seven days; they do not establish an organization-wide backup plan. Recovery-email delivery and the full local UI flow need explicit verification. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for scope and ownership.
 
@@ -615,7 +615,7 @@ Continuously running Fargate, RDS, NAT and the ALB incur ongoing costs, along wi
 - [AWS migration and operations](docs/aws-migration.md): release details, verified migration evidence and local setup.
 - [Guidebook compliance plan](docs/aws-guidebook-compliance-plan.md): network/logging requirements, exceptions and remaining acceptance.
 - [Ohio retirement](docs/ohio-retirement.md): completed cleanup, recovery locations and original audit procedure.
-- [CloudWatch retention](docs/log-retention.md): Prod365-day policy, full-graph verification and deployment checks.
+- [CloudWatch retention](docs/log-retention.md): Prod 365-day policy, full-graph verification and deployment checks.
 - [AWS handoff](docs/aws-handoff.md): chronological implementation/debugging evidence; later entries supersede earlier temporary status.
 - [Parser service](parser/README.md): API, extraction provenance, OCR and sizing.
 - [Retention](docs/RETENTION.md) and [retention acceptance](docs/RETENTION_ACCEPTANCE.md).
