@@ -14,7 +14,9 @@
     "setup:local": "node scripts/dev/setup.mjs",
     "dev:local": "node scripts/dev/start.mjs",
     "stop:local": "docker compose --profile documents down",
-    "test:migration": "node --test tests/migration/*.test.mjs"
+    "test:migration": "node --test tests/migration/*.test.mjs",
+    "test:deployment": "node --test tests/deployment/*.test.mjs",
+    "prepare:environments": "node scripts/deploy/prepare.mjs"
   },
   "keywords": [],
   "author": "",

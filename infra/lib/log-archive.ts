@@ -2,11 +2,12 @@ import { Stack, Duration, RemovalPolicy, CfnOutput, type StackProps } from 'aws-
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { environments } from './config.js';
 
 export const centralLogs = {
   account: '747301449112', region: 'us-west-2',
   bucket: 'sollucio-vpc-flowlogs-747301449112-us-west-2',
-  prefix: 'vpc-flowlogs', sources: ['909762691423'], retentionDays: 365,
+  prefix: 'vpc-flowlogs', sources: Object.values(environments).map(environment => environment.account), retentionDays: 365,
 } as const;
 
 export class LogArchive extends Stack {

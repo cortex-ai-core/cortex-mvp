@@ -15,7 +15,7 @@ All seven managed groups retain their existing CloudFormation `Retain` deletion/
 
 Lambda default log groups (upload signer and default-security-group cleanup) and RDS-export log groups are created by their AWS services and currently have no expiry configured. This satisfies the requested "365 days or never expire" policy. If these groups are later managed explicitly, apply the same Prod retention floor. CloudWatch's no-expiry setting is an omitted `RetentionInDays`; do not replace it with a shorter period. See [AWS log-group retention](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-logs-loggroup.html).
 
-The central S3 flow-log archive has its own 365-day lifecycle. This change covers the CloudWatch destination and does not extend the central archive's current Dev-only delivery policy to Prod.
+The central S3 flow-log archive has its own 365-day lifecycle. Test/Prod prerequisite templates now include account-scoped central delivery, but the last live check still permitted Dev only. The archive policy and source Foundation deployments need separate authorization; offline synthesis is not evidence of Prod log delivery. See [environment prerequisites](environment-prerequisites.md).
 
 ## Verification and rollout
 

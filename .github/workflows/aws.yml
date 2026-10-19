@@ -5,11 +5,15 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      prepare_only:
+        type: boolean
+        default: true
+        description: Verify and synthesize only; do not authenticate to AWS or deploy
       environment:
         type: choice
         options: [dev, test, prod]
         default: dev
-        description: Target account (test/prod require their own bootstrap and environment approval)
+        description: Target account (test/prod remain locked pending a separate enablement PR)
 permissions:
   contents: read
 concurrency:
@@ -26,8 +30,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:migration
+      - run: npm run test:deployment
       - run: npm ci --prefix infra
       - run: npm run build --prefix infra && npm test --prefix infra
+      - name: Prepare all three environments offline (no AWS session)
+        run: npm run prepare:environments
+      - uses: actions/upload-artifact@v4
+        with:
+          name: offline-environment-preparation
+          path: .local/preparation
+          include-hidden-files: true
       - run: npm run synth --prefix infra -- -c environment=dev -c includeData=true -c includeRuntime=true --quiet
         env:
           CDK_DEFAULT_ACCOUNT: '909762691423'
@@ -50,7 +62,7 @@ jobs:
     concurrency:
       group: cortex-backend-deployment-${{ github.event.inputs.environment || 'dev' }}
       cancel-in-progress: false
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.prepare_only == false)
     needs: verify
     runs-on: ubuntu-24.04-arm
     environment: ${{ github.event.inputs.environment || 'dev' }}
@@ -68,6 +80,7 @@ jobs:
           cache: npm
       - id: target
         run: |
+          node scripts/deploy/policy.mjs "$CORTEX_ENVIRONMENT"
           node --input-type=module -e 'import fs from "node:fs";const c=JSON.parse(fs.readFileSync(`infra/environments/${process.env.CORTEX_ENVIRONMENT}.json`));fs.appendFileSync(process.env.GITHUB_OUTPUT,`account=${c.account}\n`);'
       - uses: aws-actions/configure-aws-credentials@v6.3.0
         with:

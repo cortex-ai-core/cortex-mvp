@@ -64,6 +64,8 @@ AWS Console tour: **ECS -> Clusters -> cortex-dev -> Services -> service -> Task
 
 Both repositories verify pull requests without deploying. Merging/pushing to `dev` triggers the Dev release, including documentation-only merges. GitHub uses temporary AWS credentials through OIDC. Deployment jobs are serialized per environment.
 
+Manual dispatch now defaults to `prepare_only: true`, which skips deployment; explicitly select false for an authorized Dev release. Test/Prod remain blocked by repository policy even if preparation is disabled. Their future provisioning and same-artifact promotion prerequisites are in [environment prerequisites](environment-prerequisites.md).
+
 Backend workflow:
 
 1. Install dependencies, run regression/infrastructure checks and synthesize CloudFormation.

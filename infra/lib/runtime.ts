@@ -19,7 +19,7 @@ import type { Operations } from './operations.js';
 import { originHeader, type PublicEdge } from './edge.js';
 
 export class Runtime extends Stack {
-  readonly alb: elb.ApplicationLoadBalancer;
+  readonly alb?: elb.ApplicationLoadBalancer;
   readonly publicAlb?: elb.ApplicationLoadBalancer;
   readonly queue: sqs.Queue;
   constructor(scope: Construct, id: string, config: Configuration, foundation: Foundation, data: Data, operations: Operations, image: string, parserImage: string, postgrestImage: string, props: StackProps & { edge?: PublicEdge }) {
@@ -73,12 +73,16 @@ export class Runtime extends Stack {
     const service=new ecs.FargateService(this,'Api',{serviceName:`${prefix}-api`,cluster:operations.cluster,taskDefinition:api.task,securityGroups:[taskGroup],vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},desiredCount:config.multiAz?2:1,minHealthyPercent:100,maxHealthyPercent:200,circuitBreaker:{rollback:true},healthCheckGracePeriod:Duration.seconds(90)});
     const worker=createTask('worker',['node','scripts/aws/start-worker.mjs']);
     new ecs.FargateService(this,'Worker',{serviceName:`${prefix}-worker`,cluster:operations.cluster,taskDefinition:worker.task,securityGroups:[taskGroup],vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},desiredCount:1,minHealthyPercent:100,maxHealthyPercent:200,circuitBreaker:{rollback:true}});
-    const albGroup=new ec2.SecurityGroup(this,'OriginAccess',{vpc:foundation.vpc,allowAllOutbound:false});
-    albGroup.addIngressRule(ec2.Peer.prefixList(config.cloudFrontOriginFacingPrefixListId),ec2.Port.tcp(80),'CloudFront origin-facing service only');
-    albGroup.addEgressRule(taskGroup,ec2.Port.tcp(8081),'API tasks');
-    taskGroup.addIngressRule(albGroup,ec2.Port.tcp(8081),'Private ALB only');
-    this.alb=new elb.ApplicationLoadBalancer(this,'LoadBalancer',{vpc:foundation.vpc,internetFacing:false,securityGroup:albGroup,vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},idleTimeout:Duration.seconds(120)});
-    this.alb.addListener('Http',{port:80,open:false}).addTargets('Api',{port:8081,protocol:elb.ApplicationProtocol.HTTP,targets:[service],healthCheck:{path:'/api/health',healthyHttpCodes:'200'},deregistrationDelay:Duration.seconds(30)});
+    // Preserve Dev's staged origin and rollback identity. Fresh Test/Prod environments
+    // with a public HTTPS origin do not need a second ALB or a VPC origin.
+    if(config.name==='dev'||props.edge?.apiOrigin!=='public'){
+      const albGroup=new ec2.SecurityGroup(this,'OriginAccess',{vpc:foundation.vpc,allowAllOutbound:false});
+      albGroup.addIngressRule(ec2.Peer.prefixList(config.cloudFrontOriginFacingPrefixListId),ec2.Port.tcp(80),'CloudFront origin-facing service only');
+      albGroup.addEgressRule(taskGroup,ec2.Port.tcp(8081),'API tasks');
+      taskGroup.addIngressRule(albGroup,ec2.Port.tcp(8081),'Private ALB only');
+      this.alb=new elb.ApplicationLoadBalancer(this,'LoadBalancer',{vpc:foundation.vpc,internetFacing:false,securityGroup:albGroup,vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},idleTimeout:Duration.seconds(120)});
+      this.alb.addListener('Http',{port:80,open:false}).addTargets('Api',{port:8081,protocol:elb.ApplicationProtocol.HTTP,targets:[service],healthCheck:{path:'/api/health',healthyHttpCodes:'200'},deregistrationDelay:Duration.seconds(30)});
+    }
     if(props.edge){
       // Public HTTPS origin for CloudFront (docs/custom-domain.md). Only CloudFront's origin-facing
       // ranges reach port 443, and only requests carrying the origin secret are forwarded to the API.

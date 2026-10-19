@@ -1,10 +1,12 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {resolve} from 'node:path';
 import {aws} from './aws.mjs';
+import {assertDeployableTemplate} from './policy.mjs';
 const account=aws(['sts','get-caller-identity']).Account;
 if(account!=='747301449112'||process.env.AWS_REGION!=='us-west-2')throw new Error('A verified SolluCIO Log Archive Oregon session is required.');
 const stack='cortex-central-flowlogs',file='infra/cdk.out-logs/cortex-central-flowlogs.template.json';
 const template=JSON.parse(await readFile(file,'utf8'));
+assertDeployableTemplate(template);
 await mkdir('.local/deployment',{recursive:true,mode:0o700});
 const compact=resolve('.local/deployment/cortex-central-flowlogs.json');
 await writeFile(compact,JSON.stringify(template),{mode:0o600});
