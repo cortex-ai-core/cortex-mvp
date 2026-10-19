@@ -1,6 +1,18 @@
-# Ohio retirement — manual, Sanjay only
+# Ohio retirement — completed
 
-**Do not run this during the Oregon build.** This is a runbook for Sanjay after personally accepting Oregon and both GitHub Actions deployments. No deployment workflow calls it. No Ohio deletion has been executed by this migration.
+Sanjay explicitly authorized Ohio retirement after accepting Oregon. Cleanup completed on **October 16, 2026**; a fresh account-guarded inventory on **October 19** confirmed no remaining Cortex RDS instances/snapshots/backups/subnet groups, Cognito pools, S3 buckets, secrets, ECS clusters, Lambda functions, ECR repositories, load balancers, EC2 instances/volumes/addresses/NAT gateways, queues, stacks, log groups or EFS filesystems in `us-east-2`. The default VPC/security group and AWS-managed keys remain.
+
+Before deletion, source writes were frozen. All 25 tables / 8,404 rows matched the migration fingerprints, all 35 source files matched Oregon by SHA-256, and all 15 users were mapped to Oregon. The final Ohio snapshot was copied under the Oregon key and restored into a separate private database; all table counts and fingerprints matched. That temporary instance was then deleted. The accepted Oregon database received its own snapshot too.
+
+Recovery owner: Sanjay / SolluCIO. Keep these encrypted manual snapshots in `us-west-2` until an explicit retention decision; no automatic deletion is scheduled:
+
+- `cortex-dev-accepted-20261016-202917` — accepted Oregon database.
+- `cortex-dev-ohio-final-20261016-202917` — final Ohio data, independently copied to Oregon and restore-verified.
+- `cortex-dev-oregon-20261015` — original migration snapshot; its ARN remains pinned in the CDK environment configuration.
+
+The encrypted/versioned archive `s3://cortex-migration-dev-909762691423-us-west-2/retirement/20261016-202917/` holds file versions, identity metadata, inventory and verification evidence. October 19 checks confirmed Oregon's protected private database, all 15 users, three steady Fargate services and public API health. Do not restart the old Ohio connection scripts. Historical issuer/subject mappings remain necessary to link migrated accounts and must be preserved.
+
+The original manual procedure below is retained for audit context. **Do not rerun it.** No deployment workflow performs retirement.
 
 1. Check you are in SolluCIO **Cortex-Dev 909762691423**, source **us-east-2**, destination **us-west-2**. Run STS with your dedicated SSO profile; stop if it returns any other account. Do not use the laptop's default profile.
 2. Complete the acceptance checklist in `aws-migration.md`, including existing account access, roles/namespaces, prior conversations, old file downloads and citations, a new upload becoming ready, and an actual backend/frontend Actions release. Verify 15 users exist in Oregon and that first-login password change works. Users were transferred with temporary credentials; no Ohio authentication bridge is needed. Test recovery email delivery with an account you control before announcing the service.

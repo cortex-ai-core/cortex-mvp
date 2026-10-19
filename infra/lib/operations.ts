@@ -35,7 +35,7 @@ export class Operations extends Stack {
       command: ['node', 'scripts/aws/database-task.mjs'],
       environment: { AWS_REGION: config.region, CORTEX_ACCOUNT_ID: config.account, PGHOST: data.database.attrEndpointAddress, PGDATABASE: 'cortex', PGSSLMODE: 'verify-full', PGSSLROOTCERT: '/app/rds-ca.pem', MIGRATION_BUCKET: data.archives.bucketName },
       secrets: { PGUSER: ecs.Secret.fromSecretsManager(admin, 'username'), PGPASSWORD: ecs.Secret.fromSecretsManager(admin, 'password'), CORTEX_DB_PASSWORD: ecs.Secret.fromSecretsManager(data.databaseSecret, 'password') },
-      logging: ecs.LogDrivers.awsLogs({ logGroup: new logs.LogGroup(this, 'DatabaseLogs', { logGroupName: `/cortex/${config.name}/database`, retention: logs.RetentionDays.ONE_MONTH, removalPolicy: RemovalPolicy.RETAIN }), streamPrefix: 'database' }),
+      logging: ecs.LogDrivers.awsLogs({ logGroup: new logs.LogGroup(this, 'DatabaseLogs', { logGroupName: `/cortex/${config.name}/database`, retention: config.logRetentionDays, removalPolicy: RemovalPolicy.RETAIN }), streamPrefix: 'database' }),
     });
     for (const [key,value] of Object.entries({ Cluster: this.cluster.clusterName, DatabaseTask: this.migration.taskDefinitionArn, TaskSecurityGroup: this.group.securityGroupId, PrivateSubnets: foundation.vpc.privateSubnets.map(s=>s.subnetId).join(',') })) new CfnOutput(this,`${key}Output`,{value}).overrideLogicalId(key);
   }

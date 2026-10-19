@@ -1,6 +1,18 @@
 # Migration continuation
 
-Authorized scope: finish Cortex-Dev Oregon deployment and both GitHub Actions pipelines. Do not retire, disable or delete Ohio resources. Do not touch PerinHealth AWS. Test/Prod require their own bootstrap/access; do not copy Dev customer data into them.
+## Current status — October 19, 2026
+
+Sanjay subsequently authorized Ohio retirement. It completed October 16 and was independently re-inventoried October 19; see [retirement and recovery evidence](ohio-retirement.md). Earlier "do not retire Ohio" instructions below are historical and were superseded by that explicit request. Keep all new workload changes in Oregon and preserve the recovery snapshots and identity provenance.
+
+PR7 merged into `dev`; [Phase A deployment 38977718520](https://github.com/cortex-ai-core/cortex-mvp/actions/runs/38977718520) succeeded. Fresh reads confirmed the public ALB active in public subnets, HTTPS443 only, CloudFront prefix-list ingress, default403 and the verification-header forwarding rule. CloudFront's custom viewer alias is deployed, while `/api/*` still uses the private origin. The viewer hostname passes HTTPS API health when connected directly to CloudFront with that hostname; public DNS routing CNAMEs are still absent as of this check. The generated CloudFront URL is healthy and all three Fargate services are steady.
+
+GoDaddy must add `cortex-dev` -> `d3ni3zlrnsq9j7.cloudfront.net` and `cortex-dev-origin` -> `cortex-Publi-URRWSUWy3mmX-1353226054.us-west-2.elb.amazonaws.com`, retaining ACM validation records. This is a draft instruction, not a sent message. Wait for DNS and endpoint verification before the separate Phase B PR switches `/api/*` to the public origin. The ALB's internet-client timeout versus allowed-source default403 is explained in [the corrected runbook](custom-domain.md).
+
+Tom's Prod retention request is implemented by the shared CDK environment policy: seven managed Prod CloudWatch groups use365days, including VPC flow logs; Dev/Test remain30days. Lambda/RDS default groups currently never expire. See [retention and rollout](log-retention.md). Source/template verification is separate from live Prod deployment; Foundation must also be applied through its reviewed bootstrap process.
+
+## Historical migration notes
+
+Original scope: finish Cortex-Dev Oregon deployment and both GitHub Actions pipelines. Ohio retirement was initially deferred. Test/Prod require their own bootstrap/access; do not copy Dev customer data into them.
 
 Source repositories `cortex-ai-core/cortex-mvp` and `cortex-ai-core/cortex-ui-mvp`, branch `aws-migration` in both. Backend is based on Francis's `feature/aws-conversion`; UI is based on `ian`. The user's requested initial temporary password was applied to 15 transferred Cognito accounts; it is deliberately absent from source, logs and this handoff. First-login password change is required. No Ohio authentication bridge is wanted. Existing Cortex IDs/roles/history are preserved by verified immutable legacy issuer/subject claims.
 
