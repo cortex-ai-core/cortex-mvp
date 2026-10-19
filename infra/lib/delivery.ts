@@ -12,6 +12,7 @@ export class Delivery extends Stack {
   constructor(scope:Construct,id:string,data:Data,runtime:Runtime,props:StackProps & { edge?: PublicEdge }){
     super(scope,id,props);
     const edge=props.edge;
+    if(edge?.apiOrigin==='public'&&(!edge.originDomain||!edge.originCertificateArn))throw new Error('Public API origin DNS/certificate configuration is incomplete.');
     const route=new cloudfront.Function(this,'StaticRoutes',{runtime:cloudfront.FunctionRuntime.JS_2_0,code:cloudfront.FunctionCode.fromInline(`function handler(event){var r=event.request;var leaf=r.uri.split('/').pop();if(r.uri.endsWith('/'))r.uri+='index.html';else if(leaf.indexOf('.')===-1)r.uri+='/index.html';return r;}`)});
     const web=s3.Bucket.fromBucketName(this,'WebOrigin',data.web.bucketName);
     // An attached VPC origin cannot be updated. Give this corrected endpoint a
@@ -23,7 +24,7 @@ export class Delivery extends Stack {
     // The private VPC origin stays defined after the switch so it can be retired in a separate reviewed cleanup.
     // The public origin's hostname matches its ALB certificate; CloudFront sends that hostname as Host.
     const api=edge?.apiOrigin==='public'
-      ?new origins.HttpOrigin(edge.originDomain,{protocolPolicy:cloudfront.OriginProtocolPolicy.HTTPS_ONLY,originSslProtocols:[cloudfront.OriginSslPolicy.TLS_V1_2],readTimeout:Duration.seconds(120),customHeaders:{[originHeader]:SecretValue.secretsManager(edge.originSecretName).unsafeUnwrap()}})
+      ?new origins.HttpOrigin(edge.originDomain!,{protocolPolicy:cloudfront.OriginProtocolPolicy.HTTPS_ONLY,originSslProtocols:[cloudfront.OriginSslPolicy.TLS_V1_2],readTimeout:Duration.seconds(120),customHeaders:{[originHeader]:SecretValue.secretsManager(edge.originSecretName).unsafeUnwrap()}})
       :apiOrigin?origins.VpcOrigin.withVpcOrigin(apiOrigin,{readTimeout:Duration.seconds(120)}):undefined;
     if(!api)throw new Error('An API origin is required: configure a public HTTPS edge or a private ALB.');
     const distribution=new cloudfront.Distribution(this,'Distribution',{

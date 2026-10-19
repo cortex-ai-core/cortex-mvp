@@ -1,6 +1,9 @@
 # Guidebook compliance and deployment plan
 
-Updated October 16, 2026 following Sanjay's request for the AWS Build Book v1.3 network pattern, pages 9–11. This records deployed controls and remaining acceptance; pending controls must not be reported as deployed. Target workload is Cortex-Dev **909762691423**, Oregon **us-west-2**. Log Archive is **747301449112** (guidebook page 2). Ohio retirement remains exclusively Sanjay's later manual action.
+Updated October 16, 2026 following Sanjay's request for the AWS Build Book v1.3 network pattern, pages 9–11. This records deployed controls and remaining acceptance; pending controls must not be reported as deployed. Target workload is Cortex-Dev **909762691423**, Oregon **us-west-2**. Log Archive is **747301449112** (guidebook page 2). Ohio retirement was completed separately; see [the retirement record](ohio-retirement.md).
+
+
+**October 19 decision superseding the public-tier rollout below:** Sanjay selected a private ALB behind CloudFront VPC origins for Dev, Test and Prod. The custom Dev viewer domain now resolves and its website/API health return HTTPS 200. The proposed public-origin switch is cancelled. This is an explicit variation from the guidebook's public load-balancer tier, not a claim of exact tier alignment. The existing private HTTP port-80 origin remains; private routing is not end-to-end application TLS. Test/Prod stay undeployed and locked; their templates now use one internal ALB/VPC origin and require no public origin hostname/certificate. Dev's staged public ALB is unused and retained pending separate cleanup. See [the current domain runbook](custom-domain.md). Tom also confirmed Control Tower-owned log groups are excluded from Vanta and must remain untouched; Cortex-owned Prod log groups retain the one-year CDK policy.
 
 ## Verified live baseline
 
@@ -47,7 +50,7 @@ Already verified live: inbound=[] and outbound=[]. Keep the IaC default-group re
 
 Acceptance: EC2 DescribeSecurityGroups still reports both rule arrays empty after Foundation/Application deployment. All Cortex task/database/Lambda interfaces reference their named groups.
 
-## 4. Public-tier ALB with private applications — certificate validation pending
+## 4. Historical public-tier rollout — superseded by the private-origin decision
 
 Revise the interim Application/Delivery design to match the guidebook: internet-facing ALB across both public subnets, API/worker/parser Fargate tasks in private application subnets with assignPublicIp=DISABLED, and RDS remaining isolated. Public subnet placement is for the load balancer/NAT; it does not make the API tasks or database public.
 
@@ -59,7 +62,7 @@ Acceptance: live ALB Scheme=internet-facing and its subnets are public; HTTPS li
 
 Sanjay has now supplied the GoDaddy-managed solluciopartners.com zone and confirmed cortex-dev.solluciopartners.com for viewers and cortex-dev-origin.solluciopartners.com for the origin. The existing Vercel hostname has no custom DNS to migrate. Separate CDK certificate stacks request the required CloudFront certificate in us-east-1 and ALB certificate in us-west-2; the former is the CloudFront service-required exception, not a workload deployment outside Oregon. Exact GoDaddy validation records are returned by ACM; the staged routing procedure is in [custom-domain.md](custom-domain.md). Until certificate validation and the separately reviewed origin transition complete, retain the existing private ALB and CloudFront VPC origin as an open guidebook deviation. Do not claim this control is implemented before that input exists. The signer change is deployed and verified. The public ALB remains pending; current code retains the private ALB/VPC origin. The interim private hop explicitly uses HTTP port80 to match its listener, and the ALB ingress uses the AWS-owned CloudFront origin-facing prefix list; the viewer connection remains HTTPS. Changing to a public origin requires validated HTTPS first.
 
-## 5. Release order and remaining acceptance
+## 5. Historical rollout order — superseded where it calls for a public origin
 
 1. Verify the supplied Log Archive session and review the new dedicated destination stack/policies. Hostname/zone input is resolved; external certificate validation and public-HTTPS-origin acceptance are pending. Preserve the working private origin during those steps.
 2. Implement and locally validate the revised topology plus the preserved offline CDK context fix. Test full synthesis without AWS lookups, account/Region guards, stateful retention/replacement guards, signer/ALB placement, secret references, central log destination and security-group rules. Inspect CloudFormation change sets; do not replace RDS/buckets/pools/keys.

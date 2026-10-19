@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { App } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { configuration } from '../lib/config.js';
@@ -40,13 +41,18 @@ for (const environment of ['dev', 'test', 'prod']) {
 }
 
 for (const environment of ['test', 'prod']) {
-  test(`${environment} fresh public deployment has one origin and a private fresh database`, () => {
+  test(`${environment} configuration uses one private ALB with a VPC origin and keeps deployment locked`, () => {
     const app = new App(), config = configuration(environment);
     const props = { env: { account: config.account, region: config.region } };
     const foundation = new Foundation(app, 'foundation', config, props);
     const data = new Data(app, 'data', config, foundation, undefined, [], props);
+    const saved = JSON.parse(readFileSync(new URL(`../environments/${environment}.json`, import.meta.url), 'utf8'));
+    assert.equal(saved.deploymentEnabled, false);
+    assert.equal(saved.apiOrigin, 'private');
     const edge = publicEdge(config, {
-      dns: { viewerDomain: `${environment}.example.invalid`, originDomain: `${environment}-origin.example.invalid`, apiOrigin: 'public' },
+      apiOrigin: saved.apiOrigin,
+      // Even leftover public-origin metadata must not override private selection.
+      dns: { viewerDomain: `${environment}.example.invalid`, originDomain: `${environment}-origin.example.invalid` },
       certificates: {
         viewer: `arn:aws:acm:us-east-1:${config.account}:certificate/test-only`,
         origin: `arn:aws:acm:us-west-2:${config.account}:certificate/test-only`,
@@ -62,8 +68,9 @@ for (const environment of ['test', 'prod']) {
     assert.equal(database.Properties.MultiAZ, environment === 'prod');
     assert.equal(database.Properties.BackupRetentionPeriod, environment === 'prod' ? 35 : 7);
     rt.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
-    rt.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', { Scheme: 'internet-facing' });
-    dt.resourceCountIs('AWS::CloudFront::VpcOrigin', 0);
+    rt.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', { Scheme: 'internal' });
+    dt.resourceCountIs('AWS::CloudFront::VpcOrigin', 1);
+    dt.hasResourceProperties('AWS::CloudFront::VpcOrigin', { VpcOriginEndpointConfig: { HTTPPort: 80, OriginProtocolPolicy: 'http-only' } });
     for (const service of Object.values(rt.findResources('AWS::ECS::Service'))) {
       assert.equal(service.Properties.NetworkConfiguration.AwsvpcConfiguration.AssignPublicIp, 'DISABLED');
     }

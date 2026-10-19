@@ -83,7 +83,9 @@ export class Runtime extends Stack {
       this.alb=new elb.ApplicationLoadBalancer(this,'LoadBalancer',{vpc:foundation.vpc,internetFacing:false,securityGroup:albGroup,vpcSubnets:{subnetType:ec2.SubnetType.PRIVATE_WITH_EGRESS},idleTimeout:Duration.seconds(120)});
       this.alb.addListener('Http',{port:80,open:false}).addTargets('Api',{port:8081,protocol:elb.ApplicationProtocol.HTTP,targets:[service],healthCheck:{path:'/api/health',healthyHttpCodes:'200'},deregistrationDelay:Duration.seconds(30)});
     }
-    if(props.edge){
+    // Private origins need only a viewer certificate. Preserve Dev's previously
+    // provisioned public ALB until separately reviewed cleanup, not in new accounts.
+    if(props.edge?.originDomain&&props.edge.originCertificateArn&&(props.edge.apiOrigin==='public'||config.name==='dev')){
       // Public HTTPS origin for CloudFront (docs/custom-domain.md). Only CloudFront's origin-facing
       // ranges reach port 443, and only requests carrying the origin secret are forwarded to the API.
       const publicGroup=new ec2.SecurityGroup(this,'PublicOriginAccess',{vpc:foundation.vpc,allowAllOutbound:false});

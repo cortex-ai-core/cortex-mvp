@@ -315,9 +315,9 @@ Arrows show logical requests/data flow; the network controls below determine con
 
 ### Current load-balancer variation
 
-The guidebook describes a public load-balancer tier. Dev Phase A now has an active **public HTTPS ALB** in public subnets, restricted to CloudFront's origin-facing address range and requests carrying the origin verification header. The certificates and CloudFront viewer alias are deployed. `/api/*` continues through the existing **private ALB and VPC origin** until the GoDaddy routing CNAMEs resolve and the separate Phase B switch is accepted (see [custom-domain setup](docs/custom-domain.md)). That interim private origin hop uses HTTP port80.
+Sanjay selected **CloudFront → private ALB → private API tasks** on October 19 for Dev, Test and Prod. Each environment explicitly sets `apiOrigin: private`. Dev's new [custom domain](https://cortex-dev.solluciopartners.com) resolves and serves HTTPS through the existing private origin; the public-origin switch is cancelled. Test/Prod templates use one internal ALB and one VPC origin. Dev's previously staged public HTTPS ALB is unused and retained until separate cleanup (see [custom-domain setup](docs/custom-domain.md)).
 
-This is not full end-to-end origin TLS or a completed public-tier guidebook implementation. Changing the protocol of an attached CloudFront VPC origin requires a versioned new origin and distribution switch; an in-place update fails. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for the outstanding decision and acceptance criteria.
+The current private CloudFront-to-ALB hop uses HTTP port 80. This provides private network routing, not end-to-end application TLS. It is an explicit variation from the guidebook's public tier. A future private-origin HTTPS change needs its own reviewed, versioned origin rollout; in-place protocol changes on an attached origin fail. See the [compliance plan](docs/aws-guidebook-compliance-plan.md).
 
 ## AWS Console walkthrough
 
@@ -444,7 +444,7 @@ Open the [CloudFront Console](https://console.aws.amazon.com/cloudfront/v4/home)
 | Pages, JavaScript, CSS and images | Private S3 web bucket using origin access control |
 | `/api/*` | VPC origin → internal ALB → API task on port 8081 |
 
-This routing is defined in [delivery.ts](infra/lib/delivery.ts). The S3 files reside in Oregon; CloudFront caches/delivers them globally. CloudFront/API behavior changes for the new custom hostname/public HTTPS origin remain a separate staged operation in [custom-domain.md](docs/custom-domain.md). Use the Delivery stack outputs if a future environment/distribution has a different ID or URL. See [AWS CloudFront origins](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html).
+This routing is defined in [delivery.ts](infra/lib/delivery.ts). The S3 files reside in Oregon; CloudFront caches/delivers them globally. The custom viewer hostname now resolves; API traffic keeps the private VPC-origin route described in [custom-domain.md](docs/custom-domain.md). Use the Delivery stack outputs if a future environment/distribution has a different ID or URL. See [AWS CloudFront origins](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/DownloadDistS3AndCustomOrigins.html).
 
 ### 6. Locate supporting components and deployment artifacts
 
@@ -614,13 +614,13 @@ This was a **point-in-time copy, not continuous replication**. Later Ohio writes
 
 **Prod CloudWatch retention:** the CDK environment policy sets all seven managed Prod log groups to 365 days, including the Foundation VPC flow logs. Dev/Test retain 30 days; service-created Lambda/RDS groups currently never expire. See [log retention and rollout verification](docs/log-retention.md). These source settings require the corresponding Prod stack deployments, including the separately reviewed Foundation operation.
 
-Dev application deployment is not a claim of complete guidebook or production readiness. Remaining acceptance includes public-ALB/DNS/origin TLS alignment, confirmed operational alert subscribers, Audit-owned GuardDuty Fargate runtime monitoring, AWS Backup planning and restore exercises, production WAF/TLS readiness, and GitHub environment protection/admin settings. RDS native backups currently retain seven days; they do not establish an organization-wide backup plan. Recovery-email delivery and the full local UI flow need explicit verification. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for scope and ownership.
+Dev application deployment is not a claim of complete guidebook or production readiness. Remaining acceptance includes production transport-policy review for the private origin, confirmed operational alert subscribers, Audit-owned GuardDuty Fargate runtime monitoring, AWS Backup planning and restore exercises, production WAF/TLS readiness, and GitHub environment protection/admin settings. RDS native backups currently retain seven days; they do not establish an organization-wide backup plan. Recovery-email delivery and the full local UI flow need explicit verification. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for scope and ownership.
 
 Continuously running Fargate, RDS, NAT and the ALB incur ongoing costs, along with storage, traffic, logs and OpenAI use. Dev is not a scale-to-zero deployment; budget/alert ownership and actual workload estimates should guide further sizing.
 
 ## Further documentation
 
-- [New custom hostname and GoDaddy DNS](docs/custom-domain.md): separate ACM stacks, external validation and staged public HTTPS-origin acceptance.
+- [New custom hostname and GoDaddy DNS](docs/custom-domain.md): viewer ACM certificates, GoDaddy records, the selected private-origin design and legacy public-ALB cleanup boundary.
 - [AWS migration and operations](docs/aws-migration.md): release details, verified migration evidence and local setup.
 - [Guidebook compliance plan](docs/aws-guidebook-compliance-plan.md): network/logging requirements, exceptions and remaining acceptance.
 - [Ohio retirement](docs/ohio-retirement.md): completed cleanup, recovery locations and original audit procedure.
