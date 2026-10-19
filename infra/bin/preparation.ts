@@ -18,10 +18,10 @@ app.node.setContext(`availability-zones:account=${config.account}:region=${confi
   config.multiAz ? ['us-west-2a', 'us-west-2b', 'us-west-2c'] : ['us-west-2a', 'us-west-2b']);
 const saved = JSON.parse(readFileSync(new URL(`../environments/${config.name}.json`, import.meta.url), 'utf8'));
 const edge = publicEdge(config, config.name === 'dev' ? saved : {
-  dns: { viewerDomain: `${config.name}.example.invalid`, originDomain: `${config.name}-origin.example.invalid`, apiOrigin: 'public' },
+  apiOrigin: saved.apiOrigin,
+  dns: { viewerDomain: `${config.name}.example.invalid` },
   certificates: {
     viewer: `arn:aws:acm:us-east-1:${config.account}:certificate/preparation-only`,
-    origin: `arn:aws:acm:us-west-2:${config.account}:certificate/preparation-only`,
   },
 });
 const env = { account: config.account, region: config.region };
@@ -38,9 +38,10 @@ const delivery = new Delivery(app, `cortex-${config.name}-delivery`, data, runti
 const archive = new LogArchive(app, 'cortex-central-flowlogs', {
   env: { account: centralLogs.account, region: centralLogs.region }, synthesizer: new BootstraplessSynthesizer(),
 });
-const certificates = edge ? (['viewer', 'origin'] as const).map(purpose =>
+const purposes: ('viewer' | 'origin')[] = edge?.originDomain ? ['viewer', 'origin'] : ['viewer'];
+const certificates = edge ? purposes.map(purpose =>
   new DnsCertificate(app, `cortex-${config.name}-${purpose}-certificate`, config.name, purpose,
-    purpose === 'viewer' ? edge.viewerDomain : edge.originDomain, {
+    purpose === 'viewer' ? edge.viewerDomain : edge.originDomain!, {
       env: { account: config.account, region: certificateRegions[purpose] }, synthesizer: new BootstraplessSynthesizer(),
     })) : [];
 for (const stack of [foundation, data, operations, runtime, delivery, archive, ...certificates]) {

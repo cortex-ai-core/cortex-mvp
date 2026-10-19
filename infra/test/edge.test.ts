@@ -22,13 +22,14 @@ test('edge input requires distinct hostnames, an explicit API origin and same-ac
   assert.equal(publicEdge(config, { dns: { ...dns, apiOrigin: 'public' }, certificates })?.originSecretName, 'cortex-dev/cloudfront-origin');
 });
 
-async function synth(apiOrigin: 'private' | 'public') {
+async function synth(apiOrigin: 'private' | 'public', viewerOnly = false) {
   const { Foundation } = await import('../lib/foundation.js');
   const { Data } = await import('../lib/data.js');
   const { Operations } = await import('../lib/operations.js');
   const { Runtime } = await import('../lib/runtime.js');
   const { Delivery } = await import('../lib/delivery.js');
-  const edge = publicEdge(config, { dns: { ...dns, apiOrigin }, certificates })!;
+  const edge = publicEdge(config, { apiOrigin, dns: viewerOnly ? { viewerDomain: dns.viewerDomain } : dns,
+    certificates: viewerOnly ? { viewer: certificates.viewer } : certificates })!;
   const app = new App(), env = { account: config.account, region: config.region };
   const foundation = new Foundation(app, 'f', config, { env });
   const data = new Data(app, 'd', config, foundation, 'unchanged-snapshot', [`https://${edge.viewerDomain}`], { env });
@@ -78,4 +79,27 @@ test('public phase sends /api/* to the HTTPS origin hostname with the secret hea
       OriginCustomHeaders: [{ HeaderName: originHeader, HeaderValue: '{{resolve:secretsmanager:cortex-dev/cloudfront-origin:SecretString:::}}' }],
     })]),
   }) });
+});
+
+test('private API with a custom viewer hostname needs no public ALB or origin certificate', async () => {
+  const { runtime, delivery } = await synth('private', true);
+  runtime.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+  runtime.hasResourceProperties('AWS::ElasticLoadBalancingV2::LoadBalancer', { Scheme: 'internal' });
+  delivery.resourceCountIs('AWS::CloudFront::VpcOrigin', 1);
+  const origins = Object.values(delivery.findResources('AWS::CloudFront::Distribution'))[0].Properties.DistributionConfig.Origins;
+  assert.ok(origins.some((origin: any) => origin.VpcOriginConfig));
+  assert.ok(!origins.some((origin: any) => origin.OriginCustomHeaders));
+});
+
+test('origin selection fails closed for conflicting or incomplete public settings', () => {
+  assert.equal(publicEdge(config, { apiOrigin: 'private' }), undefined);
+  assert.throws(() => publicEdge(config, { apiOrigin: 'public' }), /requires DNS/);
+  assert.throws(() => publicEdge(config, { apiOrigin: 'invalid' }), /apiOrigin/);
+  assert.throws(() => publicEdge(config, { apiOrigin: null }), /apiOrigin/);
+  assert.throws(() => publicEdge(config, { apiOrigin: false }), /apiOrigin/);
+  assert.throws(() => publicEdge(config, { apiOrigin: 'private', dns: { ...dns, apiOrigin: 'public' }, certificates }), /Conflicting/);
+  assert.throws(() => publicEdge(config, { apiOrigin: 'public', dns: { viewerDomain: dns.viewerDomain }, certificates: { viewer: certificates.viewer } }), /requires an origin/);
+  const privateViewer = publicEdge(config, { apiOrigin: 'private', dns: { viewerDomain: dns.viewerDomain }, certificates: { viewer: certificates.viewer } });
+  assert.equal(privateViewer?.originDomain, undefined);
+  assert.equal(privateViewer?.originCertificateArn, undefined);
 });

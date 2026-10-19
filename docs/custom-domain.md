@@ -7,20 +7,22 @@ Sanjay confirmed these new hostnames:
 | Purpose | Hostname | Destination after acceptance |
 |---|---|---|
 | User-facing application | `cortex-dev.solluciopartners.com` | Existing CloudFront distribution |
-| Backend origin | `cortex-dev-origin.solluciopartners.com` | New public-subnet HTTPS ALB |
+| Legacy public origin | `cortex-dev-origin.solluciopartners.com` | Existing unused public ALB; not the selected API route |
 
-The existing UI is on `cortex-ui-mvp.vercel.app` without an organization custom domain. This is a new AWS endpoint, not a DNS cutover from Vercel. Existing Vercel and generated CloudFront access remain available during acceptance. Ohio retirement remains a separate manual action.
+The existing UI is on `cortex-ui-mvp.vercel.app` without an organization custom domain. This is a new AWS endpoint, not a DNS cutover from Vercel. Existing Vercel and generated CloudFront access remain available during acceptance. Ohio retirement was completed separately; see the [retirement record](ohio-retirement.md).
 
-## 1. Request certificates without changing the running app
+**October 19 architecture decision:** Sanjay selected CloudFront VPC origins with a private ALB for Dev, Test and Prod. The public-origin switch is cancelled. Both GoDaddy routing CNAMEs resolve, and the custom viewer hostname and `/api/health` return HTTPS 200 through the existing private path. The Dev public ALB remains provisioned but unused; removal is a separate reviewed cleanup, not part of the Test/Prod configuration change.
+
+## 1. Certificates and private-origin requirements
 
 [certificates.ts](../infra/lib/certificates.ts) defines separate retained, DNS-validated, nonexportable ACM certificate stacks containing no workload, Route53 or IAM resources:
 
 - `cortex-dev-viewer-certificate` in **us-east-1** for CloudFront.
-- `cortex-dev-origin-certificate` in **us-west-2** for the ALB.
+- `cortex-dev-origin-certificate` in **us-west-2** for the previously staged public ALB. This existing certificate remains attached; private-only Test/Prod do not need an origin hostname/certificate.
 
 The viewer certificate is the required CloudFront service exception to the Oregon workload rule. No application, database, parser or file storage moves to us-east-1. See [CloudFront certificate-region requirements](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/cnames-and-https-requirements.html).
 
-Dev's names are in `infra/environments/dev.json` under `dns`. They do not activate an alias, change S3 CORS or alter the current origin. The certificate app is separate from normal release synthesis/deployment, so a pending GoDaddy validation does not block application updates.
+Dev's names are in `infra/environments/dev.json` under `dns`; the top-level `apiOrigin: private` selects the private path. The viewer alias, certificate and CORS are already configured. The certificate app remains separate from normal release synthesis/deployment.
 
 From the backend root, synthesize without credentials/lookups:
 
@@ -32,7 +34,7 @@ npm run synth:certificates --prefix infra -- \
   -c environment=dev --no-lookups --quiet
 ```
 
-Other environments must supply their own distinct `viewerDomain`/`originDomain` context values or environment configuration. The app refuses the wrong configured account, service region, wildcard, URL or malformed hostname.
+For a private Test/Prod API, use the generated CloudFront address or supply only `viewerDomain` and a viewer certificate for a custom hostname. `synth:certificates` accepts viewer-only input and produces only the us-east-1 certificate stack. An origin hostname/certificate is required only for an explicitly selected public API origin. The app rejects the wrong account, service region, wildcard, URL or malformed hostname.
 
 Certificate bootstrap uses a separately authenticated Cortex-Dev administrator/approved certificate provisioning identity. The normal workload CloudFormation role does not currently grant ACM provisioning permissions, and the existing `apply-stack.mjs` helper assumes that role and Oregon. Do not silently broaden that role or change its region guard to bootstrap these independent certificate stacks.
 
@@ -48,18 +50,30 @@ Keep the validation records after issuance so ACM can renew the certificates. Va
 
 With external DNS, `CREATE_IN_PROGRESS` and ACM `PENDING_VALIDATION` are expected until the CNAMEs resolve and ACM issues the certificate. This is not a failed application deployment. See [ACM DNS validation](https://docs.aws.amazon.com/acm/latest/userguide/dns-validation.html) and [CloudFormation external-validation behavior](https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-certificatemanager-certificate.html).
 
-## 3. Configure routing only after validation
+## 3. Selected routing: keep the private ALB
 
-Both certificates were ISSUED on 2026-10-16. Their ARNs and the hostnames are in `infra/environments/dev.json` (`certificates`, `dns`); [edge.ts](../infra/lib/edge.ts) validates them. `dns.apiOrigin` selects where CloudFront sends `/api/*`: `private` (the VPC origin) or `public` (the HTTPS origin hostname). Roll out in this order:
+Every environment now explicitly selects top-level `apiOrigin: "private"`. Older nested `dns.apiOrigin` inputs remain readable for compatibility, but conflicting controls fail synthesis.
 
-1. **Foundation first, as a separately reviewed operation.** The pipeline does not deploy foundation. This change grants the CloudFormation role `acm:DescribeCertificate` on this account's certificates and exports the public subnet IDs that the application stack now imports. Review the change set, then apply it with an approved Cortex-Dev administrator identity:
-   `node scripts/deploy/apply-stack.mjs dev cortex-dev-foundation infra/cdk.out/cortex-dev-foundation.template.json`
-2. **Phase A (`apiOrigin: "private"`), via the normal `dev` pipeline.** This creates the `cortex-dev/cloudfront-origin` secret and adds the viewer origin to document-bucket CORS. In [runtime.ts](../infra/lib/runtime.ts) it adds an internet-facing ALB in the public subnets: HTTPS 443 only, `ELBSecurityPolicy-TLS13-1-2-2021-06`, the Oregon origin certificate, ingress only from the CloudFront origin-facing prefix list, invalid header fields dropped, and default `403`. Only requests carrying `X-Cortex-Origin-Verify` with the secret value are forwarded to the API target group. Fargate tasks stay private. It also adds the `cortex-dev` alias and us-east-1 certificate to the existing distribution. `/api/*` stays on the VPC origin, so nothing changes for users yet.
-3. **GoDaddy.** Send both CNAMEs: **`cortex-dev`** → **`d3ni3zlrnsq9j7.cloudfront.net`**, and **`cortex-dev-origin`** → the `PublicOriginDns` output of `cortex-dev-application`. Do not point `cortex-dev-origin` at the internal ALB or at CloudFront.
-4. **Check before switching.** `cortex-dev-origin` must resolve to the public ALB. A direct request from an ordinary internet client should time out because the ALB security group accepts only CloudFront origin-facing addresses. The listener's default `403` applies to requests that reach the ALB from an allowed network source but lack the correct verification header. Verify the origin certificate and rejection rule through that allowed path; do not broaden ALB ingress for a laptop check. `https://cortex-dev.solluciopartners.com` must load the app, and its `/api/health` must return `200` (still through the VPC origin).
-5. **Phase B (`apiOrigin: "public"`), as its own PR.** Only the distribution's `/api/*` origin changes: HTTPS-only to `cortex-dev-origin`, TLS 1.2, the same 120-second read timeout, request policy and caching rules, plus the secret header. The VPC origin resource stays defined. To roll back, set `private` again.
-6. **Acceptance and cleanup.** Verify login, attachments, uploads and citations, API streaming and direct-origin denial on both hostnames. Only after that, retire the internal ALB and the VPC origin in a separately reviewed cleanup.
+The request path is:
 
-The origin secret has no automatic rotation, because CloudFront and the ALB rule must change together. Rotating it means a new secret value, then redeploying the application and delivery stacks in one release.
+```text
+Browser -- HTTPS --> CloudFront -- VPC origin --> internal ALB -- HTTP 8081 --> private API task
+```
 
-The origin-access secret must stay in approved secret storage/configuration; never put its value in this runbook, PR text, DNS records or public outputs. This phase is not part of the certificate-only stack execution. Existing origin behavior remains as documented in the [guidebook compliance plan](aws-guidebook-compliance-plan.md) until live evidence confirms the transition.
+The current ALB/VPC-origin hop uses HTTP port 80 over the private VPC-origin connection. This is network privacy, not end-to-end application TLS. If a production control requires TLS on that hop, plan a versioned HTTPS private-origin rollout separately; do not claim this configuration already provides it. RDS connections already use TLS. See [CloudFront VPC origins](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-vpc-origins.html).
+
+- Keep the existing private ALB, its listener/target group, security groups and VPC origin resource identities.
+- API caching stays disabled; the public viewer remains HTTPS.
+- Test/Prod desired state has one internal ALB and one VPC origin. Application tasks have no public IPs. Their deployment gates stay disabled.
+- A custom viewer alias requires a us-east-1 certificate and GoDaddy CNAME to its CloudFront distribution. It does not require a public origin ALB or an additional origin DNS record.
+- Dev's generated and custom CloudFront addresses remain usable. The `cortex-dev-origin` record is not used by the selected API behavior.
+
+## 4. Historical public-ALB staging and cleanup boundary
+
+The earlier guidebook implementation added an internet-facing HTTPS ALB, an Oregon certificate, a secret origin header and an origin DNS record. The public ALB accepts only CloudFront prefix-list traffic and forwards only requests with the secret header. It was staged alongside the internal ALB, but live traffic was never switched to it.
+
+Sanjay's October 19 decision supersedes that Phase B plan. Keeping the private ALB is an explicit variation from the guidebook's public load-balancer tier; do not report exact public-tier alignment or execute the old public-origin transition.
+
+Existing Dev public-origin settings/certificate are retained in source so this configuration PR does not unexpectedly delete deployed resources. New Test/Prod private configurations do not provision a public ALB, even if old public-origin metadata is present. Removing the unused Dev public ALB/listener/target group and obsolete origin settings is a separate reviewed operation after inspecting live dependencies. Do not delete the working private ALB/VPC origin.
+
+Keep ACM validation records while certificates remain provisioned. Do not remove live DNS records, certificates or the origin secret as a side effect of changing the environment templates.

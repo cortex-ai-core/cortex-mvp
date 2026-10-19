@@ -16,6 +16,19 @@ export function dnsHostname(value: string): string {
   return hostname;
 }
 
+export function certificateRequests(viewer: unknown, origin: unknown, requiresOrigin = false): { purpose: CertificatePurpose; hostname: string }[] {
+  if (typeof viewer !== 'string') throw new Error('Supply a viewerDomain hostname.');
+  const viewerName = dnsHostname(viewer);
+  const requests: { purpose: CertificatePurpose; hostname: string }[] = [{ purpose: 'viewer', hostname: viewerName }];
+  if (origin !== undefined) {
+    if (typeof origin !== 'string') throw new Error('Supply a valid originDomain hostname.');
+    const originName = dnsHostname(origin);
+    if (originName === viewerName) throw new Error('Viewer and origin hostnames must differ.');
+    requests.push({ purpose: 'origin', hostname: originName });
+  } else if (requiresOrigin) throw new Error('A public API requires an originDomain hostname.');
+  return requests;
+}
+
 // Separate stacks allow GoDaddy validation to wait without blocking updates to
 // the running application. CloudFront requires its viewer certificate in us-east-1;
 // only this certificate is outside the Oregon workload region.
