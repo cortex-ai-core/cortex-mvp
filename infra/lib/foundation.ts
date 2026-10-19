@@ -43,7 +43,7 @@ def handler(event,context):
  except Exception:
   respond(event,context,'FAILED')`)});
     new CfnResource(this,'RestrictDefaultGroup',{type:'Custom::RestrictDefaultGroup',properties:{ServiceToken:defaultGroup.functionArn,GroupId:this.vpc.vpcDefaultSecurityGroup}});
-    const flowLog = new logs.LogGroup(this, 'FlowLogs', { retention: logs.RetentionDays.ONE_MONTH, removalPolicy: RemovalPolicy.RETAIN });
+    const flowLog = new logs.LogGroup(this, 'FlowLogs', { retention: config.logRetentionDays, removalPolicy: RemovalPolicy.RETAIN });
     this.vpc.addFlowLog('Traffic', { destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLog) });
     this.vpc.addGatewayEndpoint('S3Endpoint', { service: ec2.GatewayVpcEndpointAwsService.S3 });
     if(config.name==='dev')new ec2.CfnFlowLog(this,'CentralFlowLogs',{

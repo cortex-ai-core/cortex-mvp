@@ -1,3 +1,5 @@
+import { RetentionDays } from 'aws-cdk-lib/aws-logs';
+
 export const environments = {
   dev: { account: '909762691423', cidr: '10.10.0.0/16', multiAz: false },
   test: { account: '223323955607', cidr: '10.20.0.0/16', multiAz: false },
@@ -10,6 +12,8 @@ export function configuration(name: string, account?: string, region = 'us-west-
   if (account && config.account !== account) throw new Error(`Refusing account ${account}; ${name} requires ${config.account}.`);
   if (region !== 'us-west-2') throw new Error('Cortex regional workloads must use us-west-2.');
   // AWS-owned com.amazonaws.global.cloudfront.origin-facing in Oregon.
-  return { ...config, name: name as EnvironmentName, region, cloudFrontOriginFacingPrefixListId: 'pl-82a045eb' };
+  return { ...config, name: name as EnvironmentName, region, cloudFrontOriginFacingPrefixListId: 'pl-82a045eb',
+    logRetentionDays: name === 'prod' ? RetentionDays.ONE_YEAR : RetentionDays.ONE_MONTH,
+  };
 }
 export type Configuration = ReturnType<typeof configuration>;

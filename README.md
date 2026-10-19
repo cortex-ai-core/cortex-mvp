@@ -174,6 +174,10 @@ In AWS, the API authorizes a document upload and invokes a private upload-signin
 
 The worker uses atomic claims and heartbeats. Duplicate deliveries are expected; failures retry and can enter the dead-letter queue. A successful S3 upload or API health check does not mean indexing has completed. Locally, the multipart/local-storage path and in-process queue polling replace this AWS delivery path.
 
+For a step-by-step explanation of the signing Lambda, S3, SQS, API/worker/parser tasks, deployment failures and exact manual release commands, see [runtime and deployment recovery](docs/runtime-and-recovery.md).
+
+October 19 Dev verification passed a fresh synthetic PDF through signed S3 upload, completion checks, SQS/Docling ingestion to `ready`, retrieval and a cited chat answer. All temporary test records, file versions and the test identity were removed. This exercised the deployed generated-domain API; the new custom-domain browser flow still awaits DNS.
+
 ## Code map
 
 ### This repository
@@ -311,7 +315,7 @@ Arrows show logical requests/data flow; the network controls below determine con
 
 ### Current load-balancer variation
 
-The guidebook describes a public load-balancer tier. The current Dev design deliberately retains a **private ALB behind a CloudFront VPC origin**, while the confirmed GoDaddy hostnames await certificate validation and staged public-origin deployment (see [custom-domain setup](docs/custom-domain.md)). Viewer access uses HTTPS; the private origin hop is explicitly HTTP port 80. ALB ingress permits AWS's Oregon CloudFront origin-facing managed prefix list.
+The guidebook describes a public load-balancer tier. Dev Phase A now has an active **public HTTPS ALB** in public subnets, restricted to CloudFront's origin-facing address range and requests carrying the origin verification header. The certificates and CloudFront viewer alias are deployed. `/api/*` continues through the existing **private ALB and VPC origin** until the GoDaddy routing CNAMEs resolve and the separate Phase B switch is accepted (see [custom-domain setup](docs/custom-domain.md)). That interim private origin hop uses HTTP port80.
 
 This is not full end-to-end origin TLS or a completed public-tier guidebook implementation. Changing the protocol of an attached CloudFront VPC origin requires a versioned new origin and distribution switch; an in-place update fails. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for the outstanding decision and acceptance criteria.
 
@@ -515,6 +519,8 @@ Do not blindly deploy CDK using the saved Dev `image` value: normal release over
 - RDS restore is a separate reviewed recovery operation into an appropriate private target. It is not an automatic application rollback.
 - Test/Prod need their own account bootstrap, deployment identities, secrets, image publication, approved dataset, logging setup, domains and GitHub environment protections. Prod also needs reviewed scaling/availability and operational acceptance. Do not copy customer data there implicitly.
 
+For a failed release, begin with the failed GitHub Actions **push-to-dev** run and inspect its job/step. A PR rerun verifies only. Earlier stack/database changes can survive a later failure, and frontend S3 publication can be partial. The [failure-stage table and manual deployment guide](docs/runtime-and-recovery.md#if-a-pipeline-fails) covers GitHub retries, ECS/CloudFormation rollback limits, CLI releases using a known-good ECR image, and frontend rebuild/publication.
+
 ## Verification
 
 ### Automated local checks
@@ -601,7 +607,9 @@ The Ohio RDS snapshot was independently copied/restored into Oregon. Before appl
 
 This was a **point-in-time copy, not continuous replication**. Later Ohio writes do not automatically appear in Oregon. Agree a write cutoff and reconcile both sides before retirement; never restore an old snapshot over a now-active Oregon database. Verification reports and source identity metadata are retained in the private encrypted/versioned Oregon migration archive, not in Git.
 
-**Ohio retirement is manual and belongs to Sanjay after Oregon and both Actions paths are accepted.** Nothing in the local launcher or normal release retires Ohio. Follow the separate [Ohio retirement runbook](docs/ohio-retirement.md), including independent Oregon restore verification, final data/file reconciliation, ownership/dependency checks and retained encryption keys/backups.
+**Ohio retirement completed on October 16 after Sanjay explicitly authorized it; a fresh October 19 inventory confirmed cleanup.** Recovery snapshots, archived files and verification evidence remain encrypted in Oregon. The independent restore matched all 25 original tables / 8,404 rows. See the [retirement record and recovery locations](docs/ohio-retirement.md). Nothing in the local launcher or normal release performs retirement; the old Ohio connection scripts are obsolete.
+
+**Prod CloudWatch retention:** the CDK environment policy sets all seven managed Prod log groups to 365 days, including the Foundation VPC flow logs. Dev/Test retain 30 days; service-created Lambda/RDS groups currently never expire. See [log retention and rollout verification](docs/log-retention.md). These source settings require the corresponding Prod stack deployments, including the separately reviewed Foundation operation.
 
 Dev application deployment is not a claim of complete guidebook or production readiness. Remaining acceptance includes public-ALB/DNS/origin TLS alignment, confirmed operational alert subscribers, Audit-owned GuardDuty Fargate runtime monitoring, AWS Backup planning and restore exercises, production WAF/TLS readiness, and GitHub environment protection/admin settings. RDS native backups currently retain seven days; they do not establish an organization-wide backup plan. Recovery-email delivery and the full local UI flow need explicit verification. See the [compliance plan](docs/aws-guidebook-compliance-plan.md) for scope and ownership.
 
@@ -612,7 +620,9 @@ Continuously running Fargate, RDS, NAT and the ALB incur ongoing costs, along wi
 - [New custom hostname and GoDaddy DNS](docs/custom-domain.md): separate ACM stacks, external validation and staged public HTTPS-origin acceptance.
 - [AWS migration and operations](docs/aws-migration.md): release details, verified migration evidence and local setup.
 - [Guidebook compliance plan](docs/aws-guidebook-compliance-plan.md): network/logging requirements, exceptions and remaining acceptance.
-- [Ohio retirement](docs/ohio-retirement.md): gated manual retirement instructions.
+- [Ohio retirement](docs/ohio-retirement.md): completed cleanup, recovery locations and original audit procedure.
+- [CloudWatch retention](docs/log-retention.md): Prod 365-day policy, full-graph verification and deployment checks.
+- [Runtime and deployment recovery](docs/runtime-and-recovery.md): upload signing, Fargate tasks, pipeline failures and manual backend/frontend releases.
 - [AWS handoff](docs/aws-handoff.md): chronological implementation/debugging evidence; later entries supersede earlier temporary status.
 - [Parser service](parser/README.md): API, extraction provenance, OCR and sizing.
 - [Retention](docs/RETENTION.md) and [retention acceptance](docs/RETENTION_ACCEPTANCE.md).
