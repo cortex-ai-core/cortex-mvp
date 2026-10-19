@@ -174,6 +174,10 @@ In AWS, the API authorizes a document upload and invokes a private upload-signin
 
 The worker uses atomic claims and heartbeats. Duplicate deliveries are expected; failures retry and can enter the dead-letter queue. A successful S3 upload or API health check does not mean indexing has completed. Locally, the multipart/local-storage path and in-process queue polling replace this AWS delivery path.
 
+For a step-by-step explanation of the signing Lambda, S3, SQS, API/worker/parser tasks, deployment failures and exact manual release commands, see [runtime and deployment recovery](docs/runtime-and-recovery.md).
+
+October 19 Dev verification passed a fresh synthetic PDF through signed S3 upload, completion checks, SQS/Docling ingestion to `ready`, retrieval and a cited chat answer. All temporary test records, file versions and the test identity were removed. This exercised the deployed generated-domain API; the new custom-domain browser flow still awaits DNS.
+
 ## Code map
 
 ### This repository
@@ -515,6 +519,8 @@ Do not blindly deploy CDK using the saved Dev `image` value: normal release over
 - RDS restore is a separate reviewed recovery operation into an appropriate private target. It is not an automatic application rollback.
 - Test/Prod need their own account bootstrap, deployment identities, secrets, image publication, approved dataset, logging setup, domains and GitHub environment protections. Prod also needs reviewed scaling/availability and operational acceptance. Do not copy customer data there implicitly.
 
+For a failed release, begin with the failed GitHub Actions **push-to-dev** run and inspect its job/step. A PR rerun verifies only. Earlier stack/database changes can survive a later failure, and frontend S3 publication can be partial. The [failure-stage table and manual deployment guide](docs/runtime-and-recovery.md#if-a-pipeline-fails) covers GitHub retries, ECS/CloudFormation rollback limits, CLI releases using a known-good ECR image, and frontend rebuild/publication.
+
 ## Verification
 
 ### Automated local checks
@@ -616,6 +622,7 @@ Continuously running Fargate, RDS, NAT and the ALB incur ongoing costs, along wi
 - [Guidebook compliance plan](docs/aws-guidebook-compliance-plan.md): network/logging requirements, exceptions and remaining acceptance.
 - [Ohio retirement](docs/ohio-retirement.md): completed cleanup, recovery locations and original audit procedure.
 - [CloudWatch retention](docs/log-retention.md): Prod 365-day policy, full-graph verification and deployment checks.
+- [Runtime and deployment recovery](docs/runtime-and-recovery.md): upload signing, Fargate tasks, pipeline failures and manual backend/frontend releases.
 - [AWS handoff](docs/aws-handoff.md): chronological implementation/debugging evidence; later entries supersede earlier temporary status.
 - [Parser service](parser/README.md): API, extraction provenance, OCR and sizing.
 - [Retention](docs/RETENTION.md) and [retention acceptance](docs/RETENTION_ACCEPTANCE.md).
