@@ -46,7 +46,7 @@ def handler(event,context):
     const flowLog = new logs.LogGroup(this, 'FlowLogs', { retention: config.logRetentionDays, removalPolicy: RemovalPolicy.RETAIN });
     this.vpc.addFlowLog('Traffic', { destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLog) });
     this.vpc.addGatewayEndpoint('S3Endpoint', { service: ec2.GatewayVpcEndpointAwsService.S3 });
-    if(config.name==='dev')new ec2.CfnFlowLog(this,'CentralFlowLogs',{
+    new ec2.CfnFlowLog(this,'CentralFlowLogs',{
       resourceId:this.vpc.vpcId,resourceType:'VPC',trafficType:'ALL',maxAggregationInterval:60,
       logDestinationType:'s3',logDestination:`arn:aws:s3:::${centralLogs.bucket}/${centralLogs.prefix}`,
       // CfnFlowLog types this as a raw object, so CloudFormation property casing is required.
@@ -84,11 +84,10 @@ def handler(event,context):
       const deployment = new iam.Role(this, `GitHub-${repository}`, {
         roleName: `${prefix}-github-${repository}`, maxSessionDuration: Duration.hours(1),
         assumedBy: new iam.FederatedPrincipal(provider.oidcProviderArn, {
-          StringEquals: { 'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com' },
-          StringLike: { 'token.actions.githubusercontent.com:sub': [
-            `repo:cortex-ai-core/${repository}:ref:refs/heads/dev`,
-            `repo:cortex-ai-core/${repository}:environment:${config.name}`,
-          ] },
+          StringEquals: {
+            'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+            'token.actions.githubusercontent.com:sub': `repo:cortex-ai-core/${repository}:environment:${config.name}`,
+          },
         }, 'sts:AssumeRoleWithWebIdentity'),
       });
       const backend = repository === 'cortex-mvp';

@@ -1,10 +1,12 @@
 import { readFile,writeFile,mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { aws,guard } from './aws.mjs';
+import { assertDeployableTemplate } from './policy.mjs';
 const [environment,stack,file]=process.argv.slice(2);
 guard(environment);
 if(!stack?.startsWith(`cortex-${environment}-`))throw new Error('Unexpected stack name.');
 const template=JSON.parse(await readFile(resolve(file),'utf8'));
+assertDeployableTemplate(template);
 await mkdir('.local/deployment',{recursive:true,mode:0o700});
 const compact=resolve(`.local/deployment/${stack}.json`);
 const body=JSON.stringify(template);

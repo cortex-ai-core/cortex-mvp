@@ -16,15 +16,16 @@ export class Delivery extends Stack {
     const web=s3.Bucket.fromBucketName(this,'WebOrigin',data.web.bucketName);
     // An attached VPC origin cannot be updated. Give this corrected endpoint a
     // new resource identity, then switch the distribution before retiring the old origin.
-    const apiOrigin=new cloudfront.VpcOrigin(this,'PrivateHttpOriginV1',{
+    const apiOrigin=runtime.alb?new cloudfront.VpcOrigin(this,'PrivateHttpOriginV1',{
       endpoint:cloudfront.VpcOriginEndpoint.applicationLoadBalancer(runtime.alb),
       protocolPolicy:cloudfront.OriginProtocolPolicy.HTTP_ONLY,httpPort:80,
-    });
+    }):undefined;
     // The private VPC origin stays defined after the switch so it can be retired in a separate reviewed cleanup.
     // The public origin's hostname matches its ALB certificate; CloudFront sends that hostname as Host.
     const api=edge?.apiOrigin==='public'
       ?new origins.HttpOrigin(edge.originDomain,{protocolPolicy:cloudfront.OriginProtocolPolicy.HTTPS_ONLY,originSslProtocols:[cloudfront.OriginSslPolicy.TLS_V1_2],readTimeout:Duration.seconds(120),customHeaders:{[originHeader]:SecretValue.secretsManager(edge.originSecretName).unsafeUnwrap()}})
-      :origins.VpcOrigin.withVpcOrigin(apiOrigin,{readTimeout:Duration.seconds(120)});
+      :apiOrigin?origins.VpcOrigin.withVpcOrigin(apiOrigin,{readTimeout:Duration.seconds(120)}):undefined;
+    if(!api)throw new Error('An API origin is required: configure a public HTTPS edge or a private ALB.');
     const distribution=new cloudfront.Distribution(this,'Distribution',{
       comment:id,defaultRootObject:'index.html',minimumProtocolVersion:cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
       ...(edge?{domainNames:[edge.viewerDomain],certificate:acm.Certificate.fromCertificateArn(this,'ViewerCertificate',edge.viewerCertificateArn)}:{}),

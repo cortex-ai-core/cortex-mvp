@@ -480,7 +480,7 @@ Infrastructure source is TypeScript in `infra/`; synthesized CloudFormation is a
 | `cortex-ENV-delivery` | [delivery.ts](infra/lib/delivery.ts) | CloudFront static/API routing and private ALB origin |
 | `cortex-central-flowlogs` in Log Archive | [log-archive.ts](infra/lib/log-archive.ts) | Dedicated central bucket, retention and delivery policy |
 
-The central destination currently enables Dev delivery; Test/Prod require their own source-account policy and flow-log configuration. Do not assume a Dev deployment activates central logging for all environments.
+The live central destination currently enables Dev delivery. Desired-state templates now support Test/Prod source accounts as well, but their archive policy and Foundation changes require separately approved provisioning. See [Test/Prod prerequisites](docs/environment-prerequisites.md).
 
 ### GitHub Actions release paths
 
@@ -490,11 +490,13 @@ Backend workflow: [.github/workflows/aws.yml](.github/workflows/aws.yml). The co
 |---|---|---|
 | Pull request | Regression tests, infrastructure type/tests and synthesis; no deployment | Static build; no deployment |
 | Push to `dev` | Verify, then deploy Dev | Build, then publish Dev |
-| Manual dispatch | Select Dev/Test/Prod after matching account bootstrap and workflow availability | Select an already-provisioned environment |
+| Manual dispatch | Defaults to preparation only; Test/Prod deployment is locked | Defaults to build/verification only; Test/Prod publishing is locked |
 
 After these promotion PRs merge, the workflow deploys on every push to `dev`, including documentation changes. Pushes to `feature/aws-conversion` do not deploy; its PRs run verification only. Deployment jobs are serialized per environment. GitHub obtains temporary role credentials through OIDC with account restrictions; it does not need long-lived AWS keys.
 
-The Foundation templates trust the `dev` branch and the selected GitHub environment. Existing live roles already trust the named environment used by deployment jobs, so this workflow transition does not require an IAM change to run. Removing the old direct `aws-migration` trust subject from live IAM still requires the separate reviewed Foundation update; normal releases do not apply Foundation.
+The Foundation templates now trust only the exact repository/GitHub environment subject. Existing Dev deployment jobs already use that subject. Removing older branch-based trust from live IAM still requires the separate reviewed Foundation update; normal releases do not apply Foundation. GitHub environment reviewer/branch protections require repository admin configuration and are not created by YAML.
+
+Test/Prod standard deployment helpers fail before contacting AWS while `deploymentEnabled` is false. Manual dispatch defaults to `prepare_only: true`; an actual authorized Dev dispatch requires explicitly selecting false. Run `npm run prepare:environments` for offline synthesis of all three environments; its marked fixture templates must never be deployed. The [prerequisite runbook](docs/environment-prerequisites.md) separates prepared source from remaining GitHub, DNS, secret, artifact-promotion and account prerequisites. No Test/Prod provisioning is authorized by this preparation.
 
 Backend release sequence:
 
@@ -529,6 +531,7 @@ From the backend root:
 
 ```bash
 npm run test:migration
+npm run test:deployment
 npm ci --prefix infra
 npm run build --prefix infra
 npm test --prefix infra

@@ -1,1 +1,5 @@
-{"account":"223323955607","region":"us-west-2"}
+{
+  "account": "223323955607",
+  "region": "us-west-2",
+  "deploymentEnabled": false
+}
