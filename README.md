@@ -732,6 +732,31 @@ These are Linux **ARM64 Fargate** tasks using `awsvpc` networking, private appli
 
 CloudWatch → **Log groups** contains `/cortex/test/api`, `/cortex/test/api-postgrest`, `/cortex/test/worker`, `/cortex/test/worker-postgrest`, `/cortex/test/parser`, `/cortex/test/database`, plus VPC group `cortex-test-foundation-FlowLogs16C1943A-89s6UWrFfy3L`. These seven managed groups retain 30 days. ECS task/service **Logs** links open the relevant stream. The source definitions are [runtime.ts](infra/lib/runtime.ts) and [operations.ts](infra/lib/operations.ts); environment inputs are [test.json](infra/environments/test.json). New image/config releases can register later task revisions, so always follow the service's current task-definition ARN.
 
+### Initial Test super admin bootstrap
+
+The initial environment deployment intentionally left all 25 public application tables and Cognito empty. A separately authorized **first-admin bootstrap** on October 23, 2026 created fresh Test setup records: five roles (`super_admin`, `admin`, `operator`, `viewer`, `client`), organization **Cortex Test**, namespace **Test Workspace**, one active super-admin profile, one namespace membership and one Cognito issuer/subject identity link. This is ten database rows plus one independent Cognito identity; no Dev records, passwords, documents, history or organization IDs are copied. Account-specific email/identifiers and execution evidence remain in the private migration bucket and ignored local evidence, rather than this public README.
+
+[bootstrap-test-admin.mjs](scripts/aws/bootstrap-test-admin.mjs) implements the database operation; its [administrator runner](scripts/deploy/bootstrap-test-admin.mjs) runs it using the existing `cortex-test-database` Fargate task definition. It uploads the non-secret script to the versioned, encrypted Test migration bucket, pins its S3 version and SHA-256, verifies that checksum inside the task, and downloads the script into the task's temporary filesystem. Existing database-task secret references provide the private PostgreSQL connection over verified TLS. No new service, public database access, IAM expansion or application image rebuild is needed.
+
+The script validates the exact Test account, region, RDS host, database, migration bucket and Cognito pool. Preflight requires an empty database. Database writes run in one transaction under the existing migration advisory lock. A repeat `apply` accepts only the exact first-admin state and creates no duplicates; unexpected identities, partial setups or business content cause refusal. These bootstrap helpers are **never called by CI or normal releases**. Later promotions run schema migrations and preserve Test users and organization data.
+
+Operator sequence, using an explicitly authenticated Test administrator session from the repository root:
+
+```bash
+# 1. Verify every public application table is empty.
+node scripts/deploy/bootstrap-test-admin.mjs preflight ADMIN_EMAIL
+# 2. Create the new identity in Test Cognito, with invitation delivery suppressed.
+#    Use its returned sub below; do not auto-link an existing user by email.
+node scripts/deploy/bootstrap-test-admin.mjs apply ADMIN_EMAIL COGNITO_SUB
+# 3. Set the explicitly requested Cognito password through a protected API input,
+#    never a committed file, task override, command-line argument or CI log.
+node scripts/deploy/bootstrap-test-admin.mjs verify ADMIN_EMAIL COGNITO_SUB
+```
+
+The Cognito operations are `AdminCreateUser` (`MessageAction=SUPPRESS`, verified email) and `AdminSetUserPassword` (`Permanent=true`). They are separate administrator operations; the database script never receives the login password. If a task fails, inspect its database/report state before deleting or resetting an identity: Cognito and PostgreSQL do not share a transaction. Once application content exists, manage accounts through authorized application settings instead of rerunning initial bootstrap. Future password changes are separate operations.
+
+Each bootstrap task writes its non-secret result to `s3://cortex-migration-test-223323955607-us-west-2/bootstrap/reports/RUN_ID/MODE.json` and `/cortex/test/database` logs; the runner downloads a local copy under ignored `.local/deployment/admin-bootstrap/`. Evidence includes task mode, row counts, profile/organization/workspace identifiers and the explicit Cognito link. Verify application login reports `super_admin` and the intended organization/workspace, then verify protected settings access. The organization uses schema defaults: 30-day chat retention, retention hold off; no persona, documents or example conversations are seeded. Live verification confirmed Cognito status CONFIRMED/enabled, successful application sign-in with `super_admin`, and HTTP 200 from protected organization/user/role settings (one organization, one user, five roles). A second apply returned `already-configured` with identical counts and identifiers.
+
 ### GitHub and AWS identities
 
 The Test workflow deliberately uses **branch-bound OIDC**, without a GitHub environment subject:

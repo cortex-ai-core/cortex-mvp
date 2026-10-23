@@ -8,7 +8,7 @@ Updated October 23, 2026. **Test is enabled on the `test` branch; Prod remains d
 - A push to `test` selects a successful Dev AWS release, copies exact API/parser/PostgREST digests and deploys all five Test workload stacks. No container rebuild or application-data transfer occurs during promotion.
 - GitHub source/target roles trust the exact backend Test branch. The Dev reader has ECR read-only permissions; it cannot change Dev workloads. Test remains account-isolated.
 - The private ALB/VPC-origin design is selected. A custom browser hostname requires only its us-east-1 viewer certificate. While DNS validation is pending, releases use the generated CloudFront address and activate the alias after certificate issuance.
-- The initial database is schema-only, all 25 application tables are empty, and Cognito has no users. Provisioning a Test tenant/admin is a separate task.
+- The initial deployment was schema-only with all 25 application tables and Cognito empty. The separately authorized first-admin bootstrap creates fresh Test roles, a Test organization/workspace and one linked super admin; see the [bootstrap operating guide](../README.md#initial-test-super-admin-bootstrap). Routine promotions preserve those records.
 - Central Log Archive delivery is account-scoped and active. The October 23 policy operation added Test without adding Prod.
 - No budget definitions or alarm subscriptions were returned by Dev inventory; Test preserves that configuration and the same service sizes.
 
