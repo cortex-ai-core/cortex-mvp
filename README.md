@@ -639,7 +639,7 @@ Update this entry point when commands, ports, hosting or module ownership change
 
 ## Test environment and Dev to Test promotion
 
-**Generated Test site:** [https://d3e2wh85985oj4.cloudfront.net](https://d3e2wh85985oj4.cloudfront.net). CloudFront distribution **`E1H1PAMT85D0KU`**. Custom hostname: `cortex-test.solluciopartners.com`, pending external DNS/certificate activation.
+**Test site:** [https://cortex-test.solluciopartners.com](https://cortex-test.solluciopartners.com). The [generated CloudFront address](https://d3e2wh85985oj4.cloudfront.net) remains available. Distribution **`E1H1PAMT85D0KU`**. Both GoDaddy CNAMEs were published and resolved correctly on October 23, 2026; custom-host activation runs through the backend promotion certificate gate described below.
 
 Test was authorized on October 23, 2026. A push to **`test`** runs [Promote Dev to Test backend](.github/workflows/promote-test.yml): verify the release tooling, select the latest successful **Dev push** run of `AWS Oregon backend`, copy its exact API/parser/PostgREST artifacts into Test, verify destination digests, apply the Test Foundation/Data/Operations stacks, run Test-only database migrations, and deploy Test Application/Delivery. It does not rebuild the containers. Application changes must first reach `dev` and pass its AWS release workflow. Code unique to `test` changes the deployment tooling/infrastructure; it does not become the promoted application image.
 
@@ -663,7 +663,7 @@ The companion UI's `test` branch similarly promotes its accepted Dev static expo
 | Workload stacks | `cortex-test-foundation`, `cortex-test-data`, `cortex-test-operations`, `cortex-test-application`, `cortex-test-delivery` |
 | Public entry | CloudFront; API remains behind one internal ALB/VPC origin |
 | Cognito pool / app client | `us-west-2_jkRHTdgKB`; read the Data stack `UserPoolClientId` output |
-| Intended viewer | `https://cortex-test.solluciopartners.com` after GoDaddy validation/routing |
+| Custom viewer | `https://cortex-test.solluciopartners.com`; generated URL remains supported |
 | Logs | Managed Test CloudWatch groups: 30 days; central Parquet VPC flow logs: 365-day archive lifecycle |
 
 The initial Test API/parser/PostgREST versions were copied from the actual running Dev task definitions and destination digests verified. No RDS snapshot was restored and no Dev application data or identities were transferred. The schema is initialized with the baseline and checksummed incremental migrations only. Cognito was initially empty; the later authorized first-admin bootstrap is described below. The OpenAI credential is held in an independent Test secret using Dev's existing integration setting; usage therefore shares that key/project until a separate Test key is supplied. Database passwords and application/parser signing values are generated independently.
@@ -714,7 +714,7 @@ All workload resources below belong to Test account `223323955607` in **Oregon (
 | Secrets Manager | `cortex-test/database`, `cortex-test/runtime`, `cortex-test/postgrest-signing`, `cortex-test/parser-signing`, `cortex-test/openai`, `cortex-test/legacy-cognito`, `cortex-test/cloudfront-origin`; RDS also manages its master secret |
 | CloudFront | Distribution `E1H1PAMT85D0KU`; VPC origin `vo_8PfXZuE7CmJFJ3v1yGn3Ll`; OAC `E7392V4UD8CQ8`; function `us-west-2cortextestdeliveryStaticRoutes51430309` |
 | IAM | Deployment roles listed below; CloudFormation `cortex-test-cloudformation`; runtime roles `cortex-test-application`, `cortex-test-application-execution`, `cortex-test-parser`; database `cortex-test-database-operations`, `cortex-test-database-execution`; signer `cortex-test-upload-signer`; default-group helper `cortex-test-default-group` |
-| ACM, **us-east-1** | Viewer certificate `86f8a27a-254d-4130-88e7-74651b3635d6`, pending GoDaddy DNS validation |
+| ACM, **us-east-1** | Viewer certificate `86f8a27a-254d-4130-88e7-74651b3635d6`; validation CNAME published |
 | Log Archive account `747301449112`, Oregon | Existing stack `cortex-central-flowlogs`, bucket `sollucio-vpc-flowlogs-747301449112-us-west-2`, Test prefix `vpc-flowlogs/AWSLogs/223323955607/` |
 
 ### ECS configuration and task definitions
@@ -788,14 +788,14 @@ The viewer certificate stack is `cortex-test-viewer-certificate` in **us-east-1*
 
 `arn:aws:acm:us-east-1:223323955607:certificate/86f8a27a-254d-4130-88e7-74651b3635d6`
 
-For the GoDaddy zone `solluciopartners.com`, provide the security/DNS owner:
+The security/DNS owner added both records in GoDaddy zone `solluciopartners.com` on October 23, 2026. Retain these records:
 
 | Purpose | Type | Host in zone | Value |
 |---|---|---|---|
 | ACM validation | CNAME | `_b5efa4f48a871a52fa5fef42a9760c28.cortex-test` | `_cf7067c89daacfc490feb4d44df011ac.wzccmgtwzk.acm-validations.aws` |
 | Website routing | CNAME | `cortex-test` | `d3e2wh85985oj4.cloudfront.net` |
 
-Retain the validation CNAME for ACM renewal. No public origin hostname/ALB certificate is required. The generated CloudFront URL works while the custom certificate is pending. `viewerActivation: when-issued` makes each backend release check ACM: it attaches the configured custom alias/certificate only after issuance. After the DNS owner adds the records, rerun/promote the backend to activate the alias, then check custom-host HTTPS. The private origin's current HTTP hop is not end-to-end application TLS.
+Retain the validation CNAME for ACM renewal. No public origin hostname/ALB certificate is required. The generated CloudFront URL works while the custom certificate is pending. `viewerActivation: when-issued` makes each backend release check ACM: it attaches the configured custom alias/certificate only after issuance. The backend promotion was rerun after the DNS records were published to activate the alias. For a future certificate/DNS replacement, wait for issuance, rerun/promote the backend, then verify custom-host HTTPS. The private origin's current HTTP hop is not end-to-end application TLS.
 
 The document bucket must allow both the generated URL and the intended custom viewer in CORS. The generated URL is saved in `infra/environments/test.json`; the Test Data stack CORS permits it and the intended custom viewer. A future distribution replacement must update that input before direct-upload acceptance.
 
