@@ -6,8 +6,12 @@
   "image": "git-ddc51e70c6baacdbff4b2e09cca62ea170cc563d-39311761837-1",
   "parserImage": "migration-20261015-1",
   "postgrestImage": "migration-20261015-1",
-  "publicOrigin": "https://cortex-test.solluciopartners.com",
+  "publicOrigin": "https://d3e2wh85985oj4.cloudfront.net",
   "viewerActivation": "when-issued",
-  "dns": { "viewerDomain": "cortex-test.solluciopartners.com" },
-  "certificates": { "viewer": "arn:aws:acm:us-east-1:223323955607:certificate/86f8a27a-254d-4130-88e7-74651b3635d6" }
+  "dns": {
+    "viewerDomain": "cortex-test.solluciopartners.com"
+  },
+  "certificates": {
+    "viewer": "arn:aws:acm:us-east-1:223323955607:certificate/86f8a27a-254d-4130-88e7-74651b3635d6"
+  }
 }
