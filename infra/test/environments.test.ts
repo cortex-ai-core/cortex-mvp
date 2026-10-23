@@ -96,4 +96,3 @@ test('central archive grants delivery to each exact account prefix without broad
     assert.match(JSON.stringify(write.Resource), new RegExp(`vpc-flowlogs/AWSLogs/${account}/\\*`));
   }
 });
-

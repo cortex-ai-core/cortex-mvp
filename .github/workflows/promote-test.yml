@@ -38,7 +38,7 @@ jobs:
       id-token: write
     env:
       AWS_REGION: us-west-2
-      DOCKER_CONFIG: ${{ runner.temp }}/promotion-registry
+      DOCKER_CONFIG: /tmp/cortex-promotion-registry
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
