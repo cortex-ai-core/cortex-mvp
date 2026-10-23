@@ -1,0 +1,663 @@
+{
+  "observedAt": "2026-10-23T18:01:00.892590+00:00",
+  "account": "223323955607",
+  "region": "us-west-2",
+  "note": "Initial workload resource snapshot; consult CloudFormation Resources for current physical identities. IAM and CloudFront have global consoles. Separate certificate, source-reader and central-log bootstrap are described in README. No secret values are included.",
+  "stacks": {
+    "cortex-test-foundation": [
+      {
+        "LogicalResourceId": "CentralFlowLogs",
+        "ResourceType": "AWS::EC2::FlowLog",
+        "PhysicalResourceId": "fl-0e23829daffb26942"
+      },
+      {
+        "LogicalResourceId": "CloudFormationExecution8A3A34A2",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-cloudformation"
+      },
+      {
+        "LogicalResourceId": "CloudFormationExecutionDefaultPolicyF71969BB",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Cloud-XU4qmZrrxXUA"
+      },
+      {
+        "LogicalResourceId": "DataKey17AFBB84",
+        "ResourceType": "AWS::KMS::Key",
+        "PhysicalResourceId": "e6a9d697-0222-4419-817c-1792db5b71ea"
+      },
+      {
+        "LogicalResourceId": "DataKeyAliasF989EB84",
+        "ResourceType": "AWS::KMS::Alias",
+        "PhysicalResourceId": "alias/cortex-test-data"
+      },
+      {
+        "LogicalResourceId": "DefaultGroupCleanupC332FFFD",
+        "ResourceType": "AWS::Lambda::Function",
+        "PhysicalResourceId": "cortex-test-foundation-DefaultGroupCleanupC332FFFD-QduDXwZDLRoq"
+      },
+      {
+        "LogicalResourceId": "DefaultGroupRoleB9121874",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-default-group"
+      },
+      {
+        "LogicalResourceId": "DefaultGroupRoleDefaultPolicy6E30BED0",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Defau-gE3mEPTGGUWD"
+      },
+      {
+        "LogicalResourceId": "FlowLogs16C1943A",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "cortex-test-foundation-FlowLogs16C1943A-89s6UWrFfy3L"
+      },
+      {
+        "LogicalResourceId": "GitHubOidcA2A496A3",
+        "ResourceType": "AWS::IAM::OIDCProvider",
+        "PhysicalResourceId": "arn:aws:iam::223323955607:oidc-provider/token.actions.githubusercontent.com"
+      },
+      {
+        "LogicalResourceId": "GitHubcortexmvpC7060EE2",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-github-cortex-mvp"
+      },
+      {
+        "LogicalResourceId": "GitHubcortexmvpDefaultPolicy3FC9FC09",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-GitHu-GXz8zuHnrVxL"
+      },
+      {
+        "LogicalResourceId": "GitHubcortexuimvp5880E14A",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-github-cortex-ui-mvp"
+      },
+      {
+        "LogicalResourceId": "GitHubcortexuimvpDefaultPolicy8C8446CE",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-GitHu-B8CbZHvzB0sN"
+      },
+      {
+        "LogicalResourceId": "RestrictDefaultGroup",
+        "ResourceType": "Custom::RestrictDefaultGroup",
+        "PhysicalResourceId": "cortex-default-group"
+      },
+      {
+        "LogicalResourceId": "Vpc8378EB38",
+        "ResourceType": "AWS::EC2::VPC",
+        "PhysicalResourceId": "vpc-0a03199e279018716"
+      },
+      {
+        "LogicalResourceId": "VpcIGWD7BA715C",
+        "ResourceType": "AWS::EC2::InternetGateway",
+        "PhysicalResourceId": "igw-06fbbb7c28f585c3e"
+      },
+      {
+        "LogicalResourceId": "VpcS3Endpoint4A3DE4B5",
+        "ResourceType": "AWS::EC2::VPCEndpoint",
+        "PhysicalResourceId": "vpce-05bbd2ae9de1b1f2c"
+      },
+      {
+        "LogicalResourceId": "VpcTrafficFlowLog4C4A9AC2",
+        "ResourceType": "AWS::EC2::FlowLog",
+        "PhysicalResourceId": "fl-0e5d49baad87c715e"
+      },
+      {
+        "LogicalResourceId": "VpcTrafficIAMRoleA0AAB229",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-foundation-VpcTrafficIAMRoleA0AAB229-0ne507lemEdT"
+      },
+      {
+        "LogicalResourceId": "VpcTrafficIAMRoleDefaultPolicyE83A2770",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-VpcTr-lauxRNKyNPgT"
+      },
+      {
+        "LogicalResourceId": "VpcVPCGWBF912B6E",
+        "ResourceType": "AWS::EC2::VPCGatewayAttachment",
+        "PhysicalResourceId": "IGW|vpc-0a03199e279018716"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet1DefaultRouteD1F37131",
+        "ResourceType": "AWS::EC2::Route",
+        "PhysicalResourceId": "rtb-0ff07662d8e61381b|0.0.0.0/0"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet1RouteTableAssociation75D5245D",
+        "ResourceType": "AWS::EC2::SubnetRouteTableAssociation",
+        "PhysicalResourceId": "rtbassoc-091f55447936967dc"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet1RouteTableF03E8296",
+        "ResourceType": "AWS::EC2::RouteTable",
+        "PhysicalResourceId": "rtb-0ff07662d8e61381b"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet1Subnet8B68205B",
+        "ResourceType": "AWS::EC2::Subnet",
+        "PhysicalResourceId": "subnet-053ac93b3e7409c1f"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet2DefaultRoute928D347B",
+        "ResourceType": "AWS::EC2::Route",
+        "PhysicalResourceId": "rtb-03e8bbf25ad28d887|0.0.0.0/0"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet2RouteTable17378AED",
+        "ResourceType": "AWS::EC2::RouteTable",
+        "PhysicalResourceId": "rtb-03e8bbf25ad28d887"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet2RouteTableAssociationF25110CC",
+        "ResourceType": "AWS::EC2::SubnetRouteTableAssociation",
+        "PhysicalResourceId": "rtbassoc-00226bc8d12db2540"
+      },
+      {
+        "LogicalResourceId": "VpcapplicationSubnet2Subnet29670962",
+        "ResourceType": "AWS::EC2::Subnet",
+        "PhysicalResourceId": "subnet-0a29b38415df5df7a"
+      },
+      {
+        "LogicalResourceId": "VpcdataSubnet1RouteTableAF5F53E0",
+        "ResourceType": "AWS::EC2::RouteTable",
+        "PhysicalResourceId": "rtb-0d848413fb5ece7c0"
+      },
+      {
+        "LogicalResourceId": "VpcdataSubnet1RouteTableAssociation9E9FDBBB",
+        "ResourceType": "AWS::EC2::SubnetRouteTableAssociation",
+        "PhysicalResourceId": "rtbassoc-06f76eefb08f81c3c"
+      },
+      {
+        "LogicalResourceId": "VpcdataSubnet1SubnetE2B009FB",
+        "ResourceType": "AWS::EC2::Subnet",
+        "PhysicalResourceId": "subnet-0c760c12d76e94089"
+      },
+      {
+        "LogicalResourceId": "VpcdataSubnet2RouteTable94FA483A",
+        "ResourceType": "AWS::EC2::RouteTable",
+        "PhysicalResourceId": "rtb-0f8f2aa7dd70c90c0"
+      },
+      {
+        "LogicalResourceId": "VpcdataSubnet2RouteTableAssociation6C8F2058",
+        "ResourceType": "AWS::EC2::SubnetRouteTableAssociation",
+        "PhysicalResourceId": "rtbassoc-0daff4311600ec86f"
+      },
+      {
+        "LogicalResourceId": "VpcdataSubnet2SubnetAD08DFFF",
+        "ResourceType": "AWS::EC2::Subnet",
+        "PhysicalResourceId": "subnet-05dd84912d05d987f"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet1DefaultRouteB88F9E93",
+        "ResourceType": "AWS::EC2::Route",
+        "PhysicalResourceId": "rtb-05714060a79fe27b6|0.0.0.0/0"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet1EIP411541E6",
+        "ResourceType": "AWS::EC2::EIP",
+        "PhysicalResourceId": "44.235.6.238"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet1NATGatewayA036E8A6",
+        "ResourceType": "AWS::EC2::NatGateway",
+        "PhysicalResourceId": "nat-00556a398c9d74b4d"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet1RouteTable15C15F8E",
+        "ResourceType": "AWS::EC2::RouteTable",
+        "PhysicalResourceId": "rtb-05714060a79fe27b6"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet1RouteTableAssociation4E83B6E4",
+        "ResourceType": "AWS::EC2::SubnetRouteTableAssociation",
+        "PhysicalResourceId": "rtbassoc-0c2f9f26cc0131c79"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet1Subnet2BB74ED7",
+        "ResourceType": "AWS::EC2::Subnet",
+        "PhysicalResourceId": "subnet-0a0d7dcfd095b28c5"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet2DefaultRoute732F0BEB",
+        "ResourceType": "AWS::EC2::Route",
+        "PhysicalResourceId": "rtb-02805a5a2014e52fc|0.0.0.0/0"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet2RouteTableAssociationCCE257FF",
+        "ResourceType": "AWS::EC2::SubnetRouteTableAssociation",
+        "PhysicalResourceId": "rtbassoc-0ed8227ea95baccc1"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet2RouteTableC5A6DF77",
+        "ResourceType": "AWS::EC2::RouteTable",
+        "PhysicalResourceId": "rtb-02805a5a2014e52fc"
+      },
+      {
+        "LogicalResourceId": "VpcpublicSubnet2SubnetE34B022A",
+        "ResourceType": "AWS::EC2::Subnet",
+        "PhysicalResourceId": "subnet-019619215317f8edd"
+      },
+      {
+        "LogicalResourceId": "apiRepository1BACA399",
+        "ResourceType": "AWS::ECR::Repository",
+        "PhysicalResourceId": "cortex-test-api"
+      },
+      {
+        "LogicalResourceId": "parserRepositoryEB14EB3B",
+        "ResourceType": "AWS::ECR::Repository",
+        "PhysicalResourceId": "cortex-test-parser"
+      },
+      {
+        "LogicalResourceId": "postgrestRepository3B47291D",
+        "ResourceType": "AWS::ECR::Repository",
+        "PhysicalResourceId": "cortex-test-postgrest"
+      }
+    ],
+    "cortex-test-data": [
+      {
+        "LogicalResourceId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db8347ECC3691",
+        "ResourceType": "AWS::Lambda::Function",
+        "PhysicalResourceId": "cortex-test-data-BucketNotificationsHandler050a058-9GggxldTDrrs"
+      },
+      {
+        "LogicalResourceId": "BucketNotificationsHandler050a0587b7544547bf325f094a3db834RoleB6FB88EC",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-data-BucketNotificationsHandler050a0587-HRHOLr1RvYZV"
+      },
+      {
+        "LogicalResourceId": "CloudFrontOrigin388288E5",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/cloudfront-origin-JmXgF5"
+      },
+      {
+        "LogicalResourceId": "Database",
+        "ResourceType": "AWS::RDS::DBInstance",
+        "PhysicalResourceId": "cortex-test-oregon"
+      },
+      {
+        "LogicalResourceId": "DatabaseAccessEFE4F4C3",
+        "ResourceType": "AWS::EC2::SecurityGroup",
+        "PhysicalResourceId": "sg-0c867349463d03091"
+      },
+      {
+        "LogicalResourceId": "DatabaseLogin40FC65C6",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/database-le5tlZ"
+      },
+      {
+        "LogicalResourceId": "DatabaseSigningE2A95F56",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/postgrest-signing-bw5Tg8"
+      },
+      {
+        "LogicalResourceId": "DatabaseSubnets",
+        "ResourceType": "AWS::RDS::DBSubnetGroup",
+        "PhysicalResourceId": "cortex-test-data-databasesubnets-hqfnalh0sfod"
+      },
+      {
+        "LogicalResourceId": "Documents7E5B2978",
+        "ResourceType": "AWS::S3::Bucket",
+        "PhysicalResourceId": "cortex-documents-test-223323955607-us-west-2"
+      },
+      {
+        "LogicalResourceId": "DocumentsNotificationsE1B38AC2",
+        "ResourceType": "Custom::S3BucketNotifications",
+        "PhysicalResourceId": "DocumentsNotificationsE1B38AC2"
+      },
+      {
+        "LogicalResourceId": "DocumentsNotificationsHandlerPolicy33E44349",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Docum-d0ulsRNJQ9g7"
+      },
+      {
+        "LogicalResourceId": "DocumentsPolicy2E972B69",
+        "ResourceType": "AWS::S3::BucketPolicy",
+        "PhysicalResourceId": "cortex-documents-test-223323955607-us-west-2"
+      },
+      {
+        "LogicalResourceId": "LegacyCognito402A3F3E",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/legacy-cognito-ysrBK5"
+      },
+      {
+        "LogicalResourceId": "MigrationArchiveBF116144",
+        "ResourceType": "AWS::S3::Bucket",
+        "PhysicalResourceId": "cortex-migration-test-223323955607-us-west-2"
+      },
+      {
+        "LogicalResourceId": "MigrationArchivePolicy84DFFCA9",
+        "ResourceType": "AWS::S3::BucketPolicy",
+        "PhysicalResourceId": "cortex-migration-test-223323955607-us-west-2"
+      },
+      {
+        "LogicalResourceId": "OpenAi99D569F8",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/openai-gbMC5Z"
+      },
+      {
+        "LogicalResourceId": "Parameters",
+        "ResourceType": "AWS::RDS::DBParameterGroup",
+        "PhysicalResourceId": "cortex-test-data-parameters-f52bg5ynzpln"
+      },
+      {
+        "LogicalResourceId": "ParserSigningAB4A0841",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/parser-signing-a3V4Tl"
+      },
+      {
+        "LogicalResourceId": "RuntimeSigning2E2039C4",
+        "ResourceType": "AWS::SecretsManager::Secret",
+        "PhysicalResourceId": "arn:aws:secretsmanager:us-west-2:223323955607:secret:cortex-test/runtime-tkHbS3"
+      },
+      {
+        "LogicalResourceId": "UploadRole66CFAE20",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-upload-signer"
+      },
+      {
+        "LogicalResourceId": "UploadRoleDefaultPolicy918CA478",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Uploa-68VSwLQedKqq"
+      },
+      {
+        "LogicalResourceId": "UploadSigner01004508",
+        "ResourceType": "AWS::Lambda::Function",
+        "PhysicalResourceId": "cortex-test-upload-signer"
+      },
+      {
+        "LogicalResourceId": "UploadSignerAccess52985A1E",
+        "ResourceType": "AWS::EC2::SecurityGroup",
+        "PhysicalResourceId": "sg-0277b722483708eaa"
+      },
+      {
+        "LogicalResourceId": "Users0A0EEA89",
+        "ResourceType": "AWS::Cognito::UserPool",
+        "PhysicalResourceId": "us-west-2_jkRHTdgKB"
+      },
+      {
+        "LogicalResourceId": "UsersBackendDF344146",
+        "ResourceType": "AWS::Cognito::UserPoolClient",
+        "PhysicalResourceId": "6gtb3eu95dd3097nnvlbba19o6"
+      },
+      {
+        "LogicalResourceId": "Web3C8945DB",
+        "ResourceType": "AWS::S3::Bucket",
+        "PhysicalResourceId": "cortex-web-test-223323955607-us-west-2"
+      },
+      {
+        "LogicalResourceId": "WebPolicy83ABEB90",
+        "ResourceType": "AWS::S3::BucketPolicy",
+        "PhysicalResourceId": "cortex-web-test-223323955607-us-west-2"
+      }
+    ],
+    "cortex-test-operations": [
+      {
+        "LogicalResourceId": "Cluster3DA9CCBA",
+        "ResourceType": "AWS::ECS::ClusterCapacityProviderAssociations",
+        "PhysicalResourceId": "cortex-test"
+      },
+      {
+        "LogicalResourceId": "ClusterEB0386A7",
+        "ResourceType": "AWS::ECS::Cluster",
+        "PhysicalResourceId": "cortex-test"
+      },
+      {
+        "LogicalResourceId": "DatabaseLogs561AB38E",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "/cortex/test/database"
+      },
+      {
+        "LogicalResourceId": "DatabaseTask6E342AB9",
+        "ResourceType": "AWS::ECS::TaskDefinition",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:task-definition/cortex-test-database:1"
+      },
+      {
+        "LogicalResourceId": "ExecutionRole605A040B",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-database-execution"
+      },
+      {
+        "LogicalResourceId": "ExecutionRoleDefaultPolicyA5B92313",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Execu-xoJKPvX7YRa1"
+      },
+      {
+        "LogicalResourceId": "OperationsAccessB73FD14B",
+        "ResourceType": "AWS::EC2::SecurityGroup",
+        "PhysicalResourceId": "sg-0ee16fa6b4814d38f"
+      },
+      {
+        "LogicalResourceId": "OperationsAccesscortextestdataDatabaseAccessE7B1713F5432to2C37398A",
+        "ResourceType": "AWS::EC2::SecurityGroupIngress",
+        "PhysicalResourceId": "sgr-01042b0058ec1e921"
+      },
+      {
+        "LogicalResourceId": "OperationsAccesstocortextestdataDatabaseAccessE7B1713F543296A8BF29",
+        "ResourceType": "AWS::EC2::SecurityGroupEgress",
+        "PhysicalResourceId": "sgr-0e8d1ef29412676c8"
+      },
+      {
+        "LogicalResourceId": "TaskRole30FC0FBB",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-database-operations"
+      },
+      {
+        "LogicalResourceId": "TaskRoleDefaultPolicy07FC53DE",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-TaskR-mcBLveh1hTpb"
+      }
+    ],
+    "cortex-test-application": [
+      {
+        "LogicalResourceId": "Alerts91F83244",
+        "ResourceType": "AWS::SNS::Topic",
+        "PhysicalResourceId": "arn:aws:sns:us-west-2:223323955607:cortex-test-operations"
+      },
+      {
+        "LogicalResourceId": "ApiService89E3D990",
+        "ResourceType": "AWS::ECS::Service",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:service/cortex-test/cortex-test-api"
+      },
+      {
+        "LogicalResourceId": "ApplicationAccess285EE8C3",
+        "ResourceType": "AWS::EC2::SecurityGroup",
+        "PhysicalResourceId": "sg-06dba9c889a5e4d9f"
+      },
+      {
+        "LogicalResourceId": "ApplicationAccesscortextestdataDatabaseAccessE7B1713F5432toF91010A3",
+        "ResourceType": "AWS::EC2::SecurityGroupIngress",
+        "PhysicalResourceId": "sgr-0aa2658611f72e022"
+      },
+      {
+        "LogicalResourceId": "ApplicationAccessfromcortextestapplicationOriginAccess5A94E9E98081E40C3215",
+        "ResourceType": "AWS::EC2::SecurityGroupIngress",
+        "PhysicalResourceId": "sgr-0e5189a6ce01426be"
+      },
+      {
+        "LogicalResourceId": "ApplicationAccesstocortextestapplicationParserAccess6A0E9AEE8090DAE5589A",
+        "ResourceType": "AWS::EC2::SecurityGroupEgress",
+        "PhysicalResourceId": "sgr-09d272dbfa5637101"
+      },
+      {
+        "LogicalResourceId": "ApplicationAccesstocortextestdataDatabaseAccessE7B1713F54324744C084",
+        "ResourceType": "AWS::EC2::SecurityGroupEgress",
+        "PhysicalResourceId": "sgr-066847b74f80c6acf"
+      },
+      {
+        "LogicalResourceId": "ApplicationRole90C00724",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-application"
+      },
+      {
+        "LogicalResourceId": "ApplicationRoleDefaultPolicy2A2BCE7E",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Appli-PTKEsShnkBDi"
+      },
+      {
+        "LogicalResourceId": "DeadLettersAlarm3F8DE0AC",
+        "ResourceType": "AWS::CloudWatch::Alarm",
+        "PhysicalResourceId": "cortex-test-application-DeadLettersAlarm3F8DE0AC-V35112EzE2I5"
+      },
+      {
+        "LogicalResourceId": "DeadLettersBBF8BAAB",
+        "ResourceType": "AWS::SQS::Queue",
+        "PhysicalResourceId": "https://sqs.us-west-2.amazonaws.com/223323955607/cortex-test-ingestion-dead"
+      },
+      {
+        "LogicalResourceId": "DiscoveryA3CBF0BC",
+        "ResourceType": "AWS::ServiceDiscovery::PrivateDnsNamespace",
+        "PhysicalResourceId": "ns-e6w2ga3kagzaa5zm"
+      },
+      {
+        "LogicalResourceId": "ExecutionRole605A040B",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-application-execution"
+      },
+      {
+        "LogicalResourceId": "ExecutionRoleDefaultPolicyA5B92313",
+        "ResourceType": "AWS::IAM::Policy",
+        "PhysicalResourceId": "corte-Execu-L9YcDiDO7UeD"
+      },
+      {
+        "LogicalResourceId": "LoadBalancerBE9EEC3A",
+        "ResourceType": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+        "PhysicalResourceId": "arn:aws:elasticloadbalancing:us-west-2:223323955607:loadbalancer/app/cortex-LoadB-yZt3jTVBcbnC/0305d0a7845e3e59"
+      },
+      {
+        "LogicalResourceId": "LoadBalancerHttpApiGroup166B8435",
+        "ResourceType": "AWS::ElasticLoadBalancingV2::TargetGroup",
+        "PhysicalResourceId": "arn:aws:elasticloadbalancing:us-west-2:223323955607:targetgroup/cortex-LoadB-XU5DJAYAACID/0a42bc4532ac3d08"
+      },
+      {
+        "LogicalResourceId": "LoadBalancerHttpF4A6AC3E",
+        "ResourceType": "AWS::ElasticLoadBalancingV2::Listener",
+        "PhysicalResourceId": "arn:aws:elasticloadbalancing:us-west-2:223323955607:listener/app/cortex-LoadB-yZt3jTVBcbnC/0305d0a7845e3e59/5cff93cad1767d02"
+      },
+      {
+        "LogicalResourceId": "OriginAccess8057296B",
+        "ResourceType": "AWS::EC2::SecurityGroup",
+        "PhysicalResourceId": "sg-0da30da110d37e937"
+      },
+      {
+        "LogicalResourceId": "OriginAccessfrompl82a045eb8053DB13F2",
+        "ResourceType": "AWS::EC2::SecurityGroupIngress",
+        "PhysicalResourceId": "sgr-0e8e50ae267cf6680"
+      },
+      {
+        "LogicalResourceId": "OriginAccesstocortextestapplicationApplicationAccessD91AC6C38081E3E6F600",
+        "ResourceType": "AWS::EC2::SecurityGroupEgress",
+        "PhysicalResourceId": "sgr-0f719955a9ca31433"
+      },
+      {
+        "LogicalResourceId": "OriginalUploads69AD215E",
+        "ResourceType": "AWS::Events::Rule",
+        "PhysicalResourceId": "cortex-test-application-OriginalUploads69AD215E-4MtDHCmwCNkK"
+      },
+      {
+        "LogicalResourceId": "ParserAccess6041A991",
+        "ResourceType": "AWS::EC2::SecurityGroup",
+        "PhysicalResourceId": "sg-00b7a91d437b22c56"
+      },
+      {
+        "LogicalResourceId": "ParserAccessfromcortextestapplicationApplicationAccessD91AC6C380902A5DA913",
+        "ResourceType": "AWS::EC2::SecurityGroupIngress",
+        "PhysicalResourceId": "sgr-0b7d158bf9f0878c0"
+      },
+      {
+        "LogicalResourceId": "ParserCloudmapService27D1DCCB",
+        "ResourceType": "AWS::ServiceDiscovery::Service",
+        "PhysicalResourceId": "srv-2rxtq3ba3z54azf7"
+      },
+      {
+        "LogicalResourceId": "ParserRole4C2AA8A7",
+        "ResourceType": "AWS::IAM::Role",
+        "PhysicalResourceId": "cortex-test-parser"
+      },
+      {
+        "LogicalResourceId": "ParserService828B659E",
+        "ResourceType": "AWS::ECS::Service",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:service/cortex-test/cortex-test-parser"
+      },
+      {
+        "LogicalResourceId": "ParserTaskA7F8A417",
+        "ResourceType": "AWS::ECS::TaskDefinition",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:task-definition/cortex-test-parser:1"
+      },
+      {
+        "LogicalResourceId": "Queue4A7E3555",
+        "ResourceType": "AWS::SQS::Queue",
+        "PhysicalResourceId": "https://sqs.us-west-2.amazonaws.com/223323955607/cortex-test-ingestion"
+      },
+      {
+        "LogicalResourceId": "QueueAgeAlarmC3F61350",
+        "ResourceType": "AWS::CloudWatch::Alarm",
+        "PhysicalResourceId": "cortex-test-application-QueueAgeAlarmC3F61350-hqVv7AGZVFBj"
+      },
+      {
+        "LogicalResourceId": "QueuePolicy25439813",
+        "ResourceType": "AWS::SQS::QueuePolicy",
+        "PhysicalResourceId": "cortex-test-application-QueuePolicy25439813-Tp3Ja4fWEmLp"
+      },
+      {
+        "LogicalResourceId": "WorkerService9FFC549A",
+        "ResourceType": "AWS::ECS::Service",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:service/cortex-test/cortex-test-worker"
+      },
+      {
+        "LogicalResourceId": "apiLogsC6C29EB1",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "/cortex/test/api"
+      },
+      {
+        "LogicalResourceId": "apiTask2CF13C0A",
+        "ResourceType": "AWS::ECS::TaskDefinition",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:task-definition/cortex-test-api:1"
+      },
+      {
+        "LogicalResourceId": "apipostgrestLogs4FC93E03",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "/cortex/test/api-postgrest"
+      },
+      {
+        "LogicalResourceId": "parserLogs2544C943",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "/cortex/test/parser"
+      },
+      {
+        "LogicalResourceId": "workerLogs41619A4B",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "/cortex/test/worker"
+      },
+      {
+        "LogicalResourceId": "workerTaskF37CA197",
+        "ResourceType": "AWS::ECS::TaskDefinition",
+        "PhysicalResourceId": "arn:aws:ecs:us-west-2:223323955607:task-definition/cortex-test-worker:1"
+      },
+      {
+        "LogicalResourceId": "workerpostgrestLogs2E725E84",
+        "ResourceType": "AWS::Logs::LogGroup",
+        "PhysicalResourceId": "/cortex/test/worker-postgrest"
+      }
+    ],
+    "cortex-test-delivery": [
+      {
+        "LogicalResourceId": "Distribution830FAC52",
+        "ResourceType": "AWS::CloudFront::Distribution",
+        "PhysicalResourceId": "E1H1PAMT85D0KU"
+      },
+      {
+        "LogicalResourceId": "DistributionOrigin1S3OriginAccessControlEB606076",
+        "ResourceType": "AWS::CloudFront::OriginAccessControl",
+        "PhysicalResourceId": "E7392V4UD8CQ8"
+      },
+      {
+        "LogicalResourceId": "PrivateHttpOriginV162B865A1",
+        "ResourceType": "AWS::CloudFront::VpcOrigin",
+        "PhysicalResourceId": "vo_8PfXZuE7CmJFJ3v1yGn3Ll"
+      },
+      {
+        "LogicalResourceId": "StaticRoutes05B28734",
+        "ResourceType": "AWS::CloudFront::Function",
+        "PhysicalResourceId": "arn:aws:cloudfront::223323955607:function/us-west-2cortextestdeliveryStaticRoutes51430309"
+      }
+    ]
+  }
+}

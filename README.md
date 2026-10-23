@@ -670,6 +670,68 @@ The initial Test API/parser/PostgREST versions were copied from the actual runni
 
 No AWS Budget definitions or SNS alarm subscriptions were returned by the Dev inventory. Test therefore adds no new budget amounts or notification recipients. It retains the same queue-age/DLQ alarm pattern. Running Fargate, RDS, NAT, ALB, storage and OpenAI still incur charges; absence of a budget is not a spending limit.
 
+### How this deployment was made
+
+Infrastructure is defined as **AWS CDK TypeScript**, synthesized into **CloudFormation JSON templates**, and applied through CloudFormation change sets. It was not assembled manually in the AWS Console. The authorized administrator session bootstrapped the Foundation/Data/Operations stacks, requested the viewer certificate, granted the central flow-log destination access, installed the Dev read-only promotion role and initialized independent Test secrets. The successful GitHub promotion then copied the accepted images and applied all five Test workload stacks; the frontend workflow published the accepted static export.
+
+| Responsibility | Source / mechanism |
+|---|---|
+| Environment/account, sizing and domain inputs | [infra/environments/test.json](infra/environments/test.json), [config.ts](infra/lib/config.ts), [cortex.ts](infra/bin/cortex.ts) |
+| Network, ECR, encryption and deployment IAM | [foundation.ts](infra/lib/foundation.ts) → `cortex-test-foundation` |
+| RDS, S3, Cognito, application secrets and upload signer | [data.ts](infra/lib/data.ts) → `cortex-test-data` |
+| ECS cluster and one-off database task | [operations.ts](infra/lib/operations.ts) → `cortex-test-operations` |
+| Services, task definitions, ALB, queue, discovery and alarms | [runtime.ts](infra/lib/runtime.ts) → `cortex-test-application` |
+| CloudFront distribution, VPC origin and static route function | [delivery.ts](infra/lib/delivery.ts) → `cortex-test-delivery` |
+| Viewer certificate | [certificates.ts](infra/lib/certificates.ts), [certificate entrypoint](infra/bin/certificates.ts) → `cortex-test-viewer-certificate`, us-east-1 |
+| Dev artifact reader | [promotion.ts](infra/lib/promotion.ts), [promotion entrypoint](infra/bin/promotion.ts) → `cortex-dev-test-promotion`, Dev account |
+| Central flow-log destination | [log-archive.ts](infra/lib/log-archive.ts), [log-archive helper](scripts/deploy/log-archive.mjs) → existing `cortex-central-flowlogs`, Log Archive account |
+| Release orchestration | [release.mjs](scripts/deploy/release.mjs) synthesizes; [apply-stack.mjs](scripts/deploy/apply-stack.mjs) guards/applies change sets; [database.mjs](scripts/deploy/database.mjs) runs the private migration task |
+| Exact image promotion and release evidence | [promotion workflow](.github/workflows/promote-test.yml), [promote-images.mjs](scripts/deploy/promote-images.mjs), [record-release.mjs](scripts/deploy/record-release.mjs) |
+| Frontend publication | Companion UI `scripts/deploy/publish.mjs`: S3 upload, release marker, CloudFront invalidation |
+
+The initial central policy operation preserved the deployed template and its existing Dev statements, adding only the two Test delivery statements. It did not enable future Prod delivery. The viewer certificate and cross-account logging/reader bootstrap are intentionally outside routine Test promotion. Generated templates are in `infra/cdk.out/` during a release; AWS Console → **CloudFormation → stack → Template / Resources / Outputs / Change sets** shows the deployed template, exact physical names and update history.
+
+### Exact resource names and where to find them
+
+All workload resources below belong to Test account `223323955607` in **Oregon (`us-west-2`)** unless noted. CloudFront and IAM use global consoles. The [resource snapshot](docs/test-aws-resources.json) lists every CloudFormation-managed resource across the five workload stacks, including generated subnet, route-table, security-group, policy, helper Lambda and target-group names. It is an initial deployment snapshot; the stack Resources tab is authoritative after updates.
+
+| Console | Component names / identifiers |
+|---|---|
+| VPC | VPC name `cortex-test`, ID `vpc-0a03199e279018716`; NAT `nat-00556a398c9d74b4d`; IGW `igw-06fbbb7c28f585c3e`; S3 endpoint `vpce-05bbd2ae9de1b1f2c` |
+| EC2 → Load Balancers | Internal ALB `cortex-LoadB-yZt3jTVBcbnC`; target group `cortex-LoadB-XU5DJAYAACID` |
+| ECS | Cluster `cortex-test`; services `cortex-test-api`, `cortex-test-worker`, `cortex-test-parser`; task families listed below |
+| ECR | `cortex-test-api`, `cortex-test-parser`, `cortex-test-postgrest` in `223323955607.dkr.ecr.us-west-2.amazonaws.com` |
+| RDS | DB `cortex-test-oregon`, database name `cortex`; subnet group `cortex-test-data-databasesubnets-hqfnalh0sfod`; parameter group `cortex-test-data-parameters-f52bg5ynzpln` |
+| S3 | `cortex-web-test-223323955607-us-west-2` (website), `cortex-documents-test-223323955607-us-west-2` (uploads), `cortex-migration-test-223323955607-us-west-2` (migration evidence) |
+| Cognito | Pool name `cortex-test`, ID `us-west-2_jkRHTdgKB`; client ID `6gtb3eu95dd3097nnvlbba19o6` |
+| Lambda | `cortex-test-upload-signer`; infrastructure helpers `cortex-test-foundation-DefaultGroupCleanupC332FFFD-QduDXwZDLRoq`, `cortex-test-data-BucketNotificationsHandler050a058-9GggxldTDrrs` |
+| SQS | `cortex-test-ingestion`, `cortex-test-ingestion-dead` |
+| EventBridge | Rule `cortex-test-application-OriginalUploads69AD215E-4MtDHCmwCNkK` sends original-upload events to the ingestion queue |
+| Cloud Map / private Route 53 | Namespace `cortex-test.internal`; service `parser`, reachable as `parser.cortex-test.internal:8090` |
+| SNS | Topic `cortex-test-operations`; no subscribers were present in Dev to replicate |
+| CloudWatch alarms | `cortex-test-application-DeadLettersAlarm3F8DE0AC-V35112EzE2I5`, `cortex-test-application-QueueAgeAlarmC3F61350-hqVv7AGZVFBj` |
+| KMS | Alias `alias/cortex-test-data`; key `e6a9d697-0222-4419-817c-1792db5b71ea` |
+| Secrets Manager | `cortex-test/database`, `cortex-test/runtime`, `cortex-test/postgrest-signing`, `cortex-test/parser-signing`, `cortex-test/openai`, `cortex-test/legacy-cognito`, `cortex-test/cloudfront-origin`; RDS also manages its master secret |
+| CloudFront | Distribution `E1H1PAMT85D0KU`; VPC origin `vo_8PfXZuE7CmJFJ3v1yGn3Ll`; OAC `E7392V4UD8CQ8`; function `us-west-2cortextestdeliveryStaticRoutes51430309` |
+| IAM | Deployment roles listed below; CloudFormation `cortex-test-cloudformation`; runtime roles `cortex-test-application`, `cortex-test-application-execution`, `cortex-test-parser`; database `cortex-test-database-operations`, `cortex-test-database-execution`; signer `cortex-test-upload-signer`; default-group helper `cortex-test-default-group` |
+| ACM, **us-east-1** | Viewer certificate `86f8a27a-254d-4130-88e7-74651b3635d6`, pending GoDaddy DNS validation |
+| Log Archive account `747301449112`, Oregon | Existing stack `cortex-central-flowlogs`, bucket `sollucio-vpc-flowlogs-747301449112-us-west-2`, Test prefix `vpc-flowlogs/AWSLogs/223323955607/` |
+
+### ECS configuration and task definitions
+
+Open **ECS → Clusters → `cortex-test` → Services**. Select a service, then **Tasks → running task → task-definition link** to inspect its actual revision, containers, image URIs, environment, secret references, IAM roles, private network and logs. Alternatively open **ECS → Task definitions**, search the family name below and choose the active revision. A task definition is the versioned container recipe; a service maintains the desired number of running tasks. The database task runs once per release and exits instead of remaining a service.
+
+| Service / purpose | Task family (initial deployed revision) | Task CPU / memory | Containers / traffic |
+|---|---|---|---|
+| `cortex-test-api` | `cortex-test-api:1` | 512 units = 0.5 vCPU / 1,024 MiB | `api` + `postgrest`; ALB HTTP 80 → API 8081; health `/api/health` |
+| `cortex-test-worker` | `cortex-test-worker:1` | 0.5 vCPU / 1,024 MiB | `worker` + `postgrest`; same API image, command `node scripts/aws/start-worker.mjs`; consumes SQS, no listener |
+| `cortex-test-parser` | `cortex-test-parser:1` | 2 vCPU / 4,096 MiB | `parser`; private port 8090; container health `/health` |
+| Migration/verification, no service | `cortex-test-database` (read Operations `DatabaseTask` output for current revision) | 0.5 vCPU / 1,024 MiB | `database`; API image, command `node scripts/aws/database-task.mjs`; private PostgreSQL 5432 |
+
+These are Linux **ARM64 Fargate** tasks using `awsvpc` networking, private application subnets and **no public IP**. Each service has desired count **1**, deployment minimum healthy **100%**, maximum **200%**, and circuit-breaker rollback. There is no application autoscaling policy. API has a 90-second ALB health grace; parser allows a 120-second startup period. API and worker each use their own PostgREST sidecar at `127.0.0.1:3001` with pool size 5; PostgREST is not exposed publicly. Their application secret references come from Test Secrets Manager. The execution role pulls images and resolves startup secrets/logging; task roles authorize the running application's AWS calls. CPU/memory limits in the table apply to each whole task, including its sidecar.
+
+CloudWatch → **Log groups** contains `/cortex/test/api`, `/cortex/test/api-postgrest`, `/cortex/test/worker`, `/cortex/test/worker-postgrest`, `/cortex/test/parser`, `/cortex/test/database`, plus VPC group `cortex-test-foundation-FlowLogs16C1943A-89s6UWrFfy3L`. These seven managed groups retain 30 days. ECS task/service **Logs** links open the relevant stream. The source definitions are [runtime.ts](infra/lib/runtime.ts) and [operations.ts](infra/lib/operations.ts); environment inputs are [test.json](infra/environments/test.json). New image/config releases can register later task revisions, so always follow the service's current task-definition ARN.
+
 ### GitHub and AWS identities
 
 The Test workflow deliberately uses **branch-bound OIDC**, without a GitHub environment subject:
@@ -709,6 +771,8 @@ Retain the validation CNAME for ACM renewal. No public origin hostname/ALB certi
 The document bucket must allow both the generated URL and the intended custom viewer in CORS. The generated URL is saved in `infra/environments/test.json`; the Test Data stack CORS permits it and the intended custom viewer. A future distribution replacement must update that input before direct-upload acceptance.
 
 ### Verification and recovery
+
+Initial end-to-end GitHub promotion succeeded: [backend run 39996208577](https://github.com/cortex-ai-core/cortex-mvp/actions/runs/39996208577) and [frontend run 39995573151](https://github.com/cortex-ai-core/cortex-ui-mvp/actions/runs/39995573151). They promoted backend Dev run `39311761837` and frontend Dev run `39311786688`. Subsequent Test pushes rerun the same guarded path. Live verification on October 23, 2026 observed HTTP 200 from `/api/health`, the rendered Test login page, all three services running, successful repeat migrations, 25 empty public application tables, zero Cognito users and central Parquet flow-log delivery. The web release marker at `/releases/current.json` identifies the current source and deployment runs.
 
 Check the generated/custom website and `/api/health`, all three ECS services, internal target health, private networking/default SG, RDS settings, empty application tables/Cognito pool, signed-upload configuration and central flow-log objects. Full authenticated chat/upload/recovery acceptance requires separately provisioned Test users/workspaces; no initial tenant or user is silently created by this deployment.
 
