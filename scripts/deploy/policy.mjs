@@ -10,10 +10,14 @@ export function settings(environment) {
   return saved;
 }
 
-export function assertDeploymentEnabled(environment) {
+export function assertDeploymentEnabled(environment, execution = process.env) {
   const saved = settings(environment);
   if (saved.deploymentEnabled !== true) {
     throw new Error(`${environment} deployment is disabled. Complete docs/environment-prerequisites.md and approve a separate enablement PR first.`);
+  }
+  if (environment === 'test' && execution.GITHUB_ACTIONS === 'true'
+      && (execution.GITHUB_REF !== 'refs/heads/test' || !['push', 'workflow_dispatch'].includes(execution.GITHUB_EVENT_NAME))) {
+    throw new Error('Test deployment requires the test branch and a push or workflow_dispatch event.');
   }
   return saved;
 }

@@ -86,13 +86,16 @@ def handler(event,context):
         assumedBy: new iam.FederatedPrincipal(provider.oidcProviderArn, {
           StringEquals: {
             'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-            'token.actions.githubusercontent.com:sub': `repo:cortex-ai-core/${repository}:environment:${config.name}`,
+            'token.actions.githubusercontent.com:sub': config.name === 'test'
+              ? `repo:cortex-ai-core/${repository}:ref:refs/heads/test`
+              : `repo:cortex-ai-core/${repository}:environment:${config.name}`,
           },
         }, 'sts:AssumeRoleWithWebIdentity'),
       });
       const backend = repository === 'cortex-mvp';
       deployment.addToPolicy(new iam.PolicyStatement({ actions: backend ? ['cloudformation:Describe*','cloudformation:List*','cloudformation:Get*','cloudformation:CreateChangeSet','cloudformation:ExecuteChangeSet','cloudformation:DeleteChangeSet'] : ['cloudformation:DescribeStacks'], resources:[`arn:aws:cloudformation:${config.region}:${this.account}:stack/cortex-${config.name}-*/*`] }));
       if(backend){
+        if(config.name==='test')deployment.addToPolicy(new iam.PolicyStatement({actions:['acm:DescribeCertificate'],resources:[`arn:aws:acm:us-east-1:${this.account}:certificate/*`]}));
         deployment.addToPolicy(new iam.PolicyStatement({actions:['iam:PassRole'],resources:[execution.roleArn],conditions:{StringEquals:{'iam:PassedToService':'cloudformation.amazonaws.com'}}}));
         deployment.addToPolicy(new iam.PolicyStatement({actions:['ecr:GetAuthorizationToken'],resources:['*']}));
         for(const repo of Object.values(this.repositories))repo.grantPullPush(deployment);

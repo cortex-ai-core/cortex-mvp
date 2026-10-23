@@ -1,5 +1,8 @@
 # Cortéx backend and AWS infrastructure
 
+
+**Test deployment:** the `test` branch has a dedicated AWS pipeline for account `223323955607`. See [Test deployment](docs/test-deployment.md). Test starts with an empty database and Cognito pool; Prod remains disabled.
+
 Cortéx is a document-grounded chat application for SolluCIO. Users sign in to an organization/workspace, upload documents, ask questions with citations, and manage conversations, personas, preferences and memory according to their role.
 
 This repository contains the Fastify API, document ingestion code, Docling parser service, database migrations, local development launcher, and AWS CDK infrastructure. The browser application lives in [cortex-ui-mvp](https://github.com/cortex-ai-core/cortex-ui-mvp).
@@ -480,7 +483,7 @@ Infrastructure source is TypeScript in `infra/`; synthesized CloudFormation is a
 | `cortex-ENV-delivery` | [delivery.ts](infra/lib/delivery.ts) | CloudFront static/API routing and private ALB origin |
 | `cortex-central-flowlogs` in Log Archive | [log-archive.ts](infra/lib/log-archive.ts) | Dedicated central bucket, retention and delivery policy |
 
-The live central destination currently enables Dev delivery. Desired-state templates now support Test/Prod source accounts as well, but their archive policy and Foundation changes require separately approved provisioning. See [Test/Prod prerequisites](docs/environment-prerequisites.md).
+The central destination enables Dev and Test delivery; Test was added October 23, 2026 with account-specific permissions. Desired-state templates now support Test/Prod source accounts as well, but their archive policy and Foundation changes require separately approved provisioning. See [Test/Prod prerequisites](docs/environment-prerequisites.md).
 
 ### GitHub Actions release paths
 
@@ -490,13 +493,13 @@ Backend workflow: [.github/workflows/aws.yml](.github/workflows/aws.yml). The co
 |---|---|---|
 | Pull request | Regression tests, infrastructure type/tests and synthesis; no deployment | Static build; no deployment |
 | Push to `dev` | Verify, then deploy Dev | Build, then publish Dev |
-| Manual dispatch | Defaults to preparation only; Test/Prod deployment is locked | Defaults to build/verification only; Test/Prod publishing is locked |
+| Manual dispatch | Defaults to preparation only; Test has a separate branch workflow; Prod deployment is locked | Defaults to build/verification only; Test has a separate branch workflow; Prod publishing is locked |
 
 After these promotion PRs merge, the workflow deploys on every push to `dev`, including documentation changes. Pushes to `feature/aws-conversion` do not deploy; its PRs run verification only. Deployment jobs are serialized per environment. GitHub obtains temporary role credentials through OIDC with account restrictions; it does not need long-lived AWS keys.
 
 The Foundation templates now trust only the exact repository/GitHub environment subject. Existing Dev deployment jobs already use that subject. Removing older branch-based trust from live IAM still requires the separate reviewed Foundation update; normal releases do not apply Foundation. GitHub environment reviewer/branch protections require repository admin configuration and are not created by YAML.
 
-Test/Prod standard deployment helpers fail before contacting AWS while `deploymentEnabled` is false. Manual dispatch defaults to `prepare_only: true`; an actual authorized Dev dispatch requires explicitly selecting false. Run `npm run prepare:environments` for offline synthesis of all three environments; its marked fixture templates must never be deployed. The [prerequisite runbook](docs/environment-prerequisites.md) separates prepared source from remaining GitHub, DNS, secret, artifact-promotion and account prerequisites. No Test/Prod provisioning is authorized by this preparation.
+Test/Prod standard deployment helpers fail before contacting AWS while `deploymentEnabled` is false. Manual dispatch defaults to `prepare_only: true`; an actual authorized Dev dispatch requires explicitly selecting false. Run `npm run prepare:environments` for offline synthesis of all three environments; its marked fixture templates must never be deployed. The [prerequisite runbook](docs/environment-prerequisites.md) separates prepared source from remaining GitHub, DNS, secret, artifact-promotion and account prerequisites. The separate October 23 Test provisioning request is recorded in the Test runbook; Prod remains outside scope.
 
 Backend release sequence:
 
@@ -632,3 +635,81 @@ Continuously running Fargate, RDS, NAT and the ALB incur ongoing costs, along wi
 - [Persona authoring](docs/PERSONA_AUTHORING.md) and [persona acceptance](docs/PCL_ACCEPTANCE.md).
 
 Update this entry point when commands, ports, hosting or module ownership change. Keep detailed service policies and operational procedures in their linked owners. Record new verification with its environment and limits; do not turn a prior passing result into a claim about a later release.
+
+## Test environment and Dev to Test promotion
+
+Test was authorized on October 23, 2026. A push to **`test`** runs [Promote Dev to Test backend](.github/workflows/promote-test.yml): verify the release tooling, select the latest successful **Dev push** run of `AWS Oregon backend`, copy its exact API/parser/PostgREST artifacts into Test, verify destination digests, run Test-only database migrations, and deploy Test Application/Delivery. It does not rebuild the containers. Application changes must first reach `dev` and pass its AWS release workflow. Code unique to `test` changes the deployment tooling/infrastructure; it does not become the promoted application image.
+
+The companion UI's `test` branch similarly promotes its accepted Dev static export. Push the backend first; the frontend checks that the selected backend image is deployed before publishing. A frontend promotion waits up to thirty minutes for the matching backend tag. A missing/mismatched backend or failed checksum stops publication. Both repositories serialize their own Test deployments. The UI/backend source pair is recorded in release evidence; the repositories do not have a distributed deployment transaction.
+
+### Account and resource inventory
+
+| Setting | Test |
+|---|---|
+| Account / region | `223323955607` / `us-west-2` |
+| VPC | `10.20.0.0/16`, two AZs, public/application/isolated-data tiers |
+| VPC ID | `vpc-0a03199e279018716` |
+| NAT / database availability | One NAT, Single-AZ RDS; same sizing policy as Dev |
+| API / worker | One ARM64 task each, 0.5 vCPU / 1 GB, with PostgREST sidecar |
+| Parser | One ARM64 task, 2 vCPU / 4 GB, private Docling service |
+| Database | `cortex-test-oregon`, PostgreSQL, encrypted/private/TLS, seven-day native backups, deletion protection |
+| Image repositories | `cortex-test-api`, `cortex-test-parser`, `cortex-test-postgrest` |
+| Buckets | `cortex-web-test-223323955607-us-west-2`, `cortex-documents-test-223323955607-us-west-2`, `cortex-migration-test-223323955607-us-west-2` |
+| ECS / signer | `cortex-test` cluster; `cortex-test-upload-signer` private Lambda |
+| Queues | `cortex-test-ingestion`, `cortex-test-ingestion-dead` |
+| Workload stacks | `cortex-test-foundation`, `cortex-test-data`, `cortex-test-operations`, `cortex-test-application`, `cortex-test-delivery` |
+| Public entry | CloudFront; API remains behind one internal ALB/VPC origin |
+| Intended viewer | `https://cortex-test.solluciopartners.com` after GoDaddy validation/routing |
+| Logs | Managed Test CloudWatch groups: 30 days; central Parquet VPC flow logs: 365-day archive lifecycle |
+
+The initial Test API/parser/PostgREST versions were copied from the actual running Dev task definitions and destination digests verified. No RDS snapshot was restored and no Dev application data or identities were transferred. The schema is initialized with the baseline and checksummed incremental migrations only. Cognito starts empty. The OpenAI credential is held in an independent Test secret using Dev's existing integration setting; usage therefore shares that key/project until a separate Test key is supplied. Database passwords and application/parser signing values are generated independently.
+
+No AWS Budget definitions or SNS alarm subscriptions were returned by the Dev inventory. Test therefore adds no new budget amounts or notification recipients. It retains the same queue-age/DLQ alarm pattern. Running Fargate, RDS, NAT, ALB, storage and OpenAI still incur charges; absence of a budget is not a spending limit.
+
+### GitHub and AWS identities
+
+The Test workflow deliberately uses **branch-bound OIDC**, without a GitHub environment subject:
+
+- Backend target: `arn:aws:iam::223323955607:role/cortex-test-github-cortex-mvp` trusts `repo:cortex-ai-core/cortex-mvp:ref:refs/heads/test`.
+- Frontend target: `arn:aws:iam::223323955607:role/cortex-test-github-cortex-ui-mvp` trusts `repo:cortex-ai-core/cortex-ui-mvp:ref:refs/heads/test`.
+- Dev source reader: `arn:aws:iam::909762691423:role/cortex-dev-promotion-cortex-mvp`, managed by the separate `cortex-dev-test-promotion` stack. It trusts only the backend Test branch and can read the three Dev ECR repositories; it cannot deploy or mutate Dev resources.
+- OIDC audience: `sts.amazonaws.com`. No saved AWS keys are needed in repository secrets.
+
+Test is enabled in `infra/environments/test.json`; Prod remains disabled. Deployment policy rejects Test actions from other GitHub refs/events before AWS access. IAM independently restricts the source and destination role subjects. Existing Dev environment-based deployment remains unchanged.
+
+The connected GitHub user does not have admin access, so repository branch protection/reviewer administration is not implied by these workflows. An owner can protect `test` and require review/checks. The push-triggered release works without changing the existing `main` default branch. Manual `workflow_dispatch` supports an explicit `dev_run_id` (or `latest`) when this workflow is registered on the default branch; choose the **test** ref. If the manual button is unavailable, rerun an existing Test push run or publish the workflow definition on the default branch through the repository owner. Never deploy old main application code as a workaround.
+
+### Promotion contract and evidence
+
+Only a completed, successful `push` run on `dev` from `.github/workflows/aws.yml` is accepted. A green PR verification run is not a release. The source run's exact attempt determines the API tag. Parser/PostgREST tags are read from the Dev configuration at that run's commit. The workflow captures source digests, copies them with checksum-pinned `crane`, and verifies matching destination digests before deployment.
+
+Release evidence is retained for 90 days as `dev-to-test-backend-release`, including `.local/promotion/source.json` and `.local/deployment/release.json`: source commit/run/attempt, all three image tags/digests, deployment revision/run and Delivery outputs. The frontend records its Dev artifact checksum and compatible backend source in its release marker/evidence. Promotion fails if the selected source artifact/images have expired or been deleted. Review the existing 30-image ECR lifecycle before promising a longer rollback window.
+
+To repeat a promotion, push a reviewed change to `test` or rerun its Actions workflow. For an older accepted release, use an explicit successful Dev run ID with manual dispatch once available. Promote backend first, then the compatible frontend Dev run. This copies code artifacts only; the Test database and Cognito identities remain independent.
+
+### DNS handoff and certificate activation
+
+The viewer certificate stack is `cortex-test-viewer-certificate` in **us-east-1**. Certificate ARN:
+
+`arn:aws:acm:us-east-1:223323955607:certificate/86f8a27a-254d-4130-88e7-74651b3635d6`
+
+For the GoDaddy zone `solluciopartners.com`, provide the security/DNS owner:
+
+| Purpose | Type | Host in zone | Value |
+|---|---|---|---|
+| ACM validation | CNAME | `_b5efa4f48a871a52fa5fef42a9760c28.cortex-test` | `_cf7067c89daacfc490feb4d44df011ac.wzccmgtwzk.acm-validations.aws` |
+| Website routing | CNAME | `cortex-test` | Use the hostname in the Test Delivery stack `Url` output, without `https://` |
+
+Retain the validation CNAME for ACM renewal. No public origin hostname/ALB certificate is required. The generated CloudFront URL works while the custom certificate is pending. `viewerActivation: when-issued` makes each backend release check ACM: it attaches the configured custom alias/certificate only after issuance. After the DNS owner adds the records, rerun/promote the backend to activate the alias, then check custom-host HTTPS. The private origin's current HTTP hop is not end-to-end application TLS.
+
+The document bucket must allow both the generated URL and the intended custom viewer in CORS. When the initial distribution is created, record its URL in `infra/environments/test.json` and apply Data again; otherwise direct uploads from the generated URL can fail even when the website loads.
+
+### Verification and recovery
+
+Check the generated/custom website and `/api/health`, all three ECS services, internal target health, private networking/default SG, RDS settings, empty application tables/Cognito pool, signed-upload configuration and central flow-log objects. Full authenticated chat/upload/recovery acceptance requires separately provisioned Test users/workspaces; no initial tenant or user is silently created by this deployment.
+
+The database operations task verifies the schema signature and records migration checksums under a transaction/advisory lock. It writes table counts and schema evidence into the Test migration bucket. A second successful run establishes migration idempotence. It does not copy Dev rows.
+
+CloudFormation, ECS, database and static-site publication are separate operations. Use the previous accepted Dev run/artifacts for application rollback only when compatible with the current schema. Reverting a container does not reverse migrations. Do not delete protected data stacks to retry. Stateful removals/replacements and preparation-fixture templates remain rejected by the standard helper. Preserve old hashed web assets for open tabs and rollback.
+
+Local reference copies of the supplied AWS Build Book and Cortex system documentation, with hashes and extracted indexes, are under the original backend checkout's ignored `.local/references/`. They are not uploaded into these public repositories. Project-specific rollout constraints are documented here; no work-specific information is exported into global skills.

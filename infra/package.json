@@ -10,7 +10,8 @@
     "deploy": "cdk deploy",
     "test": "tsx --test test/*.test.ts",
     "synth:logs": "cdk synth --app \"npx tsx bin/log-archive.ts\" --output cdk.out-logs",
-    "synth:certificates": "cdk synth --app \"npx tsx bin/certificates.ts\" --output cdk.out-certificates"
+    "synth:certificates": "cdk synth --app \"npx tsx bin/certificates.ts\" --output cdk.out-certificates",
+    "synth:promotion": "cdk synth --app \"npx tsx bin/promotion.ts\" --output cdk.out-promotion"
   },
   "dependencies": {
     "aws-cdk-lib": "2.272.0",

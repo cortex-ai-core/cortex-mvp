@@ -13,7 +13,7 @@ import { Delivery } from '../lib/delivery.js';
 import { publicEdge } from '../lib/edge.js';
 
 for (const environment of ['dev', 'test', 'prod']) {
-  test(`${environment} foundation uses isolated tiers, central logging and environment-only deployment trust`, () => {
+  test(`${environment} foundation uses isolated tiers, central logging and deployment trust bound to the release source`, () => {
     const app = new App(), config = configuration(environment);
     const props = { env: { account: config.account, region: config.region } };
     const foundation = new Foundation(app, 'foundation', config, props);
@@ -33,7 +33,7 @@ for (const environment of ['dev', 'test', 'prod']) {
       assert.equal(condition.StringEquals['token.actions.githubusercontent.com:aud'], 'sts.amazonaws.com');
       const repository = role.Properties.RoleName.endsWith('cortex-ui-mvp') ? 'cortex-ui-mvp' : 'cortex-mvp';
       assert.equal(condition.StringEquals['token.actions.githubusercontent.com:sub'],
-        `repo:cortex-ai-core/${repository}:environment:${environment}`);
+        environment === 'test' ? `repo:cortex-ai-core/${repository}:ref:refs/heads/test` : `repo:cortex-ai-core/${repository}:environment:${environment}`);
       assert.ok(!JSON.stringify(condition).includes('ref:refs/heads/dev'));
     }
 
@@ -41,13 +41,13 @@ for (const environment of ['dev', 'test', 'prod']) {
 }
 
 for (const environment of ['test', 'prod']) {
-  test(`${environment} configuration uses one private ALB with a VPC origin and keeps deployment locked`, () => {
+  test(`${environment} configuration uses one private ALB with a VPC origin and preserves the explicit deployment gate`, () => {
     const app = new App(), config = configuration(environment);
     const props = { env: { account: config.account, region: config.region } };
     const foundation = new Foundation(app, 'foundation', config, props);
     const data = new Data(app, 'data', config, foundation, undefined, [], props);
     const saved = JSON.parse(readFileSync(new URL(`../environments/${environment}.json`, import.meta.url), 'utf8'));
-    assert.equal(saved.deploymentEnabled, false);
+    assert.equal(saved.deploymentEnabled, environment === 'test');
     assert.equal(saved.apiOrigin, 'private');
     const edge = publicEdge(config, {
       apiOrigin: saved.apiOrigin,
@@ -96,3 +96,4 @@ test('central archive grants delivery to each exact account prefix without broad
     assert.match(JSON.stringify(write.Resource), new RegExp(`vpc-flowlogs/AWSLogs/${account}/\\*`));
   }
 });
+

@@ -98,6 +98,6 @@ export class Runtime extends Stack {
       // GoDaddy CNAME target for props.edge.originDomain.
       new CfnOutput(this,'PublicOriginDns',{value:this.publicAlb.loadBalancerDnsName});
     }
-    for(const [key,value] of Object.entries({IngestionQueue:this.queue.queueUrl,IngestionQueueArn:this.queue.queueArn,DeadLetterQueue:dead.queueUrl,AlertsTopic:topic.topicArn,ApiService:service.serviceName,ApiTask:api.task.taskDefinitionArn})) new CfnOutput(this,key,{value});
+    for(const [key,value] of Object.entries({ApiImageTag:image,IngestionQueue:this.queue.queueUrl,IngestionQueueArn:this.queue.queueArn,DeadLetterQueue:dead.queueUrl,AlertsTopic:topic.topicArn,ApiService:service.serviceName,ApiTask:api.task.taskDefinitionArn})) new CfnOutput(this,key,{value});
   }
 }

@@ -16,12 +16,14 @@ const foundation = new Foundation(app, `cortex-${config.name}-foundation`, confi
 const saved = JSON.parse(readFileSync(new URL(`../environments/${config.name}.json`, import.meta.url),'utf8'));
 const snapshot = app.node.tryGetContext('snapshot') || saved.snapshot;
 const input = (name:string) => app.node.tryGetContext(name) || saved[name];
-const edge = publicEdge(config, saved);
-const publicOrigins = [input('publicOrigin'), ...(edge ? [`https://${edge.viewerDomain}`] : [])].filter(Boolean);
+const viewerReady = saved.viewerActivation !== 'when-issued' || app.node.tryGetContext('viewerCertificateReady') === 'true';
+const edge = publicEdge(config, viewerReady ? saved : { apiOrigin: saved.apiOrigin });
+const publicOrigins = [...new Set([input('publicOrigin'), ...(saved.dns?.viewerDomain ? [`https://${saved.dns.viewerDomain}`] : [])].filter(Boolean))];
 if (app.node.tryGetContext('includeData') === 'true') {
   const data = new Data(app, `cortex-${config.name}-data`, config, foundation, snapshot, publicOrigins, { env, synthesizer: new BootstraplessSynthesizer() });
   const image = input('image');
   if (image) {
+    if (config.name !== 'dev' && (!input('parserImage') || !input('postgrestImage'))) throw new Error('Explicit parserImage and postgrestImage are required outside Dev.');
     const operations = new Operations(app, `cortex-${config.name}-operations`, config, foundation, data, image, { env, synthesizer: new BootstraplessSynthesizer() });
     if (app.node.tryGetContext('includeRuntime') === 'true') {
       const runtime = new Runtime(app, `cortex-${config.name}-application`, config, foundation, data, operations, image, input('parserImage') || image, input('postgrestImage') || image, { env, synthesizer: new BootstraplessSynthesizer(), edge });

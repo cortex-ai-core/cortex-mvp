@@ -11,9 +11,9 @@ on:
         description: Verify and synthesize only; do not authenticate to AWS or deploy
       environment:
         type: choice
-        options: [dev, test, prod]
+        options: [dev, prod]
         default: dev
-        description: Target account (test/prod remain locked pending a separate enablement PR)
+        description: Target account (Test uses its test-branch workflow; Prod remains locked)
 permissions:
   contents: read
 concurrency:

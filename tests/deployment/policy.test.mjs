@@ -8,18 +8,19 @@ import { spawnSync } from 'node:child_process';
 import { settings, assertDeploymentEnabled, assertDeployableTemplate } from '../../scripts/deploy/policy.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
-test('unknown environments cannot fall back to Dev and only Dev is enabled', () => {
+test('unknown environments cannot fall back to Dev and Dev and Test are enabled', () => {
   for (const name of ['', 'unknown', 'constructor', '__proto__']) assert.throws(() => settings(name));
   assert.equal(assertDeploymentEnabled('dev').account, '909762691423');
-  for (const name of ['test', 'prod']) assert.throws(() => assertDeploymentEnabled(name), /deployment is disabled/);
+  assert.equal(assertDeploymentEnabled('test', {}).account, '223323955607');
+  for (const name of ['prod']) assert.throws(() => assertDeploymentEnabled(name), /deployment is disabled/);
 });
 
-test('every workload deployment helper refuses Test/Prod before invoking AWS, including outside the repo cwd', () => {
+test('every workload deployment helper refuses Prod before invoking AWS, including outside the repo cwd', () => {
   const directory = mkdtempSync(join(tmpdir(), 'cortex-deployment-gate-'));
   const marker = join(directory, 'aws-was-called');
   writeFileSync(join(directory, 'aws'), '#!/bin/sh\necho called > "$AWS_CALL_MARKER"\nexit 99\n', { mode: 0o700 });
   try {
-    for (const name of ['test', 'prod']) for (const [file, args] of [
+    for (const name of ['prod']) for (const [file, args] of [
       ['policy.mjs', [name]],
       ['release.mjs', [name, 'reviewed-release-123']],
       ['push-images.mjs', [name, 'reviewed-release-123']],
@@ -39,4 +40,15 @@ test('every workload deployment helper refuses Test/Prod before invoking AWS, in
 test('deployment refuses offline fixture templates', () => {
   assert.throws(() => assertDeployableTemplate({ Metadata: { CortexPreparationOnly: true } }), /cannot be deployed/);
   assert.doesNotThrow(() => assertDeployableTemplate({ Resources: {} }));
+});
+
+// GitHub credentials are issued only for the branch-bound Test release path.
+test('Test rejects other refs and pull requests before AWS access', () => {
+  for (const execution of [
+    {GITHUB_ACTIONS:'true',GITHUB_REF:'refs/heads/dev',GITHUB_EVENT_NAME:'push'},
+    {GITHUB_ACTIONS:'true',GITHUB_REF:'refs/pull/1/merge',GITHUB_EVENT_NAME:'pull_request'},
+    {GITHUB_ACTIONS:'true',GITHUB_REF:'refs/heads/test',GITHUB_EVENT_NAME:'pull_request'},
+  ]) assert.throws(() => assertDeploymentEnabled('test', execution), /requires the test branch/);
+  for (const event of ['push','workflow_dispatch']) assert.equal(assertDeploymentEnabled('test',
+    {GITHUB_ACTIONS:'true',GITHUB_REF:'refs/heads/test',GITHUB_EVENT_NAME:event}).account, '223323955607');
 });

@@ -25,3 +25,5 @@ infra/cdk.context.json
 
 infra/cdk.out-logs/
 infra/cdk.out-certificates/
+
+infra/cdk.out-promotion/

@@ -1,0 +1,100 @@
+name: Promote Dev to Test backend
+on:
+  push:
+    branches: [test]
+  workflow_dispatch:
+    inputs:
+      dev_run_id:
+        description: Successful AWS Oregon backend push run on dev (select the test ref)
+        required: false
+        default: latest
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: cortex-backend-test
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run test:migration && npm run test:deployment
+      - run: npm ci --prefix infra
+      - run: npm run build --prefix infra && npm test --prefix infra
+  promote:
+    if: github.ref == 'refs/heads/test'
+    runs-on: ubuntu-latest
+    needs: verify
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    env:
+      AWS_REGION: us-west-2
+      DOCKER_CONFIG: ${{ runner.temp }}/promotion-registry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Validate successful Dev run and resolve immutable tags
+        id: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEV_RUN_ID: ${{ inputs.dev_run_id || 'latest' }}
+        run: node scripts/deploy/resolve-dev-release.mjs "$DEV_RUN_ID"
+      - run: npm ci && npm ci --prefix infra
+      - name: Install checksum-pinned registry copier
+        run: |
+          curl -fsSL https://github.com/google/go-containerregistry/releases/download/v0.22.1/go-containerregistry_Linux_x86_64.tar.gz -o "$RUNNER_TEMP/crane.tar.gz"
+          echo "0ab7a1d6932a213aed964ce97666c3077fe691c8606413674a8b3e0b9ec4cda0  $RUNNER_TEMP/crane.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/crane.tar.gz" -C "$RUNNER_TEMP" crane
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+          mkdir -m 700 "$DOCKER_CONFIG"
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::909762691423:role/cortex-dev-promotion-cortex-mvp
+          aws-region: us-west-2
+          allowed-account-ids: '909762691423'
+          unset-current-credentials: true
+      - name: Capture Dev digests and source read token
+        run: |
+          node scripts/deploy/promote-images.mjs capture
+          aws ecr get-login-password | crane auth login 909762691423.dkr.ecr.us-west-2.amazonaws.com --username AWS --password-stdin
+      - uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: arn:aws:iam::223323955607:role/cortex-test-github-cortex-mvp
+          aws-region: us-west-2
+          allowed-account-ids: '223323955607'
+          unset-current-credentials: true
+      - name: Copy and verify the exact API, parser and PostgREST artifacts
+        run: |
+          aws ecr get-login-password | crane auth login 223323955607.dkr.ecr.us-west-2.amazonaws.com --username AWS --password-stdin
+          node scripts/deploy/promote-images.mjs copy
+      - name: Deploy selected Dev artifacts into Test
+        env:
+          API_TAG: ${{ steps.release.outputs.api_tag }}
+          PARSER_TAG: ${{ steps.release.outputs.parser_tag }}
+          POSTGREST_TAG: ${{ steps.release.outputs.postgrest_tag }}
+        run: |
+          node scripts/deploy/release.mjs test "$API_TAG" "$PARSER_TAG" "$POSTGREST_TAG"
+          URL=$(aws cloudformation describe-stacks --stack-name cortex-test-delivery --query 'Stacks[0].Outputs[?OutputKey==`Url`].OutputValue | [0]' --output text)
+          curl --fail --retry 6 --retry-delay 10 "$URL/api/health"
+          node scripts/deploy/record-release.mjs test "$API_TAG" "$PARSER_TAG" "$POSTGREST_TAG"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dev-to-test-backend-release
+          path: |
+            .local/promotion/source.json
+            .local/deployment/release.json
+          include-hidden-files: true
+          retention-days: 90

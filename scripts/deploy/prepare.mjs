@@ -37,7 +37,7 @@ for (const report of reports) {
     '--app', 'node_modules/.bin/tsx bin/preparation.ts', '--no-lookups', '--quiet',
     '-c', `environment=${report.environment}`, '--output', output],
   { cwd: join(root, 'infra'), env, stdio: 'inherit' });
-  console.log(`${report.environment}: offline synthesis passed; deployment ${report.deploymentEnabled ? 'enabled for existing Dev path' : 'LOCKED'}.`);
+  console.log(`${report.environment}: offline synthesis passed; deployment ${report.deploymentEnabled ? 'enabled for its authorized release path' : 'LOCKED'}.`);
 }
 mkdirSync(join(root, '.local/preparation'), { recursive: true });
 writeFileSync(join(root, '.local/preparation/readiness.json'), JSON.stringify({
