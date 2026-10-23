@@ -8,8 +8,8 @@ import { bootstrapConfiguration } from '../aws/bootstrap-test-admin.mjs';
 const [mode, email, subject] = process.argv.slice(2);
 const data = {
   BOOTSTRAP_MODE: mode, BOOTSTRAP_EMAIL: email, BOOTSTRAP_SUBJECT: subject || '',
-  BOOTSTRAP_ORGANIZATION: process.env.BOOTSTRAP_ORGANIZATION || 'Cortex Test',
-  BOOTSTRAP_WORKSPACE: process.env.BOOTSTRAP_WORKSPACE || 'Test Workspace',
+  BOOTSTRAP_ORGANIZATION: process.env.BOOTSTRAP_ORGANIZATION || 'Sollucio Partners',
+  BOOTSTRAP_WORKSPACE: process.env.BOOTSTRAP_WORKSPACE || 'core',
   BOOTSTRAP_USER_POOL_ID: 'us-west-2_jkRHTdgKB', BOOTSTRAP_RUN_ID: process.env.BOOTSTRAP_RUN_ID || randomUUID(),
 };
 bootstrapConfiguration({ ...data, AWS_REGION: 'us-west-2', CORTEX_ACCOUNT_ID: '223323955607',

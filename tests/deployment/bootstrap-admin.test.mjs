@@ -5,8 +5,8 @@ import { bootstrapConfiguration, bootstrapRoles, validateBootstrapState } from '
 const env = { AWS_REGION: 'us-west-2', CORTEX_ACCOUNT_ID: '223323955607',
   PGHOST: 'cortex-test-oregon.cp6g8aywalrw.us-west-2.rds.amazonaws.com', PGDATABASE: 'cortex',
   MIGRATION_BUCKET: 'cortex-migration-test-223323955607-us-west-2', BOOTSTRAP_USER_POOL_ID: 'us-west-2_jkRHTdgKB',
-  BOOTSTRAP_MODE: 'apply', BOOTSTRAP_EMAIL: 'admin@example.invalid', BOOTSTRAP_ORGANIZATION: 'Fresh Test',
-  BOOTSTRAP_WORKSPACE: 'Test Workspace', BOOTSTRAP_SUBJECT: '11111111-1111-4111-8111-111111111111',
+  BOOTSTRAP_MODE: 'apply', BOOTSTRAP_EMAIL: 'admin@example.invalid', BOOTSTRAP_ORGANIZATION: 'Sollucio Partners',
+  BOOTSTRAP_WORKSPACE: 'core', BOOTSTRAP_SUBJECT: '11111111-1111-4111-8111-111111111111',
   BOOTSTRAP_RUN_ID: '22222222-2222-4222-8222-222222222222' };
 const config = bootstrapConfiguration(env);
 const counts = { role: 5, organization: 1, namespace: 1, user: 1, namespace_users: 1, auth_identities: 1, documents: 0 };
