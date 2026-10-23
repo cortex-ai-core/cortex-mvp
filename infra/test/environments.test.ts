@@ -36,6 +36,12 @@ for (const environment of ['dev', 'test', 'prod']) {
         environment === 'test' ? `repo:cortex-ai-core/${repository}:ref:refs/heads/test` : `repo:cortex-ai-core/${repository}:environment:${environment}`);
       assert.ok(!JSON.stringify(condition).includes('ref:refs/heads/dev'));
     }
+    if(environment==='test') {
+      const statements=Object.values(template.findResources('AWS::IAM::Policy')).flatMap(policy=>policy.Properties.PolicyDocument.Statement);
+      const verification=statements.find(statement=>statement.Action==='ecr:DescribeImages');
+      assert.ok(verification,'Test promotion must verify destination digests');
+      assert.equal(verification.Resource.length,3,'Digest reads must be scoped to the three Test repositories');
+    }
 
   });
 }

@@ -99,6 +99,7 @@ def handler(event,context):
         deployment.addToPolicy(new iam.PolicyStatement({actions:['iam:PassRole'],resources:[execution.roleArn],conditions:{StringEquals:{'iam:PassedToService':'cloudformation.amazonaws.com'}}}));
         deployment.addToPolicy(new iam.PolicyStatement({actions:['ecr:GetAuthorizationToken'],resources:['*']}));
         for(const repo of Object.values(this.repositories))repo.grantPullPush(deployment);
+        if(config.name==='test')deployment.addToPolicy(new iam.PolicyStatement({actions:['ecr:DescribeImages'],resources:Object.values(this.repositories).map(repository=>repository.repositoryArn)}));
         deployment.addToPolicy(new iam.PolicyStatement({actions:['ecs:RunTask','ecs:DescribeTasks'],resources:[`arn:aws:ecs:${config.region}:${this.account}:task-definition/cortex-${config.name}-database:*`,`arn:aws:ecs:${config.region}:${this.account}:task/cortex-${config.name}/*`]}));
         deployment.addToPolicy(new iam.PolicyStatement({actions:['iam:PassRole'],resources:[`arn:aws:iam::${this.account}:role/cortex-${config.name}-database-operations`,`arn:aws:iam::${this.account}:role/cortex-${config.name}-database-execution`],conditions:{StringEquals:{'iam:PassedToService':'ecs-tasks.amazonaws.com'}}}));
       } else {

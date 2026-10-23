@@ -17,7 +17,8 @@ if(saved.viewerActivation==='when-issued'){
   else console.log(`Custom viewer certificate ${certificate.Status}; retaining the generated CloudFront URL until DNS validation completes.`);
 }
 run(['npm','run','synth','--',...context,'--quiet'],`${process.cwd()}/infra`);
-// Foundation IAM/network changes require a separate reviewed infrastructure operation.
+// Test's branch-driven rollout includes its foundation. Dev remains a separate infrastructure operation.
+if(environment==='test')run(['node','scripts/deploy/apply-stack.mjs',environment,`cortex-${environment}-foundation`,`infra/cdk.out/cortex-${environment}-foundation.template.json`]);
 for(const stack of ['data','operations'])run(['node','scripts/deploy/apply-stack.mjs',environment,`cortex-${environment}-${stack}`,`infra/cdk.out/cortex-${environment}-${stack}.template.json`]);
 run(['node','scripts/deploy/database.mjs',environment]);
 for(const stack of ['application','delivery'])run(['node','scripts/deploy/apply-stack.mjs',environment,`cortex-${environment}-${stack}`,`infra/cdk.out/cortex-${environment}-${stack}.template.json`]);
